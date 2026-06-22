@@ -29,6 +29,33 @@ local function yellow(text)  return c("33", text) end
 local function red(text)     return c("31", text) end
 local function magenta(text) return c("35", text) end
 
+-- UTF-8 Safe string helpers
+local function utf8_len(str)
+    return utf8.len(str) or #str
+end
+
+local function utf8_sub(str, start_char, end_char)
+    local len = utf8_len(str)
+    start_char = start_char or 1
+    end_char = end_char or len
+    
+    if start_char < 0 then start_char = len + start_char + 1 end
+    if end_char < 0 then end_char = len + end_char + 1 end
+    if start_char < 1 then start_char = 1 end
+    if end_char > len then end_char = len end
+    if start_char > end_char then return "" end
+    
+    local start_byte = utf8.offset(str, start_char)
+    local end_byte
+    if end_char == len then
+        end_byte = #str
+    else
+        end_byte = utf8.offset(str, end_char + 1) - 1
+    end
+    
+    return str:sub(start_byte, end_byte)
+end
+
 -- 2. Function to load data from the TSV file using header mapping
 local function load_tsv(filename)
     local vocabulary = {}
@@ -196,11 +223,11 @@ local function run_quiz(vocab_list)
                     m = 0
                 end
                 
-                local len = #target_word
-                local part_start = target_word:sub(1, n)
+                local len = utf8_len(target_word)
+                local part_start = utf8_sub(target_word, 1, n)
                 local part_end = ""
                 if m > 0 then
-                    part_end = target_word:sub(len - m + 1, len)
+                    part_end = utf8_sub(target_word, len - m + 1, len)
                 end
 
                 local hint_prefix = bold(cyan("💡 Hint: "))
@@ -213,7 +240,7 @@ local function run_quiz(vocab_list)
                 else
                     local mid_start = math.floor((len - k) / 2) + 1
                     local mid_end = mid_start + k - 1
-                    local part_mid = target_word:sub(mid_start, mid_end)
+                    local part_mid = utf8_sub(target_word, mid_start, mid_end)
 
                     if n >= mid_start or mid_end >= len - m + 1 or n + k + m >= len then
                         current_hint = string.format("%s%s (length: %d)", hint_prefix, green(target_word), len)
