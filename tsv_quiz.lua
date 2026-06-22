@@ -538,6 +538,9 @@ end
 
 -- Helper to format hint text with ANSI colors for a single word
 local function format_hint_text(word, n, k, m)
+    if word:match("^[%p%s]+$") then
+        return word
+    end
     local len = utf8_len(word)
     local part_start = utf8_sub(word, 1, n)
     local part_end = ""
@@ -622,28 +625,57 @@ local function mask_context(context, target_word, use_exact, has_hint, hint_n, h
         
         return context
     else
-        -- Regular single word case
-        local replacement
-        if is_correct ~= nil then
-            replacement = is_correct and bold(green(target_word)) or bold(red(target_word))
-        elseif has_hint and use_exact then
-            local hint_word = get_hint_masked_word(target_word, hint_n, hint_k, hint_m)
-            replacement = bold(yellow(hint_word))
-        else
-            local mask = get_mask_placeholder(target_word, use_exact)
-            replacement = bold(yellow(mask))
+        -- Contiguous phrase or single word
+        local parts = {}
+        for part in target_word:gmatch("[^%s]+") do
+            table.insert(parts, part)
         end
         
-        local masked, count = context:gsub(target_word, replacement)
+        local function get_part_replacement(part)
+            if is_correct ~= nil then
+                return is_correct and bold(green(part)) or bold(red(part))
+            elseif has_hint and use_exact then
+                return bold(yellow(get_hint_masked_word(part, hint_n, hint_k, hint_m)))
+            else
+                return bold(yellow(get_mask_placeholder(part, use_exact)))
+            end
+        end
+        
+        local rep_parts = {}
+        for _, part in ipairs(parts) do
+            table.insert(rep_parts, get_part_replacement(part))
+        end
+        local replacement = table.concat(rep_parts, " ")
+        
+        local function try_single_replace(word_case)
+            local e_word = escape_pattern(word_case)
+            local masked, count = context:gsub(e_word, function(m)
+                if is_correct ~= nil then
+                    local m_parts = {}
+                    for part in m:gmatch("[^%s]+") do
+                        table.insert(m_parts, part)
+                    end
+                    local m_rep_parts = {}
+                    for _, part in ipairs(m_parts) do
+                        table.insert(m_rep_parts, is_correct and bold(green(part)) or bold(red(part)))
+                    end
+                    return table.concat(m_rep_parts, " ")
+                else
+                    return replacement
+                end
+            end)
+            return masked, count
+        end
+        
+        local masked, count = try_single_replace(target_word)
         if count > 0 then return masked end
         
-        masked, count = context:gsub(target_word:lower(), replacement)
+        masked, count = try_single_replace(target_word:lower())
         if count > 0 then return masked end
         
-        -- Also try capitalized word
         local first = utf8_sub(target_word, 1, 1):upper()
         local rest = utf8_sub(target_word, 2)
-        masked, count = context:gsub(first .. rest, replacement)
+        masked, count = try_single_replace(first .. rest)
         if count > 0 then return masked end
         
         return context
@@ -723,15 +755,16 @@ local function run_quiz(study_queue, config)
                         end
                         
                         local len = utf8_len(target_word)
-                        local p1, p2 = target_word:match("^(.-)%s*%.%.%.%s*(.-)$")
-                        local hint_str
-                        if p1 and p2 then
-                            local h1 = format_hint_text(p1, n, k, m)
-                            local h2 = format_hint_text(p2, n, k, m)
-                            hint_str = h1 .. " ... " .. h2
-                        else
-                            hint_str = format_hint_text(target_word, n, k, m)
+                        local parts = {}
+                        for part in target_word:gmatch("[^%s]+") do
+                            table.insert(parts, part)
                         end
+                        
+                        local hint_parts = {}
+                        for _, part in ipairs(parts) do
+                            table.insert(hint_parts, format_hint_text(part, n, k, m))
+                        end
+                        local hint_str = table.concat(hint_parts, " ")
                         current_hint = bold(cyan("💡 Hint: ")) .. hint_str .. dim(string.format(" (length: %d)", len))
                         hint_n = n
                         hint_k = k

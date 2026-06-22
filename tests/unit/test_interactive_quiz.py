@@ -628,3 +628,21 @@ def test_boundary_broken_lnk_error(quiz_env):
     # test_data.lnk points to data.tsv at the root (which doesn't exist anymore)
     code, out, err = run_quiz(quiz_env, ["test_data.lnk"], [])
     assert "Error: File not found:" in out or "not found" in out
+
+def test_boundary_multi_word_hints(quiz_env):
+    """Test target word with spaces (multi-word phrase: Abend vorbei. Wir schlagen) hints are per-word."""
+    focus_single_card(quiz_env, "20260303214721-text1.de.tsv", "Abend vorbei. Wir schlagen")
+    
+    # Enable exact_length_mask
+    config_path = quiz_env / "config.ini"
+    content = config_path.read_text(encoding="utf-8")
+    content = content.replace("exact_length_mask = false", "exact_length_mask = true")
+    config_path.write_text(content, encoding="utf-8", newline="\n")
+
+    # Hint /h 2 on "Abend vorbei. Wir schlagen" (len: 26)
+    code, out, err = run_quiz(quiz_env, ["20260303214721-text1.de.tsv"], ["/h 2", "/q"])
+    assert code == 0
+    clean_out = strip_ansi(out)
+    
+    assert "💡 Hint: Ab... vo... Wi... sc... (length: 26)" in clean_out
+    assert "Er kommt heute Ab___ vo____. Wi_ sc______ einen neuen Weg ein." in clean_out
