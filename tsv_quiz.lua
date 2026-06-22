@@ -184,6 +184,8 @@ local function run_quiz(vocab_list)
     end
 
     print(string.format("Quiz finished! You scored %d out of %d.", score, total))
+    io.write("\nPress Enter to exit...")
+    io.read()
 end
 
 -- Main entry point
