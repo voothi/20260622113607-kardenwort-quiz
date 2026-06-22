@@ -1253,7 +1253,7 @@ local function run_quiz(study_queue, config)
 							end
 							repeat_entry.is_repeat = true
 							repeat_entry.repeat_target_idx = target_idx
-							
+
 							table.insert(study_queue, i + 1, repeat_entry)
 							-- Re-insert current card so we can return to it after the repeat
 							table.insert(study_queue, i + 2, entry)
@@ -1266,7 +1266,7 @@ local function run_quiz(study_queue, config)
 						else
 							print(bold(red("There is no previous card to repeat.")))
 							if config.single_card_mode then
-								press_any_key("Press Enter or Space to retry...", {"\r", "\n", " "})
+								press_any_key("Press Enter or Space to retry...", { "\r", "\n", " " })
 							end
 						end
 					elseif lower_cmd == "d" then
@@ -1274,10 +1274,12 @@ local function run_quiz(study_queue, config)
 						break
 					else
 						print(
-							bold(red("Unknown command: ")) .. trimmed_input .. ". Type '/h' for hint, '/q' to quit, '/a' to repeat previous, '/d' to skip.\n"
+							bold(red("Unknown command: "))
+								.. trimmed_input
+								.. ". Type '/h' for hint, '/q' to quit, '/a' to repeat previous, '/d' to skip.\n"
 						)
 						if config.single_card_mode then
-							press_any_key("Press Enter or Space to retry...", {"\r", "\n", " "})
+							press_any_key("Press Enter or Space to retry...", { "\r", "\n", " " })
 						end
 					end
 				end
@@ -1357,7 +1359,8 @@ local function run_quiz(study_queue, config)
 				print(revealed_context)
 
 				print()
-				local u_line, t_line = get_two_line_diff(trimmed_input, target_word, config.case_sensitive_diff, config.ignore_punctuation)
+				local u_line, t_line =
+					get_two_line_diff(trimmed_input, target_word, config.case_sensitive_diff, config.ignore_punctuation)
 				print_framed_diff(u_line, t_line)
 				print()
 
@@ -1370,7 +1373,10 @@ local function run_quiz(study_queue, config)
 				end
 
 				if config.single_card_mode then
-					local key = press_any_key(dim("Press Enter or Space to continue (or 's' to repeat)..."), {"\r", "\n", " ", "s"})
+					local key = press_any_key(
+						dim("Press Enter or Space to continue (or 's' to repeat)..."),
+						{ "\r", "\n", " ", "s" }
+					)
 					if key and key:lower() == "s" then
 						local repeat_entry = {}
 						for k, v in pairs(entry) do
@@ -1391,7 +1397,7 @@ local function run_quiz(study_queue, config)
 		clear_screen()
 	end
 	print(bold(green(string.format("Quiz finished! You scored %d out of %d.", score, total))))
-	press_any_key("\nPress Enter or Space to exit...", {"\r", "\n", " "})
+	press_any_key("\nPress Enter or Space to exit...", { "\r", "\n", " " })
 end
 
 -- Helper to check if file exists
@@ -1673,4 +1679,4 @@ if not ok then
 	print(err)
 end
 
-press_any_key("\nPress Enter or Space to exit...", {"\r", "\n", " "})
+press_any_key("\nPress Enter or Space to exit...", { "\r", "\n", " " })
