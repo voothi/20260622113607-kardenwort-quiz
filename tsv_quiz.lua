@@ -465,7 +465,77 @@ local function get_mask_placeholder(word, use_exact)
     end
 end
 
--- 3. Run the interactive CLI quiz
+-- Helper to generate a mask string for a word, optionally revealing specified positions
+local function get_hint_masked_word(word, n, k, m)
+    local len = utf8_len(word)
+    
+    -- Determine range of middle characters to show
+    local mid_start, mid_end = 0, 0
+    if k > 0 then
+        mid_start = math.floor((len - k) / 2) + 1
+        mid_end = mid_start + k - 1
+    end
+
+    local success, result = pcall(function()
+        if not utf8 then error("No utf8 lib") end
+        local s = ""
+        local idx = 1
+        for _, code in utf8.codes(word) do
+            local c = utf8.char(code)
+            if c:match("%s") or c:match("[%p%s]") then
+                s = s .. c
+            else
+                -- Check if this position is revealed
+                local is_revealed = false
+                if idx <= n then
+                    is_revealed = true
+                elseif idx >= len - m + 1 then
+                    is_revealed = true
+                elseif idx >= mid_start and idx <= mid_end then
+                    is_revealed = true
+                end
+
+                if is_revealed then
+                    s = s .. c
+                else
+                    s = s .. "_"
+                end
+            end
+            idx = idx + 1
+        end
+        return s
+    end)
+
+    if success then
+        return result
+    else
+        -- Fallback to simple byte-by-byte if invalid UTF-8
+        local s = ""
+        for i = 1, #word do
+            local c = word:sub(i, i)
+            if c:match("%s") or c:match("[%p%s]") then
+                s = s .. c
+            else
+                local is_revealed = false
+                if i <= n then
+                    is_revealed = true
+                elseif i >= len - m + 1 then
+                    is_revealed = true
+                elseif i >= mid_start and i <= mid_end then
+                    is_revealed = true
+                end
+
+                if is_revealed then
+                    s = s .. c
+                else
+                    s = s .. "_"
+                end
+            end
+        end
+        return s
+    end
+end
+
 -- 3. Run the interactive CLI quiz
 local function run_quiz(study_queue, filename, raw_rows, box_idx, due_idx, config)
     if not study_queue or #study_queue == 0 then
@@ -478,15 +548,23 @@ local function run_quiz(study_queue, filename, raw_rows, box_idx, due_idx, confi
 
     for i, entry in ipairs(study_queue) do
         local target_word = entry.word
-        local mask_str = get_mask_placeholder(target_word, config.exact_length_mask)
-        local placeholder = bold(yellow(mask_str))
-        local masked_context = entry.context:gsub(target_word, placeholder)
-        if masked_context == entry.context then
-            masked_context = entry.context:gsub(target_word:lower(), placeholder)
-        end
-
         local current_hint = nil
+        local hint_n, hint_k, hint_m = 0, 0, 0
+        local has_hint = false
+
         while true do
+            local mask_str
+            if has_hint and config.exact_length_mask then
+                mask_str = get_hint_masked_word(target_word, hint_n, hint_k, hint_m)
+            else
+                mask_str = get_mask_placeholder(target_word, config.exact_length_mask)
+            end
+            local placeholder = bold(yellow(mask_str))
+            local masked_context = entry.context:gsub(target_word, placeholder)
+            if masked_context == entry.context then
+                masked_context = entry.context:gsub(target_word:lower(), placeholder)
+            end
+
             if config.single_card_mode then
                 clear_screen()
             end
@@ -564,6 +642,10 @@ local function run_quiz(study_queue, filename, raw_rows, box_idx, due_idx, confi
                                 current_hint = string.format("%s%s...%s...%s (length: %d)", hint_prefix, green(part_start), green(part_mid), green(part_end), len)
                             end
                         end
+                        hint_n = n
+                        hint_k = k
+                        hint_m = m
+                        has_hint = true
                         print("\n")
                     else
                         print(bold(red("Unknown command: ")) .. trimmed_input .. ". Type '/h' for hint, '/q' to quit.\n")
