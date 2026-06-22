@@ -667,5 +667,14 @@ def test_incorrect_answer_shows_diff(quiz_env):
     clean_out = strip_ansi(out)
     assert "❌ Incorrect." in clean_out
     assert "The correct word is: 'Abend vorbei. Wir schlagen'" in clean_out
-    assert "Correction:   Abent[d] vorbeu[i.] Wie[r] scho[lage]n" in clean_out
+    assert "Correction:   Abent[d] vorbeu[i] Wie[r] scho[lage]n" in clean_out
 
+    # Test case 3: separable verbs with ellipses / punctuation stripped
+    focus_single_card(quiz_env, "20260303214721-text1.de.tsv", "stehe ... auf")
+    code, out, err = run_quiz(quiz_env, ["20260303214721-text1.de.tsv"], ["stehe aus", "/q"])
+    
+    assert code == 0
+    clean_out = strip_ansi(out)
+    assert "❌ Incorrect." in clean_out
+    assert "The correct word is: 'stehe ... auf'" in clean_out
+    assert "Correction:   stehe aus[f]" in clean_out

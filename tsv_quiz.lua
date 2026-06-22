@@ -569,6 +569,16 @@ end
 
 -- Helper to perform character-by-character diff (LCS-based) between user input and target word
 local function get_char_diff(user_str, target_str)
+    local function clean_for_diff(str)
+        local cleaned = str:gsub("%p+", "")
+        cleaned = cleaned:gsub("%s+", " ")
+        cleaned = cleaned:gsub("^%s+", ""):gsub("%s+$", "")
+        return cleaned
+    end
+
+    local clean_user = clean_for_diff(user_str)
+    local clean_target = clean_for_diff(target_str)
+
     local function to_chars(str)
         local ok, chars = pcall(function()
             local c = {}
@@ -585,8 +595,8 @@ local function get_char_diff(user_str, target_str)
         return chars
     end
 
-    local A = to_chars(user_str)
-    local B = to_chars(target_str)
+    local A = to_chars(clean_user)
+    local B = to_chars(clean_target)
     local n = #A
     local m = #B
 
@@ -871,9 +881,9 @@ local function run_quiz(study_queue, config)
                     end
                 end
             else
-                -- Clean up input (strip spaces, dots/ellipses, and convert to lowercase for checking)
-                local clean_input = trimmed_input:lower():gsub("%s+", ""):gsub("%.+", "")
-                local correct_word = target_word:lower():gsub("%s+", ""):gsub("%.+", "")
+                 -- Clean up input (strip spaces, punctuation, and convert to lowercase for checking)
+                 local clean_input = trimmed_input:lower():gsub("%s+", ""):gsub("%p+", "")
+                 local correct_word = target_word:lower():gsub("%s+", ""):gsub("%p+", "")
 
                 local now = os.time()
                 local new_box = entry.box
