@@ -161,7 +161,7 @@ local function load_tsv(filename)
         return nil, "No data rows found in the TSV file (only headers/comments present)."
     elseif #vocabulary == 0 then
         return nil, string.format("Found %d data rows, but 0 valid vocabulary entries could be loaded.\n" ..
-                      "Please verify that the TSV file contains a 'Quotation' (or 'WordSource') column and a populated 'SentenceSource' (or 'SentenceSourceContextLeft') column.", parsed_rows)
+                      "Make sure at least one row has both a target word (WordSource/WordSourceInflectedForm/Quotation) and a context sentence (SentenceSource/SentenceSourceContextLeft) populated.", parsed_rows)
     end
 
     return vocabulary
