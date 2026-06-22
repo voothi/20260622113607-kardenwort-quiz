@@ -271,10 +271,10 @@ local function run_quiz(vocab_list)
                 local correct_word = target_word:gsub("%s+", ""):lower()
 
                 if clean_input == correct_word then
-                    print(bold(green("✅ Richtig!\n")))
+                    print(bold(green("✅ Correct!\n")))
                     score = score + 1
                 else
-                    print(string.format(bold(red("❌ Falsch.")) .. " The correct word is: '" .. green("%s") .. "'\n", target_word))
+                    print(string.format(bold(red("❌ Incorrect.")) .. " The correct word is: '" .. green("%s") .. "'\n", target_word))
                 end
                 break -- Go to the next question
             end
@@ -297,7 +297,7 @@ end
 -- Print standard help menu
 local function print_help()
     print(bold(cyan("=== Kardenwort TSV Quiz ===")))
-    print("An interactive CLI study tool for German vocabulary TSV files.\n")
+    print("An interactive CLI study tool for vocabulary TSV files.\n")
     print(bold("Usage:"))
     print("  lua tsv_quiz.lua [file.tsv]\n")
     print(bold("Interactive Controls (during quiz):"))

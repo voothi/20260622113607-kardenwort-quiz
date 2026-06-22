@@ -61,7 +61,7 @@ def main():
         f"$Shortcut = $WshShell.CreateShortcut('{shortcut_path}'); "
         f"$Shortcut.TargetPath = '{lua_path}'; "
         f"$Shortcut.Arguments = '\"{script_path}\"'; "
-        f"$Shortcut.Description = 'Runs B2 German Vocabulary Quiz on the selected TSV file'; "
+        f"$Shortcut.Description = 'Runs vocabulary study quiz on the selected TSV file'; "
         f"$Shortcut.WindowStyle = 1; "   # SW_SHOWNORMAL
         f"$Shortcut.Save()"
     )
@@ -76,7 +76,7 @@ def main():
         )
         print(f"\nSUCCESS: '{SHORTCUT_DISPLAY_NAME}' shortcut created!")
         print("\nHow to use:")
-        print("  1. Locate your German vocabulary .tsv file in Windows Explorer.")
+        print("  1. Locate your vocabulary .tsv file in Windows Explorer.")
         print(f"  2. Right-click → Send to → '{SHORTCUT_DISPLAY_NAME}'.")
     except subprocess.CalledProcessError as exc:
         print(f"Error: Failed to create shortcut.\nPowerShell error:\n{exc.stderr}")
