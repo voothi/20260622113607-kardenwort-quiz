@@ -536,6 +536,34 @@ local function get_hint_masked_word(word, n, k, m)
     end
 end
 
+-- Helper to format hint text with ANSI colors for a single word
+local function format_hint_text(word, n, k, m)
+    local len = utf8_len(word)
+    local part_start = utf8_sub(word, 1, n)
+    local part_end = ""
+    if m > 0 then
+        part_end = utf8_sub(word, len - m + 1, len)
+    end
+    
+    if k == 0 then
+        if n + m >= len then
+            return green(word)
+        else
+            return green(part_start) .. "..." .. green(part_end)
+        end
+    else
+        local mid_start = math.floor((len - k) / 2) + 1
+        local mid_end = mid_start + k - 1
+        local part_mid = utf8_sub(word, mid_start, mid_end)
+        
+        if n >= mid_start or mid_end >= len - m + 1 or n + k + m >= len then
+            return green(word)
+        else
+            return green(part_start) .. "..." .. green(part_mid) .. "..." .. green(part_end)
+        end
+    end
+end
+
 -- Helper to mask or reveal a target word (including separable prefix verbs) in the context sentence
 local function mask_context(context, target_word, use_exact, has_hint, hint_n, hint_k, hint_m, is_correct)
     local p1, p2 = target_word:match("^(.-)%s*%.%.%.%s*(.-)$")
@@ -551,10 +579,10 @@ local function mask_context(context, target_word, use_exact, has_hint, hint_n, h
             r1 = is_correct and bold(green(p1)) or bold(red(p1))
             r2 = is_correct and bold(green(p2)) or bold(red(p2))
         elseif has_hint and use_exact then
-            local hint_word = get_hint_masked_word(target_word, hint_n, hint_k, hint_m)
-            local hp1, hp2 = hint_word:match("^(.-)%s*%.%.%.%s*(.-)$")
-            r1 = bold(yellow(hp1 or p1))
-            r2 = bold(yellow(hp2 or p2))
+            local hp1 = get_hint_masked_word(p1, hint_n, hint_k, hint_m)
+            local hp2 = get_hint_masked_word(p2, hint_n, hint_k, hint_m)
+            r1 = bold(yellow(hp1))
+            r2 = bold(yellow(hp2))
         else
             local mask1 = get_mask_placeholder(p1, use_exact)
             local mask2 = get_mask_placeholder(p2, use_exact)
@@ -695,30 +723,16 @@ local function run_quiz(study_queue, config)
                         end
                         
                         local len = utf8_len(target_word)
-                        local part_start = utf8_sub(target_word, 1, n)
-                        local part_end = ""
-                        if m > 0 then
-                            part_end = utf8_sub(target_word, len - m + 1, len)
-                        end
-
-                        local hint_prefix = bold(cyan("💡 Hint: "))
-                        if k == 0 then
-                            if n + m >= len then
-                                current_hint = string.format("%s%s (length: %d)", hint_prefix, green(target_word), len)
-                            else
-                                current_hint = string.format("%s%s...%s (length: %d)", hint_prefix, green(part_start), green(part_end), len)
-                            end
+                        local p1, p2 = target_word:match("^(.-)%s*%.%.%.%s*(.-)$")
+                        local hint_str
+                        if p1 and p2 then
+                            local h1 = format_hint_text(p1, n, k, m)
+                            local h2 = format_hint_text(p2, n, k, m)
+                            hint_str = h1 .. " ... " .. h2
                         else
-                            local mid_start = math.floor((len - k) / 2) + 1
-                            local mid_end = mid_start + k - 1
-                            local part_mid = utf8_sub(target_word, mid_start, mid_end)
-
-                            if n >= mid_start or mid_end >= len - m + 1 or n + k + m >= len then
-                                current_hint = string.format("%s%s (length: %d)", hint_prefix, green(target_word), len)
-                            else
-                                current_hint = string.format("%s%s...%s...%s (length: %d)", hint_prefix, green(part_start), green(part_mid), green(part_end), len)
-                            end
+                            hint_str = format_hint_text(target_word, n, k, m)
                         end
+                        current_hint = bold(cyan("💡 Hint: ")) .. hint_str .. dim(string.format(" (length: %d)", len))
                         hint_n = n
                         hint_k = k
                         hint_m = m

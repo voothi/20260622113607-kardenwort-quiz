@@ -552,6 +552,20 @@ def test_boundary_separable_verbs(quiz_env):
     assert code == 0
     assert "✅ Correct!" in out
 
+    # 4. Test per-word hint formatting and context prompt masking
+    config_path = quiz_env / "config.ini"
+    content = config_path.read_text(encoding="utf-8")
+    content = content.replace("exact_length_mask = false", "exact_length_mask = true")
+    config_path.write_text(content, encoding="utf-8", newline="\n")
+
+    focus_single_card(quiz_env, "20260303214721-text1.de.tsv", "stehe ... auf")
+    code, out, err = run_quiz(quiz_env, ["20260303214721-text1.de.tsv"], ["/h 1 1", "/q"])
+    assert code == 0
+    clean_out = strip_ansi(out)
+    
+    assert "💡 Hint: s...e ... a...f (length: 13)" in clean_out
+    assert "Ich s___e morgen früh a_f." in clean_out
+
 def test_boundary_extreme_length_and_multibyte(quiz_env):
     """Test extreme length word (42 chars) and UTF-8 characters (Donaudampfschifffahrtsgesellschaftskapitän)."""
     focus_single_card(quiz_env, "20260303214721-text1.de.tsv", "Donaudampfschifffahrtsgesellschaftskapitän")
