@@ -618,19 +618,24 @@ local function print_framed_diff(u_line, t_line)
     local prefix_t = "Target: "
     local len_u = utf8_len(raw_u) + utf8_len(prefix_u)
     local len_t = utf8_len(raw_t) + utf8_len(prefix_t)
-    local max_len = math.max(len_u, len_t, 20)
+    local content_len = math.max(len_u, len_t)
+    local box_inner_width = math.max(46, content_len + 4) -- ensures at least 2 spaces pad on each side
 
     local title = " Diff "
-    local top_bar = "╭─" .. title .. string.rep("─", max_len - 5) .. "╮"
-    local bot_bar = "╰" .. string.rep("─", max_len + 2) .. "╯"
+    local top_bar = "╭─" .. title .. string.rep("─", box_inner_width - utf8_len(title) - 1) .. "╮"
+    local bot_bar = "╰" .. string.rep("─", box_inner_width) .. "╯"
 
     print(dim(top_bar))
     
-    local pad_u = string.rep(" ", max_len - len_u)
-    print(dim("│ ") .. dim(prefix_u) .. u_line .. pad_u .. dim(" │"))
+    local pad_total_u = box_inner_width - len_u
+    local pad_left_u = string.rep(" ", math.floor(pad_total_u / 2))
+    local pad_right_u = string.rep(" ", math.ceil(pad_total_u / 2))
+    print(dim("│") .. pad_left_u .. dim(prefix_u) .. u_line .. pad_right_u .. dim("│"))
     
-    local pad_t = string.rep(" ", max_len - len_t)
-    print(dim("│ ") .. dim(prefix_t) .. t_line .. pad_t .. dim(" │"))
+    local pad_total_t = box_inner_width - len_t
+    local pad_left_t = string.rep(" ", math.floor(pad_total_t / 2))
+    local pad_right_t = string.rep(" ", math.ceil(pad_total_t / 2))
+    print(dim("│") .. pad_left_t .. dim(prefix_t) .. t_line .. pad_right_t .. dim("│"))
     
     print(dim(bot_bar))
 end
