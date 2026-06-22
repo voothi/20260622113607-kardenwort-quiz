@@ -26,7 +26,9 @@ local function load_tsv(filename)
     end
 
     local headers = nil
-    local word_idx = nil
+    local word_source_idx = nil
+    local word_inflected_idx = nil
+    local quotation_idx = nil
     local context_indices = {}
 
     for line in file:lines() do
@@ -46,8 +48,10 @@ local function load_tsv(filename)
                 found_cols[clean_header] = idx
             end
 
-            -- Find word index
-            word_idx = found_cols["Quotation"] or found_cols["WordSource"] or 1
+            -- Find word indices
+            word_source_idx = found_cols["WordSource"]
+            word_inflected_idx = found_cols["WordSourceInflectedForm"]
+            quotation_idx = found_cols["Quotation"]
             
             -- Define context candidates in order of preference
             local candidates = {
@@ -69,7 +73,20 @@ local function load_tsv(filename)
             -- Parse data row
             if line:match("%S") then
                 local columns = split_line(line, "\t")
-                local target_word = columns[word_idx]
+                
+                -- Determine target word based on dictionary (WordSource) vs phrase (WordSourceInflectedForm)
+                local target_word = nil
+                if word_source_idx and columns[word_source_idx] and columns[word_source_idx] ~= "" then
+                    target_word = columns[word_source_idx]
+                elseif word_inflected_idx and columns[word_inflected_idx] and columns[word_inflected_idx] ~= "" then
+                    target_word = columns[word_inflected_idx]
+                elseif quotation_idx and columns[quotation_idx] and columns[quotation_idx] ~= "" then
+                    target_word = columns[quotation_idx]
+                end
+                
+                if not target_word or target_word == "" then
+                    target_word = columns[1]
+                end
                 
                 -- Check candidates in priority order, picking the first non-empty value
                 local context_sentence = nil
