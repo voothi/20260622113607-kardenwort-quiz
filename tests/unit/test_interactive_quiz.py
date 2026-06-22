@@ -646,3 +646,26 @@ def test_boundary_multi_word_hints(quiz_env):
     
     assert "💡 Hint: Ab... vo... Wi... sc... (length: 26)" in clean_out
     assert "Er kommt heute Ab___ vo____. Wi_ sc______ einen neuen Weg ein." in clean_out
+
+def test_incorrect_answer_shows_diff(quiz_env):
+    """Test that incorrect answers display a character-by-character correction diff."""
+    # Test case 1: simple substitution / typo
+    focus_single_card(quiz_env, "20260604184114-microsoft-just-shocked-the.en.tsv", "properly")
+    code, out, err = run_quiz(quiz_env, ["20260604184114-microsoft-just-shocked-the.en.tsv"], ["properle", "/q"])
+    
+    assert code == 0
+    clean_out = strip_ansi(out)
+    assert "❌ Incorrect." in clean_out
+    assert "The correct word is: 'properly'" in clean_out
+    assert "Correction:   properle[y]" in clean_out
+
+    # Test case 2: multi-word phrase mismatch
+    focus_single_card(quiz_env, "20260303214721-text1.de.tsv", "Abend vorbei. Wir schlagen")
+    code, out, err = run_quiz(quiz_env, ["20260303214721-text1.de.tsv"], ["Abent vorbeu wie schon", "/q"])
+    
+    assert code == 0
+    clean_out = strip_ansi(out)
+    assert "❌ Incorrect." in clean_out
+    assert "The correct word is: 'Abend vorbei. Wir schlagen'" in clean_out
+    assert "Correction:   Abent[d] vorbeu[i.] Wie[r] scho[lage]n" in clean_out
+

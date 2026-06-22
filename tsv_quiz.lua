@@ -567,6 +567,98 @@ local function format_hint_text(word, n, k, m)
     end
 end
 
+-- Helper to perform character-by-character diff (LCS-based) between user input and target word
+local function get_char_diff(user_str, target_str)
+    local function to_chars(str)
+        local ok, chars = pcall(function()
+            local c = {}
+            for _, code in utf8.codes(str) do
+                table.insert(c, utf8.char(code))
+            end
+            return c
+        end)
+        if ok then return chars end
+        local chars = {}
+        for i = 1, #str do
+            table.insert(chars, str:sub(i, i))
+        end
+        return chars
+    end
+
+    local A = to_chars(user_str)
+    local B = to_chars(target_str)
+    local n = #A
+    local m = #B
+
+    local dp = {}
+    for i = 0, n do
+        dp[i] = {}
+        for j = 0, m do
+            dp[i][j] = 0
+        end
+    end
+
+    for i = 1, n do
+        for j = 1, m do
+            if A[i]:lower() == B[j]:lower() then
+                dp[i][j] = dp[i-1][j-1] + 1
+            else
+                dp[i][j] = math.max(dp[i-1][j], dp[i][j-1])
+            end
+        end
+    end
+
+    local i = n
+    local j = m
+    local ops = {}
+
+    while i > 0 or j > 0 do
+        if i > 0 and j > 0 and A[i]:lower() == B[j]:lower() then
+            table.insert(ops, { type = "match", char = B[j] })
+            i = i - 1
+            j = j - 1
+        elseif j > 0 and (i == 0 or dp[i][j-1] >= dp[i-1][j]) then
+            table.insert(ops, { type = "missing", char = B[j] })
+            j = j - 1
+        else
+            table.insert(ops, { type = "extra", char = A[i] })
+            i = i - 1
+        end
+    end
+
+    local ops_reversed = {}
+    for k = #ops, 1, -1 do
+        table.insert(ops_reversed, ops[k])
+    end
+
+    local parts = {}
+    local missing_group = {}
+
+    local function flush_missing()
+        if #missing_group > 0 then
+            local missing_str = table.concat(missing_group)
+            table.insert(parts, cyan(bold("[" .. missing_str .. "]")))
+            missing_group = {}
+        end
+    end
+
+    for _, op in ipairs(ops_reversed) do
+        if op.type == "missing" then
+            table.insert(missing_group, op.char)
+        else
+            flush_missing()
+            if op.type == "match" then
+                table.insert(parts, green(op.char))
+            elseif op.type == "extra" then
+                table.insert(parts, red(bold(op.char)))
+            end
+        end
+    end
+    flush_missing()
+
+    return table.concat(parts)
+end
+
 -- Helper to mask or reveal a target word (including separable prefix verbs) in the context sentence
 local function mask_context(context, target_word, use_exact, has_hint, hint_n, hint_k, hint_m, is_correct)
     local p1, p2 = target_word:match("^(.-)%s*%.%.%.%s*(.-)$")
@@ -823,7 +915,9 @@ local function run_quiz(study_queue, config)
                 if is_correct then
                     print(bold(green("✅ Correct!\n")))
                 else
-                    print(string.format(bold(red("❌ Incorrect.")) .. " The correct word is: '" .. green("%s") .. "'\n", target_word))
+                    print(string.format(bold(red("❌ Incorrect.")) .. " The correct word is: '" .. green("%s") .. "'", target_word))
+                    local diff_str = get_char_diff(trimmed_input, target_word)
+                    print(bold("Correction:   ") .. diff_str .. "\n")
                 end
 
                 if not save_ok then
