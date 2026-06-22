@@ -537,7 +537,7 @@ local function get_hint_masked_word(word, n, k, m)
 end
 
 -- 3. Run the interactive CLI quiz
-local function run_quiz(study_queue, filename, raw_rows, box_idx, due_idx, config)
+local function run_quiz(study_queue, config)
     if not study_queue or #study_queue == 0 then
         print("No cards to review.")
         return
@@ -680,10 +680,10 @@ local function run_quiz(study_queue, filename, raw_rows, box_idx, due_idx, confi
                 -- Save state
                 entry.box = new_box
                 entry.due = new_due
-                entry.raw_columns[box_idx] = tostring(new_box)
-                entry.raw_columns[due_idx] = tostring(new_due)
+                entry.raw_columns[entry.box_idx] = tostring(new_box)
+                entry.raw_columns[entry.due_idx] = tostring(new_due)
 
-                local save_ok, save_err = save_tsv(filename, raw_rows)
+                local save_ok, save_err = save_tsv(entry.filename, entry.raw_rows)
 
                 -- BACK SIDE (Result presentation)
                 if config.single_card_mode then
@@ -751,6 +751,53 @@ local function print_help()
     print("  Requires headers (e.g. Quotation/WordSource and SentenceSource/SentenceSourceContextLeft).")
 end
 
+-- Helper to resolve Windows .lnk shortcuts in pure Lua
+local function resolve_lnk(path)
+    if not path:lower():match("%.lnk$") then
+        return path
+    end
+
+    local f = io.open(path, "rb")
+    if not f then return path end
+    local data = f:read("*a")
+    f:close()
+
+    if #data < 76 or data:sub(1, 4) ~= "L\0\0\0" then
+        return path
+    end
+
+    local ok, flags = pcall(string.unpack, "<I4", data, 21)
+    if not ok then return path end
+    local has_link_target_id_list = (flags & 0x01) ~= 0
+    local has_link_info = (flags & 0x02) ~= 0
+
+    local offset = 77 -- 1-based index
+    if has_link_target_id_list then
+        if offset + 2 > #data then return path end
+        local id_list_size = string.unpack("<I2", data, offset)
+        offset = offset + 2 + id_list_size
+    end
+
+    if not has_link_info then
+        return path
+    end
+
+    if offset + 20 > #data then return path end
+    local link_info_flags = string.unpack("<I4", data, offset + 8)
+    local local_base_path_offset = string.unpack("<I4", data, offset + 16)
+
+    if (link_info_flags & 0x01) ~= 0 then
+        local start_pos = offset + local_base_path_offset
+        local end_pos = start_pos
+        while end_pos <= #data and string.byte(data, end_pos) ~= 0 do
+            end_pos = end_pos + 1
+        end
+        return data:sub(start_pos, end_pos - 1)
+    end
+
+    return path
+end
+
 -- Main entry point
 local function main()
     local arg1 = arg[1]
@@ -759,34 +806,69 @@ local function main()
         return
     end
 
-    local filename = arg1 or "data.tsv"
-    
-    -- Resolve relative filename based on the script's location
     local script_path = arg[0] or ""
     local dir = script_path:match("(.*[/\\])") or ""
 
-    if not filename:match("^%a:[/\\]") and not filename:match("^[/\\]") then
-        filename = dir .. filename
+    -- 1. Collect all input files
+    local input_files = {}
+    if #arg == 0 then
+        table.insert(input_files, "data.tsv")
+    else
+        for i = 1, #arg do
+            table.insert(input_files, arg[i])
+        end
     end
 
-    if not file_exists(filename) then
-        if not arg1 then
-            print_help()
-            print(bold(red("\nError: ")) .. "Default vocabulary file '" .. filename .. "' not found. Please provide a TSV file path.")
-        else
-            print(bold(red("Error: ")) .. "File not found: " .. filename)
+    -- 2. Resolve relative paths and .lnk shortcuts
+    local resolved_files = {}
+    for _, file in ipairs(input_files) do
+        local resolved_file = file
+        if not resolved_file:match("^%a:[/\\]") and not resolved_file:match("^[/\\]") then
+            resolved_file = dir .. resolved_file
         end
-        return
+        resolved_file = resolve_lnk(resolved_file)
+        table.insert(resolved_files, resolved_file)
     end
 
     -- Load config.ini
     local config_path = dir .. "config.ini"
     local config = load_config(config_path)
 
-    print("Loading: " .. filename)
-    local vocab, raw_rows, box_idx, due_idx, err = load_tsv(filename)
-    if not vocab then
-        print(bold(red("Error: ")) .. (err or "Failed to load vocabulary."))
+    -- Load all vocabulary from resolved files
+    local master_vocab = {}
+    local files_loaded = 0
+
+    for _, file_path in ipairs(resolved_files) do
+        if file_exists(file_path) then
+            print("Loading: " .. file_path)
+            local file_vocab, raw_rows, box_idx, due_idx, err = load_tsv(file_path)
+            if file_vocab then
+                files_loaded = files_loaded + 1
+                for _, entry in ipairs(file_vocab) do
+                    entry.filename = file_path
+                    entry.raw_rows = raw_rows
+                    entry.box_idx = box_idx
+                    entry.due_idx = due_idx
+                    table.insert(master_vocab, entry)
+                end
+            else
+                print(bold(red("Error loading ")) .. file_path .. ": " .. (err or "unknown error"))
+            end
+        else
+            if #arg == 0 then
+                print_help()
+                print(bold(red("\nError: ")) .. "Default vocabulary file '" .. file_path .. "' not found. Please provide a TSV file path.")
+                return
+            else
+                print(bold(red("Error: ")) .. "File not found: " .. file_path)
+            end
+        end
+    end
+
+    if files_loaded == 0 then
+        if #arg > 0 then
+            print(bold(red("\nError: ")) .. "No vocabulary files could be loaded.")
+        end
         return
     end
 
@@ -796,7 +878,7 @@ local function main()
     local new_queue = {}
     local future_queue = {}
 
-    for _, entry in ipairs(vocab) do
+    for _, entry in ipairs(master_vocab) do
         if entry.due == 0 then
             table.insert(new_queue, entry)
         elseif now >= entry.due then
@@ -879,13 +961,13 @@ local function main()
             if config.study_ahead then
                 print(bold(cyan("\nEntering \"Study Ahead\" mode (closest reviews first)...")))
                 study_queue = future_queue
-                run_quiz(study_queue, filename, raw_rows, box_idx, due_idx, config)
+                run_quiz(study_queue, config)
             end
         end
     else
         -- Print schedule summary
         print(bold(cyan(string.format("Queue Summary: %d due reviews, %d new cards selected.", #due_queue, #active_new))))
-        run_quiz(study_queue, filename, raw_rows, box_idx, due_idx, config)
+        run_quiz(study_queue, config)
     end
 end
 
