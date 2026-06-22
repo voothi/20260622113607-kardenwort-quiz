@@ -660,7 +660,7 @@ local function get_two_line_diff(user_str, target_str)
             table.insert(user_parts, red(op.charA))
             table.insert(target_parts, dim(op.charB))
         elseif op.type == "missing" then
-            table.insert(user_parts, dim(op.charA))
+            table.insert(user_parts, red(op.charA))
             table.insert(target_parts, dim(op.charB))
         elseif op.type == "extra" then
             table.insert(user_parts, red(op.charA))
