@@ -1017,7 +1017,7 @@ local function run_quiz(study_queue, config)
 
             local basename = entry.filename:match("([^/\\]+)$") or entry.filename
             if entry.is_repeat then
-                print(bold(yellow("Practice Repeat:")) .. dim(string.format(" [File: %s | Box %d]", basename, entry.box)))
+                print(bold(cyan("Practice Repeat:")) .. dim(string.format(" [File: %s | Box %d]", basename, entry.box)))
             else
                 print(bold(cyan(string.format("Question %d/%d:", question_num, total))) .. dim(string.format(" [File: %s | Box %d]", basename, entry.box)))
             end
@@ -1131,7 +1131,7 @@ local function run_quiz(study_queue, config)
                     print_header(config)
                     local basename = entry.filename:match("([^/\\]+)$") or entry.filename
                     if entry.is_repeat then
-                        print(bold(yellow("Practice Repeat:")) .. dim(string.format(" [File: %s | Box %d]", basename, entry.box)))
+                        print(bold(cyan("Practice Repeat:")) .. dim(string.format(" [File: %s | Box %d]", basename, entry.box)))
                     else
                         print(bold(cyan(string.format("Question %d/%d:", question_num, total))) .. dim(string.format(" [File: %s | Box %d]", basename, entry.box)))
                     end
