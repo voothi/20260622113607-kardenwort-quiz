@@ -1374,10 +1374,28 @@ local function run_quiz(study_queue, config)
 
 				if config.single_card_mode then
 					local key = press_any_key(
-						dim("Press Enter or Space to continue (or 's' to repeat)..."),
-						{ "\r", "\n", " ", "s" }
+						dim("Press Enter/Space to continue ('s' repeat, 'a' previous, 'd' skip, 'q' quit)..."),
+						{ "\r", "\n", " ", "s", "a", "d", "q" }
 					)
-					if key and key:lower() == "s" then
+					local lkey = key and key:lower()
+					if lkey == "q" then
+						print(magenta("\nExiting quiz early."))
+						return
+					elseif lkey == "a" then
+						local target_idx = entry.is_repeat and ((entry.repeat_target_idx or i) - 1) or (i - 1)
+						if target_idx >= 1 then
+							local repeat_entry = {}
+							for k, v in pairs(study_queue[target_idx]) do
+								repeat_entry[k] = v
+							end
+							repeat_entry.is_repeat = true
+							repeat_entry.repeat_target_idx = target_idx
+							table.insert(study_queue, i + 1, repeat_entry)
+						else
+							print(bold(red("\nThere is no previous card to repeat.")))
+							press_any_key("Press Enter or Space to continue...", { "\r", "\n", " " })
+						end
+					elseif lkey == "s" then
 						local repeat_entry = {}
 						for k, v in pairs(entry) do
 							repeat_entry[k] = v
@@ -1386,6 +1404,7 @@ local function run_quiz(study_queue, config)
 						repeat_entry.repeat_target_idx = entry.repeat_target_idx or i
 						table.insert(study_queue, i + 1, repeat_entry)
 					end
+					-- For 'd', '\r', '\n', ' ' we just continue to the next card
 				end
 
 				break -- Go to the next question
