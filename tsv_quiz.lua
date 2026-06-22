@@ -66,25 +66,68 @@ local function run_quiz(vocab_list)
             masked_context = entry.context:gsub(target_word:lower(), "___")
         end
 
-        print(string.format("Question %d/%d:", i, total))
-        print("Context: " .. masked_context)
-        io.write("Your answer: ")
-        
-        local user_input = io.read()
-        if not user_input or user_input == "exit" then
-            print("\nExiting quiz early.")
-            break
-        end
+        local current_hint = nil
+        while true do
+            print(string.format("Question %d/%d:", i, total))
+            print("Context: " .. masked_context)
+            if current_hint then
+                print(current_hint)
+            end
+            io.write("Your answer (type 'h N M' for a hint, 'q' to quit): ")
+            
+            local user_input = io.read()
+            if not user_input then
+                print("\nExiting quiz early.")
+                return
+            end
 
-        -- Clean up input (strip spaces and convert to lowercase for checking)
-        local clean_input = user_input:gsub("%s+", ""):lower()
-        local correct_word = target_word:gsub("%s+", ""):lower()
+            -- Normalise input: trim leading/trailing whitespace
+            local trimmed_input = user_input:gsub("^%s+", ""):gsub("%s+$", "")
+            local lower_input = trimmed_input:lower()
 
-        if clean_input == correct_word then
-            print("✅ Richtig!\n")
-            score = score + 1
-        else
-            print(string.format("❌ Falsch. The correct word is: '%s'\n", target_word))
+            -- Check for exit commands: q, quit, exit
+            if lower_input == "q" or lower_input == "quit" or lower_input == "exit" then
+                print("\nExiting quiz early.")
+                return
+            end
+
+            -- Match hint patterns: "hint N M", "h N M", "hint N", "h N", "hint", "h"
+            local hint_cmd, arg1, arg2 = trimmed_input:match("^(hint)%s*(%d*)%s*(%d*)$")
+            if not hint_cmd then
+                hint_cmd, arg1, arg2 = trimmed_input:match("^(h)%s*(%d*)%s*(%d*)$")
+            end
+
+            if hint_cmd then
+                local n = tonumber(arg1) or 1
+                local m = tonumber(arg2) or 0
+                local len = #target_word
+                
+                local part_start = target_word:sub(1, n)
+                local part_end = ""
+                if m > 0 then
+                    part_end = target_word:sub(len - m + 1, len)
+                end
+
+                local middle = "..."
+                if n + m >= len then
+                    current_hint = string.format("💡 Hint: %s (length: %d)", target_word, len)
+                else
+                    current_hint = string.format("💡 Hint: %s%s%s (length: %d)", part_start, middle, part_end, len)
+                end
+                print("\n")
+            else
+                -- Clean up input (strip spaces and convert to lowercase for checking)
+                local clean_input = lower_input:gsub("%s+", "")
+                local correct_word = target_word:gsub("%s+", ""):lower()
+
+                if clean_input == correct_word then
+                    print("✅ Richtig!\n")
+                    score = score + 1
+                else
+                    print(string.format("❌ Falsch. The correct word is: '%s'\n", target_word))
+                end
+                break -- Go to the next question
+            end
         end
     end
 
