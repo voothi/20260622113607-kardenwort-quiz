@@ -2,20 +2,21 @@
 -- A command-line utility to parse vocabulary from a TSV file and run a study quiz.
 -- Demonstrates core Lua concepts: File I/O, tables, loops, string parsing, and interactive console input.
 
--- 1. Helper function to split a string by a delimiter (tab in our case)
--- Concept: Functions, Loops, Table insertion, String pattern matching
+-- 1. Helper function to split a string by a delimiter (tab), preserving empty columns
 local function split_line(line, delimiter)
     local result = {}
-    -- "[^\t]+" matches anything that is not a tab character
-    local pattern = string.format("([^%s]+)", delimiter)
-    for part in string.gmatch(line, pattern) do
-        table.insert(result, part)
+    local from = 1
+    local delim_from, delim_to = string.find(line, delimiter, from, true)
+    while delim_from do
+        table.insert(result, string.sub(line, from, delim_from - 1))
+        from = delim_to + 1
+        delim_from, delim_to = string.find(line, delimiter, from, true)
     end
+    table.insert(result, string.sub(line, from))
     return result
 end
 
--- 2. Function to load data from the TSV file
--- Concept: File I/O (io.open), Conditionals, and multi-dimensional tables
+-- 2. Function to load data from the TSV file using header mapping
 local function load_tsv(filename)
     local vocabulary = {}
     local file, err = io.open(filename, "r")
@@ -24,17 +25,45 @@ local function load_tsv(filename)
         return nil
     end
 
+    local headers = nil
+    local word_idx = nil
+    local context_idx = nil
+
     for line in file:lines() do
-        -- Skip empty lines
-        if line:match("%S") then
-            local columns = split_line(line, "\t")
-            -- We want the word (Col 1) and the context sentence (Col 6)
-            if #columns >= 6 then
-                local entry = {
-                    word = columns[1],
-                    context = columns[6]
-                }
-                table.insert(vocabulary, entry)
+        -- Skip comments that are not deck columns
+        if line:sub(1, 1) == "#" and not line:match("^#deck") then
+            -- Skip regular comments
+        elseif line:match("^#deck") then
+            -- This marks an Anki/deck configuration line; we skip it but note it's metadata
+        elseif not headers then
+            -- The first non-comment line contains the headers
+            headers = split_line(line, "\t")
+            -- Find index of "Quotation" (target word) and the context column
+            for idx, h in ipairs(headers) do
+                if h == "Quotation" then
+                    word_idx = idx
+                elseif h == "SentenceSourceContextLeft" or h == "SentenceSource" or h == "WordSourceContext" then
+                    if not context_idx then
+                        context_idx = idx
+                    end
+                end
+            end
+            -- Fallbacks if headers not matched
+            word_idx = word_idx or 1
+            context_idx = context_idx or 6
+        else
+            -- Parse data row
+            if line:match("%S") then
+                local columns = split_line(line, "\t")
+                local target_word = columns[word_idx]
+                local context_sentence = columns[context_idx]
+                
+                if target_word and target_word ~= "" and context_sentence and context_sentence ~= "" then
+                    table.insert(vocabulary, {
+                        word = target_word,
+                        context = context_sentence
+                    })
+                end
             end
         end
     end
@@ -158,7 +187,7 @@ local function run_quiz(vocab_list)
 end
 
 -- Main entry point
-local filename = "data.tsv"
+local filename = arg[1] or "data.tsv"
 local vocab = load_tsv(filename)
 if vocab then
     run_quiz(vocab)
