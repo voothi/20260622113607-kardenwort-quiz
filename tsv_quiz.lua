@@ -91,28 +91,51 @@ local function run_quiz(vocab_list)
                 return
             end
 
-            -- Match hint patterns: "hint N M", "h N M", "hint N", "h N", "hint", "h"
-            local hint_cmd, arg1, arg2 = trimmed_input:match("^(hint)%s*(%d*)%s*(%d*)$")
+            -- Match hint patterns: "hint N K M", "h N K M", "hint N M", "h N M", "hint N", "h N", "hint", "h"
+            local hint_cmd, arg1, arg2, arg3 = trimmed_input:match("^(hint)%s*(%d*)%s*(%d*)%s*(%d*)$")
             if not hint_cmd then
-                hint_cmd, arg1, arg2 = trimmed_input:match("^(h)%s*(%d*)%s*(%d*)$")
+                hint_cmd, arg1, arg2, arg3 = trimmed_input:match("^(h)%s*(%d*)%s*(%d*)%s*(%d*)$")
             end
 
             if hint_cmd then
-                local n = tonumber(arg1) or 1
-                local m = tonumber(arg2) or 0
-                local len = #target_word
+                local n, k, m = 1, 0, 0
+                if arg3 ~= "" then
+                    n = tonumber(arg1) or 1
+                    k = tonumber(arg2) or 0
+                    m = tonumber(arg3) or 0
+                elseif arg2 ~= "" then
+                    n = tonumber(arg1) or 1
+                    k = 0
+                    m = tonumber(arg2) or 0
+                elseif arg1 ~= "" then
+                    n = tonumber(arg1) or 1
+                    k = 0
+                    m = 0
+                end
                 
+                local len = #target_word
                 local part_start = target_word:sub(1, n)
                 local part_end = ""
                 if m > 0 then
                     part_end = target_word:sub(len - m + 1, len)
                 end
 
-                local middle = "..."
-                if n + m >= len then
-                    current_hint = string.format("💡 Hint: %s (length: %d)", target_word, len)
+                if k == 0 then
+                    if n + m >= len then
+                        current_hint = string.format("💡 Hint: %s (length: %d)", target_word, len)
+                    else
+                        current_hint = string.format("💡 Hint: %s...%s (length: %d)", part_start, part_end, len)
+                    end
                 else
-                    current_hint = string.format("💡 Hint: %s%s%s (length: %d)", part_start, middle, part_end, len)
+                    local mid_start = math.floor((len - k) / 2) + 1
+                    local mid_end = mid_start + k - 1
+                    local part_mid = target_word:sub(mid_start, mid_end)
+
+                    if n >= mid_start or mid_end >= len - m + 1 or n + k + m >= len then
+                        current_hint = string.format("💡 Hint: %s (length: %d)", target_word, len)
+                    else
+                        current_hint = string.format("💡 Hint: %s...%s...%s (length: %d)", part_start, part_mid, part_end, len)
+                    end
                 end
                 print("\n")
             else
