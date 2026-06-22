@@ -1260,7 +1260,7 @@ local function run_quiz(study_queue, config)
 					print(bold(red("Warning: ")) .. "Failed to save progress: " .. tostring(save_err))
 				end
 
-				if config.single_card_mode and not entry.is_repeat then
+				if config.single_card_mode then
 					local key = press_any_key(dim("Press Enter or Space to continue (or 's' to repeat)..."))
 					if key and key:lower() == "s" then
 						local repeat_entry = {}
@@ -1270,8 +1270,6 @@ local function run_quiz(study_queue, config)
 						repeat_entry.is_repeat = true
 						table.insert(study_queue, i + 1, repeat_entry)
 					end
-				elseif config.single_card_mode and entry.is_repeat then
-					press_any_key(dim("Press Enter or Space to continue..."))
 				end
 
 				break -- Go to the next question
