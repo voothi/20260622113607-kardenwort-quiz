@@ -357,7 +357,7 @@ def test_single_card_mode(quiz_env):
     
     assert code == 0
     assert "\x1b[2J\x1b[H" in out
-    assert "Press Enter or Space to continue..." in out
+    assert "Press Enter or Space to continue (or 's' to repeat)..." in out
 
 def test_exact_length_masking(quiz_env):
     """Test exact length masking configuration."""
