@@ -1225,9 +1225,36 @@ local function run_quiz(study_queue, config)
 						hint_m = m
 						has_hint = true
 						print("\n")
+					elseif lower_cmd == "s" then
+						if i > 1 then
+							local prev_entry = study_queue[i - 1]
+							local repeat_entry = {}
+							for k, v in pairs(prev_entry) do
+								repeat_entry[k] = v
+							end
+							repeat_entry.is_repeat = true
+
+							table.insert(study_queue, i + 1, entry)
+							table.insert(study_queue, i + 1, repeat_entry)
+
+							if not entry.is_repeat then
+								question_num = question_num - 1
+							end
+
+							print(bold(cyan("\nQueued previous card for practice repeat.")))
+							if config.single_card_mode then
+								press_any_key("Press Enter or Space to continue...")
+							end
+							break
+						else
+							print(bold(red("There is no previous card to repeat.")))
+							if config.single_card_mode then
+								press_any_key("Press Enter or Space to retry...")
+							end
+						end
 					else
 						print(
-							bold(red("Unknown command: ")) .. trimmed_input .. ". Type '/h' for hint, '/q' to quit.\n"
+							bold(red("Unknown command: ")) .. trimmed_input .. ". Type '/h' for hint, '/q' to quit, '/s' to repeat previous.\n"
 						)
 						if config.single_card_mode then
 							press_any_key("Press Enter or Space to retry...")
@@ -1370,6 +1397,7 @@ local function print_help()
 	print("  " .. bold("/h N") .. "        Reveal N letters from the start")
 	print("  " .. bold("/h N M") .. "      Reveal N from the start and M from the end")
 	print("  " .. bold("/h N K M") .. "    Reveal N from the start, K from the middle, M from the end")
+	print("  " .. bold("/s") .. "                Practice repeat the previous card")
 	print("  " .. bold("/q") .. " / " .. bold("/quit") .. " / " .. bold("/exit") .. " Exit the quiz immediately\n")
 	print(bold("Supported TSV Format:"))
 	print("  Requires headers (e.g. Quotation/WordSource and SentenceSource/SentenceSourceContextLeft).")
