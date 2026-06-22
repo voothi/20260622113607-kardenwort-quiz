@@ -536,6 +536,92 @@ local function get_hint_masked_word(word, n, k, m)
     end
 end
 
+-- Helper to mask or reveal a target word (including separable prefix verbs) in the context sentence
+local function mask_context(context, target_word, use_exact, has_hint, hint_n, hint_k, hint_m, is_correct)
+    local p1, p2 = target_word:match("^(.-)%s*%.%.%.%s*(.-)$")
+    
+    local function escape_pattern(text)
+        return text:gsub("([^%w])", "%%%1")
+    end
+    
+    if p1 and p2 then
+        -- Separable verb case: p1 ... p2
+        local r1, r2
+        if is_correct ~= nil then
+            r1 = is_correct and bold(green(p1)) or bold(red(p1))
+            r2 = is_correct and bold(green(p2)) or bold(red(p2))
+        elseif has_hint and use_exact then
+            local hint_word = get_hint_masked_word(target_word, hint_n, hint_k, hint_m)
+            local hp1, hp2 = hint_word:match("^(.-)%s*%.%.%.%s*(.-)$")
+            r1 = bold(yellow(hp1 or p1))
+            r2 = bold(yellow(hp2 or p2))
+        else
+            local mask1 = get_mask_placeholder(p1, use_exact)
+            local mask2 = get_mask_placeholder(p2, use_exact)
+            r1 = bold(yellow(mask1))
+            r2 = bold(yellow(mask2))
+        end
+        
+        local function try_replace(p1_case, p2_case)
+            local ep1 = escape_pattern(p1_case)
+            local ep2 = escape_pattern(p2_case)
+            local pattern = "(" .. ep1 .. ")(.-)(" .. ep2 .. ")"
+            local masked, count = context:gsub(pattern, function(m1, mid, m2)
+                local final_r1 = r1
+                local final_r2 = r2
+                if is_correct ~= nil then
+                    final_r1 = is_correct and bold(green(m1)) or bold(red(m1))
+                    final_r2 = is_correct and bold(green(m2)) or bold(red(m2))
+                end
+                return final_r1 .. mid .. final_r2
+            end)
+            return masked, count
+        end
+        
+        -- Try exact casing
+        local res, count = try_replace(p1, p2)
+        if count > 0 then return res end
+        
+        -- Try lowercase parts
+        res, count = try_replace(p1:lower(), p2:lower())
+        if count > 0 then return res end
+        
+        -- Try capitalized part1 and lowercase part2 (common in German sentences)
+        local first = utf8_sub(p1, 1, 1):upper()
+        local rest = utf8_sub(p1, 2)
+        res, count = try_replace(first .. rest, p2:lower())
+        if count > 0 then return res end
+        
+        return context
+    else
+        -- Regular single word case
+        local replacement
+        if is_correct ~= nil then
+            replacement = is_correct and bold(green(target_word)) or bold(red(target_word))
+        elseif has_hint and use_exact then
+            local hint_word = get_hint_masked_word(target_word, hint_n, hint_k, hint_m)
+            replacement = bold(yellow(hint_word))
+        else
+            local mask = get_mask_placeholder(target_word, use_exact)
+            replacement = bold(yellow(mask))
+        end
+        
+        local masked, count = context:gsub(target_word, replacement)
+        if count > 0 then return masked end
+        
+        masked, count = context:gsub(target_word:lower(), replacement)
+        if count > 0 then return masked end
+        
+        -- Also try capitalized word
+        local first = utf8_sub(target_word, 1, 1):upper()
+        local rest = utf8_sub(target_word, 2)
+        masked, count = context:gsub(first .. rest, replacement)
+        if count > 0 then return masked end
+        
+        return context
+    end
+end
+
 -- 3. Run the interactive CLI quiz
 local function run_quiz(study_queue, config)
     if not study_queue or #study_queue == 0 then
@@ -553,17 +639,7 @@ local function run_quiz(study_queue, config)
         local has_hint = false
 
         while true do
-            local mask_str
-            if has_hint and config.exact_length_mask then
-                mask_str = get_hint_masked_word(target_word, hint_n, hint_k, hint_m)
-            else
-                mask_str = get_mask_placeholder(target_word, config.exact_length_mask)
-            end
-            local placeholder = bold(yellow(mask_str))
-            local masked_context = entry.context:gsub(target_word, placeholder)
-            if masked_context == entry.context then
-                masked_context = entry.context:gsub(target_word:lower(), placeholder)
-            end
+            local masked_context = mask_context(entry.context, target_word, config.exact_length_mask, has_hint, hint_n, hint_k, hint_m, nil)
 
             if config.single_card_mode then
                 clear_screen()
@@ -656,9 +732,9 @@ local function run_quiz(study_queue, config)
                     end
                 end
             else
-                -- Clean up input (strip spaces and convert to lowercase for checking)
-                local clean_input = trimmed_input:lower():gsub("%s+", "")
-                local correct_word = target_word:gsub("%s+", ""):lower()
+                -- Clean up input (strip spaces, dots/ellipses, and convert to lowercase for checking)
+                local clean_input = trimmed_input:lower():gsub("%s+", ""):gsub("%.+", "")
+                local correct_word = target_word:lower():gsub("%s+", ""):gsub("%.+", "")
 
                 local now = os.time()
                 local new_box = entry.box
@@ -694,12 +770,7 @@ local function run_quiz(study_queue, config)
                     print(bold(cyan(string.format("Question %d/%d:", i, total))) .. dim(string.format(" [File: %s | Box %d]", basename, entry.box)))
                 end
 
-                -- Print the context sentence with the target word highlighted
-                local colored_word = is_correct and bold(green(target_word)) or bold(red(target_word))
-                local revealed_context = entry.context:gsub(target_word, colored_word)
-                if revealed_context == entry.context then
-                    revealed_context = entry.context:gsub(target_word:lower(), colored_word)
-                end
+                local revealed_context = mask_context(entry.context, target_word, config.exact_length_mask, false, 0, 0, 0, is_correct)
                 print(bold("Context: ") .. revealed_context)
 
                 if is_correct then

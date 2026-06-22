@@ -527,9 +527,16 @@ def test_boundary_separable_verbs(quiz_env):
     """Test target word with spaces and ellipses (German separable verb: stehe ... auf)."""
     focus_single_card(quiz_env, "20260303214721-text1.de.tsv", "stehe ... auf")
     
-    # Answering correctly using either spacing or dots
-    # The normalized word is 'stehe...auf'
-    code, out, err = run_quiz(quiz_env, ["20260303214721-text1.de.tsv"], ["stehe ... auf", "/q"])
+    # 1. Test masking in the prompt
+    code, out, err = run_quiz(quiz_env, ["20260303214721-text1.de.tsv"], ["/q"])
+    assert code == 0
+    clean_out = strip_ansi(out)
+    # The stem "stehe" and prefix "auf" should both be masked with the default "___" placeholder
+    assert "Ich ___ morgen früh ___." in clean_out
+
+    # 2. Test answering correctly WITHOUT dots ("stehe auf")
+    focus_single_card(quiz_env, "20260303214721-text1.de.tsv", "stehe ... auf")
+    code, out, err = run_quiz(quiz_env, ["20260303214721-text1.de.tsv"], ["stehe auf", "/q"])
     assert code == 0
     assert "✅ Correct!" in out
     
@@ -538,10 +545,12 @@ def test_boundary_separable_verbs(quiz_env):
     entry = read_tsv_entry(tsv_file, "stehe ... auf")
     assert entry is not None
     assert entry["LeitnerBox"] == "2"
-    
-    # Verify context remains unmasked because the exact string 'stehe ... auf' is not in the sentence
-    # but rather 'stehe' and 'auf' are split.
-    assert "Ich stehe morgen früh auf." in out
+
+    # 3. Test answering correctly WITH dots ("stehe ... auf")
+    focus_single_card(quiz_env, "20260303214721-text1.de.tsv", "stehe ... auf")
+    code, out, err = run_quiz(quiz_env, ["20260303214721-text1.de.tsv"], ["stehe ... auf", "/q"])
+    assert code == 0
+    assert "✅ Correct!" in out
 
 def test_boundary_extreme_length_and_multibyte(quiz_env):
     """Test extreme length word (42 chars) and UTF-8 characters (Donaudampfschifffahrtsgesellschaftskapitän)."""
