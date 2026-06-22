@@ -16,6 +16,19 @@ local function split_line(line, delimiter)
     return result
 end
 
+-- ANSI VT100 VT100 Escape Color Codes Helper Functions
+local function c(code, text)
+    return string.format("\27[%sm%s\27[0m", code, text)
+end
+
+local function bold(text)    return c("1", text) end
+local function dim(text)     return c("90", text) end
+local function cyan(text)    return c("36", text) end
+local function green(text)   return c("32", text) end
+local function yellow(text)  return c("33", text) end
+local function red(text)     return c("31", text) end
+local function magenta(text) return c("35", text) end
+
 -- 2. Function to load data from the TSV file using header mapping
 local function load_tsv(filename)
     local vocabulary = {}
@@ -118,9 +131,9 @@ local function run_quiz(vocab_list)
         return
     end
 
-    print("=== Kardenwort TSV Quiz ===")
-    print("Fill in the blank '___' based on the context sentence.")
-    print("Type 'exit' to quit.\n")
+    print(bold(cyan("=== Kardenwort TSV Quiz ===")))
+    print(dim("Fill in the blank '") .. yellow("___") .. dim("' based on the context sentence."))
+    print(dim("Type 'q' or 'exit' to quit.\n"))
 
     local score = 0
     local total = #vocab_list
@@ -129,24 +142,25 @@ local function run_quiz(vocab_list)
         -- Replace the target word in the context sentence with a blank placeholder
         -- Case insensitive replacement check or literal match
         local target_word = entry.word
-        local masked_context = entry.context:gsub(target_word, "___")
+        local placeholder = bold(yellow("___"))
+        local masked_context = entry.context:gsub(target_word, placeholder)
         -- If gsub didn't match (due to casing or punctuation), fall back to lowercase replacement
         if masked_context == entry.context then
-            masked_context = entry.context:gsub(target_word:lower(), "___")
+            masked_context = entry.context:gsub(target_word:lower(), placeholder)
         end
 
         local current_hint = nil
         while true do
-            print(string.format("Question %d/%d:", i, total))
-            print("Context: " .. masked_context)
+            print(bold(cyan(string.format("Question %d/%d:", i, total))))
+            print(bold("Context: ") .. masked_context)
             if current_hint then
                 print(current_hint)
             end
-            io.write("Your answer (type 'h N M' for a hint, 'q' to quit): ")
+            io.write(bold("Your answer ") .. dim("(type 'h N M' for a hint, 'q' to quit): "))
             
             local user_input = io.read()
             if not user_input then
-                print("\nExiting quiz early.")
+                print(magenta("\nExiting quiz early."))
                 return
             end
 
@@ -156,7 +170,7 @@ local function run_quiz(vocab_list)
 
             -- Check for exit commands: q, quit, exit
             if lower_input == "q" or lower_input == "quit" or lower_input == "exit" then
-                print("\nExiting quiz early.")
+                print(magenta("\nExiting quiz early."))
                 return
             end
 
@@ -189,11 +203,12 @@ local function run_quiz(vocab_list)
                     part_end = target_word:sub(len - m + 1, len)
                 end
 
+                local hint_prefix = bold(cyan("💡 Hint: "))
                 if k == 0 then
                     if n + m >= len then
-                        current_hint = string.format("💡 Hint: %s (length: %d)", target_word, len)
+                        current_hint = string.format("%s%s (length: %d)", hint_prefix, green(target_word), len)
                     else
-                        current_hint = string.format("💡 Hint: %s...%s (length: %d)", part_start, part_end, len)
+                        current_hint = string.format("%s%s...%s (length: %d)", hint_prefix, green(part_start), green(part_end), len)
                     end
                 else
                     local mid_start = math.floor((len - k) / 2) + 1
@@ -201,9 +216,9 @@ local function run_quiz(vocab_list)
                     local part_mid = target_word:sub(mid_start, mid_end)
 
                     if n >= mid_start or mid_end >= len - m + 1 or n + k + m >= len then
-                        current_hint = string.format("💡 Hint: %s (length: %d)", target_word, len)
+                        current_hint = string.format("%s%s (length: %d)", hint_prefix, green(target_word), len)
                     else
-                        current_hint = string.format("💡 Hint: %s...%s...%s (length: %d)", part_start, part_mid, part_end, len)
+                        current_hint = string.format("%s%s...%s...%s (length: %d)", hint_prefix, green(part_start), green(part_mid), green(part_end), len)
                     end
                 end
                 print("\n")
@@ -213,17 +228,17 @@ local function run_quiz(vocab_list)
                 local correct_word = target_word:gsub("%s+", ""):lower()
 
                 if clean_input == correct_word then
-                    print("✅ Richtig!\n")
+                    print(bold(green("✅ Richtig!\n")))
                     score = score + 1
                 else
-                    print(string.format("❌ Falsch. The correct word is: '%s'\n", target_word))
+                    print(string.format(bold(red("❌ Falsch.")) .. " The correct word is: '" .. green("%s") .. "'\n", target_word))
                 end
                 break -- Go to the next question
             end
         end
     end
 
-    print(string.format("Quiz finished! You scored %d out of %d.", score, total))
+    print(bold(green(string.format("Quiz finished! You scored %d out of %d.", score, total))))
 end
 
 -- Main entry point
