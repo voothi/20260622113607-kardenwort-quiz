@@ -1,8 +1,8 @@
 # install.py
 # ==============================================================================
-# B2 Deutsch Quiz — Windows SendTo Shortcut Installer
-# Creates a "B2 Deutsch Quiz" shortcut in the Windows "Send to" folder.
-# Right-click a .tsv file → Send to → B2 Deutsch Quiz to start studying!
+# Kardenwort TSV Quiz — Windows SendTo Shortcut Installer
+# Creates a "Kardenwort TSV Quiz" shortcut in the Windows "Send to" folder.
+# Right-click a .tsv file → Send to → Kardenwort TSV Quiz to start studying!
 # ==============================================================================
 
 import os
@@ -10,7 +10,8 @@ import subprocess
 import sys
 import shutil
 
-SHORTCUT_DISPLAY_NAME = "B2 Deutsch Quiz"
+SHORTCUT_DISPLAY_NAME = "Kardenwort TSV Quiz"
+LEGACY_SHORTCUT_NAMES = ("B2 Deutsch Quiz", "kardenwort tsv quiz")
 SENDTO_DIRECTORY = r"%APPDATA%\Microsoft\Windows\SendTo"
 
 def main():
@@ -38,6 +39,16 @@ def main():
     sendto_dir = os.path.expandvars(SENDTO_DIRECTORY)
     os.makedirs(sendto_dir, exist_ok=True)
     shortcut_path = os.path.join(sendto_dir, f"{SHORTCUT_DISPLAY_NAME}.lnk")
+
+    # 3. Clean up legacy shortcuts (if any)
+    for legacy_name in LEGACY_SHORTCUT_NAMES:
+        old_path = os.path.join(sendto_dir, f"{legacy_name}.lnk")
+        if os.path.exists(old_path):
+            try:
+                os.remove(old_path)
+                print(f"Cleaned up legacy shortcut: {os.path.basename(old_path)}")
+            except Exception as exc:
+                print(f"Warning: Could not remove old shortcut: {exc}")
 
     print(f"Script Path:       {script_path}")
     print(f"Lua Path:          {lua_path}")
