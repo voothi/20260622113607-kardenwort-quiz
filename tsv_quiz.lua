@@ -118,7 +118,7 @@ local function run_quiz(vocab_list)
         return
     end
 
-    print("=== Deutsche Vokabeln B2 Quiz ===")
+    print("=== Kardenwort TSV Quiz ===")
     print("Fill in the blank '___' based on the context sentence.")
     print("Type 'exit' to quit.\n")
 
