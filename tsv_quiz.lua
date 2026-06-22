@@ -660,7 +660,7 @@ local function get_two_line_diff(user_str, target_str)
             table.insert(user_parts, red(op.charA))
             table.insert(target_parts, dim(op.charB))
         elseif op.type == "missing" then
-            table.insert(user_parts, red(op.charA))
+            table.insert(user_parts, dim(op.charA))
             table.insert(target_parts, dim(op.charB))
         elseif op.type == "extra" then
             table.insert(user_parts, red(op.charA))
@@ -928,8 +928,8 @@ local function run_quiz(study_queue, config)
                     print(bold(green("✅ Correct!\n")))
                 else
                     local u_line, t_line = get_two_line_diff(trimmed_input, target_word)
-                    print(u_line)
-                    print(t_line .. "\n")
+                    print(dim("User:   ") .. u_line)
+                    print(dim("Target: ") .. t_line .. "\n")
                 end
 
                 if not save_ok then
