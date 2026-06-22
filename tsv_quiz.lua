@@ -112,6 +112,18 @@ local function clear_screen()
     io.write("\27[2J\27[H")
 end
 
+-- Helper to wait for a keypress (supporting Space and Enter)
+local function press_any_key(prompt)
+    io.write(prompt)
+    io.flush()
+    if package.config:sub(1,1) == "\\" then
+        os.execute("pause >nul")
+    else
+        os.execute("read -n 1 -s -r -p ''")
+    end
+    print()
+end
+
 -- Simple INI parser for config.ini
 local function load_config(filename)
     local config = {
@@ -507,8 +519,7 @@ local function run_quiz(study_queue, filename, raw_rows, box_idx, due_idx, confi
                     else
                         print(bold(red("Unknown command: ")) .. trimmed_input .. ". Type '/h' for hint, '/q' to quit.\n")
                         if config.single_card_mode then
-                            io.write("Press Enter to retry...")
-                            io.read()
+                            press_any_key("Press Enter or Space to retry...")
                         end
                     end
                 end
@@ -571,8 +582,7 @@ local function run_quiz(study_queue, filename, raw_rows, box_idx, due_idx, confi
                 end
 
                 if config.single_card_mode then
-                    io.write(dim("Press Enter to continue..."))
-                    io.read()
+                    press_any_key(dim("Press Enter or Space to continue..."))
                 end
 
                 break -- Go to the next question
@@ -756,5 +766,4 @@ if not ok then
     print(err)
 end
 
-io.write("\nPress Enter to exit...")
-local _ = io.read()
+press_any_key("\nPress Enter or Space to exit...")
