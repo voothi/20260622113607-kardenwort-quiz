@@ -141,27 +141,46 @@ local function clear_screen()
 end
 
 -- Helper to wait for a keypress (supporting Space and Enter)
-local function press_any_key(prompt)
+local function press_any_key(prompt, allowed_keys)
 	io.write(prompt)
 	io.flush()
-	local key = ""
-	if package.config:sub(1, 1) == "\\" then
-		local f = io.popen(
-			"python -c \"import msvcrt, sys; ch = msvcrt.getch() if sys.stdin.isatty() else b''; print(ch.decode('utf-8', 'ignore') if isinstance(ch, bytes) else ch, end='')\" 2>nul"
-		)
-		if f then
-			key = f:read("*a")
-			f:close()
+	while true do
+		local key = ""
+		if package.config:sub(1, 1) == "\\" then
+			local f = io.popen(
+				"python -c \"import msvcrt, sys; ch = msvcrt.getch() if sys.stdin.isatty() else b''; print(ch.decode('utf-8', 'ignore') if isinstance(ch, bytes) else ch, end='')\" 2>nul"
+			)
+			if f then
+				key = f:read("*a")
+				f:close()
+			end
+		else
+			local f = io.popen("read -n 1 -s -r key; echo -n $key")
+			if f then
+				key = f:read("*a")
+				f:close()
+			end
 		end
-	else
-		local f = io.popen("read -n 1 -s -r key; echo -n $key")
-		if f then
-			key = f:read("*a")
-			f:close()
+
+		-- Pytest sends empty string when no tty
+		if key == "" then
+			print()
+			return key
+		end
+
+		if not allowed_keys then
+			print()
+			return key
+		end
+
+		local lkey = key:lower()
+		for _, v in ipairs(allowed_keys) do
+			if key == v or lkey == v then
+				print()
+				return key
+			end
 		end
 	end
-	print()
-	return key
 end
 
 -- Simple INI parser for config.ini
@@ -1245,7 +1264,7 @@ local function run_quiz(study_queue, config)
 						else
 							print(bold(red("There is no previous card to repeat.")))
 							if config.single_card_mode then
-								press_any_key("Press Enter or Space to retry...")
+								press_any_key("Press Enter or Space to retry...", {"\r", "\n", " "})
 							end
 						end
 					else
@@ -1253,7 +1272,7 @@ local function run_quiz(study_queue, config)
 							bold(red("Unknown command: ")) .. trimmed_input .. ". Type '/h' for hint, '/q' to quit, '/s' to repeat previous.\n"
 						)
 						if config.single_card_mode then
-							press_any_key("Press Enter or Space to retry...")
+							press_any_key("Press Enter or Space to retry...", {"\r", "\n", " "})
 						end
 					end
 				end
@@ -1346,7 +1365,7 @@ local function run_quiz(study_queue, config)
 				end
 
 				if config.single_card_mode then
-					local key = press_any_key(dim("Press Enter or Space to continue (or 's' to repeat)..."))
+					local key = press_any_key(dim("Press Enter or Space to continue (or 's' to repeat)..."), {"\r", "\n", " ", "s"})
 					if key and key:lower() == "s" then
 						local repeat_entry = {}
 						for k, v in pairs(entry) do
@@ -1366,6 +1385,7 @@ local function run_quiz(study_queue, config)
 		clear_screen()
 	end
 	print(bold(green(string.format("Quiz finished! You scored %d out of %d.", score, total))))
+	press_any_key("\nPress Enter or Space to exit...", {"\r", "\n", " "})
 end
 
 -- Helper to check if file exists
@@ -1646,4 +1666,4 @@ if not ok then
 	print(err)
 end
 
-press_any_key("\nPress Enter or Space to exit...")
+press_any_key("\nPress Enter or Space to exit...", {"\r", "\n", " "})
