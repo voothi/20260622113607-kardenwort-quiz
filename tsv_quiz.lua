@@ -755,7 +755,7 @@ local function get_two_line_diff(user_str, target_str)
 
 	for i = 1, n do
 		for j = 1, m do
-			local cost = (A[i]:lower() == B[j]:lower()) and 0 or 1
+			local cost = (A[i] == B[j]) and 0 or 1
 			dp[i][j] = math.min(
 				dp[i - 1][j] + 1, -- deletion (extra in user)
 				dp[i][j - 1] + 1, -- insertion (missing in user)
@@ -769,7 +769,7 @@ local function get_two_line_diff(user_str, target_str)
 	local ops = {}
 
 	while i > 0 or j > 0 do
-		if i > 0 and j > 0 and A[i]:lower() == B[j]:lower() then
+		if i > 0 and j > 0 and A[i] == B[j] then
 			table.insert(ops, { type = "match", charA = A[i], charB = B[j] })
 			i = i - 1
 			j = j - 1
@@ -855,7 +855,7 @@ local function get_inline_colored_diff(user_str, original_target)
 
 	for i = 1, n do
 		for j = 1, m do
-			local cost = (A[i]:lower() == B[j]:lower()) and 0 or 1
+			local cost = (A[i] == B[j]) and 0 or 1
 			dp[i][j] = math.min(dp[i - 1][j] + 1, dp[i][j - 1] + 1, dp[i - 1][j - 1] + cost)
 		end
 	end
@@ -863,7 +863,7 @@ local function get_inline_colored_diff(user_str, original_target)
 	local i, j = n, m
 	local ops = {}
 	while i > 0 or j > 0 do
-		if i > 0 and j > 0 and A[i]:lower() == B[j]:lower() then
+		if i > 0 and j > 0 and A[i] == B[j] then
 			table.insert(ops, { type = "match" })
 			i, j = i - 1, j - 1
 		elseif i > 0 and j > 0 and dp[i][j] == dp[i - 1][j - 1] + 1 then
