@@ -1336,14 +1336,10 @@ local function run_quiz(study_queue, config)
 				)
 				print(revealed_context)
 
-				if is_correct then
-					print(bold(green("\n✅ Correct!\n")))
-				else
-					print()
-					local u_line, t_line = get_two_line_diff(trimmed_input, target_word, config.case_sensitive_diff, config.ignore_punctuation)
-					print_framed_diff(u_line, t_line)
-					print()
-				end
+				print()
+				local u_line, t_line = get_two_line_diff(trimmed_input, target_word, config.case_sensitive_diff, config.ignore_punctuation)
+				print_framed_diff(u_line, t_line)
+				print()
 
 				if entry.is_repeat then
 					print(dim("This was a practice repeat. Your score and card progress were not affected."))

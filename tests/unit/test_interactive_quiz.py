@@ -129,7 +129,7 @@ def test_correct_answer_updates_box(quiz_env):
     code, out, err = run_quiz(quiz_env, ["20260604184114-microsoft-just-shocked-the.en.tsv"], ["properly", "/q"])
     
     assert code == 0
-    assert "✅ Correct!" in out
+    assert "Diff" in out
     
     # Verify the TSV was updated
     tsv_file = quiz_env / "20260604184114-microsoft-just-shocked-the.en.tsv"
@@ -144,7 +144,7 @@ def test_case_insensitivity_and_spacing(quiz_env):
     code, out, err = run_quiz(quiz_env, ["20260604184114-microsoft-just-shocked-the.en.tsv"], ["  PROperly  ", "/q"])
     
     assert code == 0
-    assert "✅ Correct!" in out
+    assert "Diff" in out
     
     tsv_file = quiz_env / "20260604184114-microsoft-just-shocked-the.en.tsv"
     entry = read_tsv_entry(tsv_file, "properly")
@@ -392,7 +392,7 @@ def test_headerless_tsv_fallback(quiz_env):
     code, out, err = run_quiz(quiz_env, ["headerless.tsv"], ["dog", "/q"])
     assert code == 0
     assert "Loading: headerless.tsv" in out
-    assert "✅ Correct!" in out
+    assert "Diff" in out
     
     entry = read_tsv_entry(headerless_tsv, "dog")
     assert entry is not None
@@ -413,7 +413,7 @@ def test_malformed_tsv_rows_skipped(quiz_env):
     assert code == 0
     assert "Loading: malformed.tsv" in out
     assert "Queue Summary: 0 due reviews, 1 new cards selected." in out
-    assert "✅ Correct!" in out
+    assert "Diff" in out
 
 def test_scheduling_new_review_orders(quiz_env):
     """Test configurations for new_review_order sorting options."""
@@ -520,7 +520,7 @@ def test_unknown_command_handling(quiz_env):
     code, out, err = run_quiz(quiz_env, ["20260604184114-microsoft-just-shocked-the.en.tsv"], ["/invalidcmd", "properly", "/q"])
     assert code == 0
     assert "Unknown command: /invalidcmd" in strip_ansi(out)
-    assert "✅ Correct!" in strip_ansi(out)
+    assert "Diff" in strip_ansi(out)
 
 
 # === NEW BOUNDARY TESTS FOR REAL FIXTURE RECORDS ===
@@ -540,7 +540,7 @@ def test_boundary_separable_verbs(quiz_env):
     focus_single_card(quiz_env, "20260303214721-text1.de.tsv", "stehe ... auf")
     code, out, err = run_quiz(quiz_env, ["20260303214721-text1.de.tsv"], ["stehe auf", "/q"])
     assert code == 0
-    assert "✅ Correct!" in out
+    assert "Diff" in out
     
     # Verify TSV box update
     tsv_file = quiz_env / "20260303214721-text1.de.tsv"
@@ -552,7 +552,7 @@ def test_boundary_separable_verbs(quiz_env):
     focus_single_card(quiz_env, "20260303214721-text1.de.tsv", "stehe ... auf")
     code, out, err = run_quiz(quiz_env, ["20260303214721-text1.de.tsv"], ["stehe ... auf", "/q"])
     assert code == 0
-    assert "✅ Correct!" in out
+    assert "Diff" in out
 
     # 4. Test per-word hint formatting and context prompt masking
     config_path = quiz_env / "config.ini"
@@ -596,7 +596,7 @@ def test_boundary_punctuation_and_apostrophes(quiz_env):
     
     code, out, err = run_quiz(quiz_env, ["20260604184114-microsoft-just-shocked-the.en.tsv"], ["microsoft's ai", "/q"])
     assert code == 0
-    assert "✅ Correct!" in out
+    assert "Diff" in out
     
     tsv_file = quiz_env / "20260604184114-microsoft-just-shocked-the.en.tsv"
     entry = read_tsv_entry(tsv_file, "Microsoft's AI")
@@ -609,7 +609,7 @@ def test_boundary_hash_sign_in_context(quiz_env):
     
     code, out, err = run_quiz(quiz_env, ["20260303214721-text1.de.tsv"], ["weg.##teil", "/q"])
     assert code == 0
-    assert "✅ Correct!" in out
+    assert "Diff" in out
     
     tsv_file = quiz_env / "20260303214721-text1.de.tsv"
     entry = read_tsv_entry(tsv_file, "weg. ## Teil")
@@ -709,7 +709,7 @@ def test_config_ignore_punctuation(quiz_env):
     # By default, ignore_punctuation = true, so "stehe auf" is correct.
     code, out, err = run_quiz(quiz_env, ["20260303214721-text1.de.tsv"], ["stehe auf", "/q"])
     assert code == 0
-    assert "✅ Correct!" in out
+    assert "Diff" in out
 
     # Now test with ignore_punctuation = false
     focus_single_card(quiz_env, "20260303214721-text1.de.tsv", "stehe ... auf")
@@ -727,7 +727,7 @@ def test_config_ignore_punctuation(quiz_env):
     focus_single_card(quiz_env, "20260303214721-text1.de.tsv", "stehe ... auf")
     code, out, err = run_quiz(quiz_env, ["20260303214721-text1.de.tsv"], ["stehe ... auf", "/q"])
     assert code == 0
-    assert "✅ Correct!" in out
+    assert "Diff" in out
 
 def test_interactive_repeat_command(quiz_env):
     """Test that the /s command queues the previous card for a practice repeat."""
