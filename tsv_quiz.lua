@@ -107,6 +107,11 @@ local function shuffle_table(t)
     return t
 end
 
+-- Helper to clear the terminal screen using ANSI escape sequences
+local function clear_screen()
+    io.write("\27[2J\27[H")
+end
+
 -- Simple INI parser for config.ini
 local function load_config(filename)
     local config = {
@@ -116,7 +121,8 @@ local function load_config(filename)
         incorrect_penalty = "reset",
         new_review_order = "review_first",
         review_sort_order = "due_date",
-        new_sort_order = "order_added"
+        new_sort_order = "order_added",
+        single_card_mode = false
     }
 
     local f = io.open(filename, "r")
@@ -168,6 +174,8 @@ local function load_config(filename)
                         if val == "order_added" or val == "random" then
                             config.new_sort_order = val
                         end
+                    elseif key == "single_card_mode" then
+                        config.single_card_mode = (val == "true" or val == "1")
                     end
                 end
             end
@@ -396,15 +404,12 @@ local function load_tsv(filename)
 end
 
 -- 3. Run the interactive CLI quiz
+-- 3. Run the interactive CLI quiz
 local function run_quiz(study_queue, filename, raw_rows, box_idx, due_idx, config)
     if not study_queue or #study_queue == 0 then
         print("No cards to review.")
         return
     end
-
-    print(bold(cyan("=== Kardenwort TSV Quiz ===")))
-    print(dim("Fill in the blank '") .. yellow("___") .. dim("' based on the context sentence."))
-    print(dim("Type '/q' or '/exit' to quit.\n"))
 
     local score = 0
     local total = #study_queue
@@ -419,6 +424,14 @@ local function run_quiz(study_queue, filename, raw_rows, box_idx, due_idx, confi
 
         local current_hint = nil
         while true do
+            if config.single_card_mode then
+                clear_screen()
+            end
+
+            print(bold(cyan("=== Kardenwort TSV Quiz ===")))
+            print(dim("Fill in the blank '") .. yellow("___") .. dim("' based on the context sentence."))
+            print(dim("Type '/q' or '/exit' to quit.\n"))
+
             print(bold(cyan(string.format("Question %d/%d:", i, total))) .. dim(string.format(" [Box %d]", entry.box)))
             print(bold("Context: ") .. masked_context)
             if current_hint then
@@ -493,6 +506,10 @@ local function run_quiz(study_queue, filename, raw_rows, box_idx, due_idx, confi
                         print("\n")
                     else
                         print(bold(red("Unknown command: ")) .. trimmed_input .. ". Type '/h' for hint, '/q' to quit.\n")
+                        if config.single_card_mode then
+                            io.write("Press Enter to retry...")
+                            io.read()
+                        end
                     end
                 end
             else
@@ -502,12 +519,12 @@ local function run_quiz(study_queue, filename, raw_rows, box_idx, due_idx, confi
 
                 local now = os.time()
                 local new_box = entry.box
-                if clean_input == correct_word then
-                    print(bold(green("✅ Correct!\n")))
+                local is_correct = (clean_input == correct_word)
+
+                if is_correct then
                     score = score + 1
                     new_box = math.min(entry.box + 1, #config.intervals)
                 else
-                    print(string.format(bold(red("❌ Incorrect.")) .. " The correct word is: '" .. green("%s") .. "'\n", target_word))
                     if config.incorrect_penalty == "reset" then
                         new_box = 1
                     else
@@ -525,8 +542,37 @@ local function run_quiz(study_queue, filename, raw_rows, box_idx, due_idx, confi
                 entry.raw_columns[due_idx] = tostring(new_due)
 
                 local save_ok, save_err = save_tsv(filename, raw_rows)
+
+                -- BACK SIDE (Result presentation)
+                if config.single_card_mode then
+                    clear_screen()
+                    print(bold(cyan("=== Kardenwort TSV Quiz ===")))
+                    print(dim("Fill in the blank '") .. yellow("___") .. dim("' based on the context sentence."))
+                    print(dim("Type '/q' or '/exit' to quit.\n"))
+                    print(bold(cyan(string.format("Question %d/%d:", i, total))) .. dim(string.format(" [Box %d]", entry.box)))
+                end
+
+                -- Print the context sentence with the target word highlighted
+                local colored_word = is_correct and bold(green(target_word)) or bold(red(target_word))
+                local revealed_context = entry.context:gsub(target_word, colored_word)
+                if revealed_context == entry.context then
+                    revealed_context = entry.context:gsub(target_word:lower(), colored_word)
+                end
+                print(bold("Context: ") .. revealed_context)
+
+                if is_correct then
+                    print(bold(green("✅ Correct!\n")))
+                else
+                    print(string.format(bold(red("❌ Incorrect.")) .. " The correct word is: '" .. green("%s") .. "'\n", target_word))
+                end
+
                 if not save_ok then
                     print(bold(red("Warning: ")) .. "Failed to save progress: " .. tostring(save_err))
+                end
+
+                if config.single_card_mode then
+                    io.write(dim("Press Enter to continue..."))
+                    io.read()
                 end
 
                 break -- Go to the next question
@@ -534,6 +580,9 @@ local function run_quiz(study_queue, filename, raw_rows, box_idx, due_idx, confi
         end
     end
 
+    if config.single_card_mode then
+        clear_screen()
+    end
     print(bold(green(string.format("Quiz finished! You scored %d out of %d.", score, total))))
 end
 
