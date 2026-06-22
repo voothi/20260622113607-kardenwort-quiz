@@ -1003,7 +1003,7 @@ local function run_quiz(study_queue, config)
 
             local basename = entry.filename:match("([^/\\]+)$") or entry.filename
             print(bold(cyan(string.format("Question %d/%d:", i, total))) .. dim(string.format(" [File: %s | Box %d]", basename, entry.box)))
-            print(bold("Context: ") .. masked_context)
+            print(masked_context)
             if current_hint then
                 print(current_hint)
             end
@@ -1112,7 +1112,7 @@ local function run_quiz(study_queue, config)
                 end
 
                 local revealed_context = mask_context(entry.context, target_word, config.exact_length_mask, false, 0, 0, 0, is_correct, trimmed_input)
-                print(bold("Context: ") .. revealed_context)
+                print(revealed_context)
 
                 if is_correct then
                     print(bold(green("✅ Correct!\n")))
