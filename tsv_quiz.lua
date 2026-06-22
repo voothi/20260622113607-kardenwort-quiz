@@ -1244,7 +1244,7 @@ local function run_quiz(study_queue, config)
 						hint_m = m
 						has_hint = true
 						print("\n")
-					elseif lower_cmd == "s" then
+					elseif lower_cmd == "p" then
 						if i > 1 then
 							local repeat_entry = {}
 							for k, v in pairs(study_queue[i - 1]) do
@@ -1269,7 +1269,7 @@ local function run_quiz(study_queue, config)
 						end
 					else
 						print(
-							bold(red("Unknown command: ")) .. trimmed_input .. ". Type '/h' for hint, '/q' to quit, '/s' to repeat previous.\n"
+							bold(red("Unknown command: ")) .. trimmed_input .. ". Type '/h' for hint, '/q' to quit, '/p' to repeat previous.\n"
 						)
 						if config.single_card_mode then
 							press_any_key("Press Enter or Space to retry...", {"\r", "\n", " "})
@@ -1409,7 +1409,7 @@ local function print_help()
 	print("  " .. bold("/h N") .. "        Reveal N letters from the start")
 	print("  " .. bold("/h N M") .. "      Reveal N from the start and M from the end")
 	print("  " .. bold("/h N K M") .. "    Reveal N from the start, K from the middle, M from the end")
-	print("  " .. bold("/s") .. "                Practice repeat the previous card")
+	print("  " .. bold("/p") .. "                Practice repeat the previous card")
 	print("  " .. bold("/q") .. " / " .. bold("/quit") .. " / " .. bold("/exit") .. " Exit the quiz immediately\n")
 	print(bold("Supported TSV Format:"))
 	print("  Requires headers (e.g. Quotation/WordSource and SentenceSource/SentenceSourceContextLeft).")
