@@ -995,8 +995,12 @@ local function run_quiz(study_queue, config)
 
     local score = 0
     local total = #study_queue
+    local question_num = 0
 
     for i, entry in ipairs(study_queue) do
+        if not entry.is_repeat then
+            question_num = question_num + 1
+        end
         local target_word = entry.word
         local current_hint = nil
         local hint_n, hint_k, hint_m = 0, 0, 0
@@ -1012,7 +1016,11 @@ local function run_quiz(study_queue, config)
             print_header(config)
 
             local basename = entry.filename:match("([^/\\]+)$") or entry.filename
-            print(bold(cyan(string.format("Question %d/%d:", i, total))) .. dim(string.format(" [File: %s | Box %d]", basename, entry.box)))
+            if entry.is_repeat then
+                print(bold(magenta("Practice Repeat:")) .. dim(string.format(" [File: %s | Box %d]", basename, entry.box)))
+            else
+                print(bold(cyan(string.format("Question %d/%d:", question_num, total))) .. dim(string.format(" [File: %s | Box %d]", basename, entry.box)))
+            end
             print(masked_context)
             if current_hint then
                 print(current_hint)
@@ -1087,38 +1095,46 @@ local function run_quiz(study_queue, config)
                  local clean_input = trimmed_input:lower():gsub("%s+", ""):gsub("%p+", "")
                  local correct_word = target_word:lower():gsub("%s+", ""):gsub("%p+", "")
 
-                local now = os.time()
-                local new_box = entry.box
                 local is_correct = (clean_input == correct_word)
+                local save_ok, save_err = true, nil
 
-                if is_correct then
-                    score = score + 1
-                    new_box = math.min(entry.box + 1, #config.intervals)
-                else
-                    if config.incorrect_penalty == "reset" then
-                        new_box = 1
+                if not entry.is_repeat then
+                    local now = os.time()
+                    local new_box = entry.box
+                    
+                    if is_correct then
+                        score = score + 1
+                        new_box = math.min(entry.box + 1, #config.intervals)
                     else
-                        new_box = math.max(1, entry.box - 1)
+                        if config.incorrect_penalty == "reset" then
+                            new_box = 1
+                        else
+                            new_box = math.max(1, entry.box - 1)
+                        end
                     end
+
+                    local interval = config.intervals[new_box]
+                    local new_due = now + interval
+
+                    -- Save state
+                    entry.box = new_box
+                    entry.due = new_due
+                    entry.raw_columns[entry.box_idx] = tostring(new_box)
+                    entry.raw_columns[entry.due_idx] = tostring(new_due)
+
+                    save_ok, save_err = save_tsv(entry.filename, entry.raw_rows)
                 end
-
-                local interval = config.intervals[new_box]
-                local new_due = now + interval
-
-                -- Save state
-                entry.box = new_box
-                entry.due = new_due
-                entry.raw_columns[entry.box_idx] = tostring(new_box)
-                entry.raw_columns[entry.due_idx] = tostring(new_due)
-
-                local save_ok, save_err = save_tsv(entry.filename, entry.raw_rows)
 
                 -- BACK SIDE (Result presentation)
                 if config.single_card_mode then
                     clear_screen()
                     print_header(config)
                     local basename = entry.filename:match("([^/\\]+)$") or entry.filename
-                    print(bold(cyan(string.format("Question %d/%d:", i, total))) .. dim(string.format(" [File: %s | Box %d]", basename, entry.box)))
+                    if entry.is_repeat then
+                        print(bold(magenta("Practice Repeat:")) .. dim(string.format(" [File: %s | Box %d]", basename, entry.box)))
+                    else
+                        print(bold(cyan(string.format("Question %d/%d:", question_num, total))) .. dim(string.format(" [File: %s | Box %d]", basename, entry.box)))
+                    end
                 end
 
                 local revealed_context = mask_context(entry.context, target_word, config.exact_length_mask, false, 0, 0, 0, is_correct, trimmed_input)
@@ -1131,17 +1147,25 @@ local function run_quiz(study_queue, config)
                     print_framed_diff(u_line, t_line)
                     print()
                 end
+                
+                if entry.is_repeat then
+                    print(dim("This was a practice repeat. Your score and card progress were not affected.\n"))
+                end
 
                 if not save_ok then
                     print(bold(red("Warning: ")) .. "Failed to save progress: " .. tostring(save_err))
                 end
 
-                if config.single_card_mode then
+                if config.single_card_mode and not entry.is_repeat then
                     local key = press_any_key(dim("Press Enter or Space to continue (or 's' to repeat)..."))
                     if key and key:lower() == "s" then
-                        table.insert(study_queue, entry)
-                        total = total + 1
+                        local repeat_entry = {}
+                        for k, v in pairs(entry) do repeat_entry[k] = v end
+                        repeat_entry.is_repeat = true
+                        table.insert(study_queue, i + 1, repeat_entry)
                     end
+                elseif config.single_card_mode and entry.is_repeat then
+                    press_any_key(dim("Press Enter or Space to continue..."))
                 end
 
                 break -- Go to the next question
