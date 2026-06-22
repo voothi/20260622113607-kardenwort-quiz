@@ -667,7 +667,7 @@ def test_incorrect_answer_shows_diff(quiz_env):
     
     assert code == 0
     clean_out = strip_ansi(out)
-    assert "Abent vorbeu wie sch---on" in clean_out
+    assert "Abent vorbeu wie scho---n" in clean_out
     assert "Abend vorbei Wir schlagen" in clean_out
     assert "❌ Incorrect." not in clean_out
 

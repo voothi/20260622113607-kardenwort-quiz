@@ -794,16 +794,15 @@ local function get_two_line_diff(user_str, target_str, case_sensitive, ignore_pu
 			table.insert(ops, { type = "match", charA = A[i], charB = B[j] })
 			i = i - 1
 			j = j - 1
-		elseif i > 0 and j > 0 and dp[i][j] == dp[i - 1][j - 1] + 1 then
-			table.insert(ops, { type = "replace", charA = A[i], charB = B[j] })
-			i = i - 1
+		elseif j > 0 and dp[i][j] == dp[i][j - 1] + 1 then
+			table.insert(ops, { type = "missing", charA = "-", charB = B[j] })
 			j = j - 1
 		elseif i > 0 and dp[i][j] == dp[i - 1][j] + 1 then
 			table.insert(ops, { type = "extra", charA = A[i], charB = "-" })
 			i = i - 1
-		elseif j > 0 and dp[i][j] == dp[i][j - 1] + 1 then
-			table.insert(ops, { type = "missing", charA = "-", charB = B[j] })
-			j = j - 1
+		elseif i > 0 and j > 0 and dp[i][j] == dp[i - 1][j - 1] + 1 then
+			table.insert(ops, { type = "replace", charA = A[i], charB = B[j] })
+			i, j = i - 1, j - 1
 		end
 	end
 
@@ -907,14 +906,15 @@ local function get_inline_colored_diff(user_str, original_target, case_sensitive
 		if match then
 			table.insert(ops, { type = "match" })
 			i, j = i - 1, j - 1
-		elseif i > 0 and j > 0 and dp[i][j] == dp[i - 1][j - 1] + 1 then
-			table.insert(ops, { type = "replace" })
-			i, j = i - 1, j - 1
-		elseif i > 0 and dp[i][j] == dp[i - 1][j] + 1 then
-			i = i - 1
 		elseif j > 0 and dp[i][j] == dp[i][j - 1] + 1 then
 			table.insert(ops, { type = "missing" })
 			j = j - 1
+		elseif i > 0 and dp[i][j] == dp[i - 1][j] + 1 then
+			-- deletion (extra in user, but inline diff only shows target characters)
+			i = i - 1
+		elseif i > 0 and j > 0 and dp[i][j] == dp[i - 1][j - 1] + 1 then
+			table.insert(ops, { type = "replace" })
+			i, j = i - 1, j - 1
 		end
 	end
 
