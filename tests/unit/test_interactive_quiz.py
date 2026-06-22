@@ -2,6 +2,10 @@ import subprocess
 import time
 from pathlib import Path
 import struct
+import re
+
+def strip_ansi(text):
+    return re.sub(r'\x1b\[[0-9;]*[a-zA-Z]', '', text)
 def read_tsv_entry(path, word):
     """
     Helper to safely read a TSV file and return a card entry as a dictionary by matching the WordSource.
@@ -253,3 +257,117 @@ def test_empty_table_error(quiz_env):
     
     assert "Error loading" in out
     assert "No vocabulary files could be loaded." in out
+
+def test_headerless_tsv_fallback(quiz_env):
+    """Test automatic column layout mapping when the TSV has no header row."""
+    headerless_tsv = quiz_env / "headerless.tsv"
+    # Write a headerless TSV matching default columns structure
+    with open(headerless_tsv, "w", encoding="utf-8", newline="\n") as f:
+        f.write("dog\tdog\t\t\tсобака\tI saw a dog.\t\t\t\t\t\tDeckA\t1\t0\n")
+    
+    code, out, err = run_quiz(quiz_env, ["headerless.tsv"], ["dog", "/q"])
+    assert code == 0
+    assert "Loading: headerless.tsv" in out
+    assert "✅ Correct!" in out
+    
+    # Verify the TSV was updated and header row was generated automatically
+    entry = read_tsv_entry(headerless_tsv, "dog")
+    assert entry is not None
+    assert entry["LeitnerBox"] == "2"
+
+def test_malformed_tsv_rows_skipped(quiz_env):
+    """Test that rows missing key fields (word or sentence) are skipped without throwing errors."""
+    malformed_tsv = quiz_env / "malformed.tsv"
+    with open(malformed_tsv, "w", encoding="utf-8", newline="\n") as f:
+        f.write(
+            "WordSource\tWordSourceInflectedForm\tWordSource2\tQuotation\tWordDestination\tSentenceSource\tNote\tSourceURL\tSource-en-GB\tSource-en-US\tSentenceSourceIndex\tDeck\tLeitnerBox\tLeitnerDue\n"
+            "\t\t\t\tяблоко\tI ate an apple today.\t\t\t\t\t\tDeckA\t1\t0\n" # Missing word
+            "banana\tbanana\t\t\tбанан\t\t\t\t\t\t\tDeckA\t1\t0\n" # Missing sentence
+            "cherry\tcherry\t\t\tвишня\tA sweet cherry.\t\t\t\t\t\tDeckA\t1\t0\n" # Valid entry
+        )
+    
+    code, out, err = run_quiz(quiz_env, ["malformed.tsv"], ["cherry", "/q"])
+    assert code == 0
+    assert "Loading: malformed.tsv" in out
+    assert "Queue Summary: 0 due reviews, 1 new cards selected." in out
+    assert "✅ Correct!" in out
+
+def test_scheduling_new_review_orders(quiz_env):
+    """Test configurations for new_review_order sorting options."""
+    config_path = quiz_env / "config.ini"
+    config_path.write_text(
+        "[Leitner]\n"
+        "intervals = 5m, 1h, 1d\n"
+        "new_cards_per_day = 10\n"
+        "single_card_mode = false\n"
+        "exact_length_mask = false\n"
+        "new_review_order = new_first\n"
+        "review_sort_order = due_date\n",
+        encoding="utf-8", newline="\n"
+    )
+    
+    data_tsv = quiz_env / "data.tsv"
+    with open(data_tsv, "w", encoding="utf-8", newline="\n") as f:
+        f.write(
+            "WordSource\tWordSourceInflectedForm\tWordSource2\tQuotation\tWordDestination\tSentenceSource\tNote\tSourceURL\tSource-en-GB\tSource-en-US\tSentenceSourceIndex\tDeck\tLeitnerBox\tLeitnerDue\n"
+            "apple\tapple\t\t\tяблоко\tI ate an apple today.\t\t\t\t\t\tDeckA\t1\t0\n" # new card
+            "banana\tbanana\t\t\tбанан\tA yellow banana.\t\t\t\t\t\tDeckA\t2\t1\n" # due review card
+        )
+        
+    # With new_first, apple should be presented first (quitting on first card)
+    code, out, err = run_quiz(quiz_env, ["data.tsv"], ["/q"])
+    assert code == 0
+    assert "I ate an" in out
+    assert "yellow" not in out
+    
+    # Change config to review_first (default)
+    config_path.write_text(
+        "[Leitner]\n"
+        "intervals = 5m, 1h, 1d\n"
+        "new_cards_per_day = 10\n"
+        "single_card_mode = false\n"
+        "exact_length_mask = false\n"
+        "new_review_order = review_first\n"
+        "review_sort_order = due_date\n",
+        encoding="utf-8", newline="\n"
+    )
+    code, out, err = run_quiz(quiz_env, ["data.tsv"], ["/q"])
+    assert code == 0
+    assert "yellow" in out
+    assert "I ate an" not in out
+
+def test_utf8_hint_offsets(quiz_env):
+    """Test 3-parameter hints with multi-byte UTF-8 words to verify no byte-slicing issues."""
+    utf8_tsv = quiz_env / "utf8_hints.tsv"
+    with open(utf8_tsv, "w", encoding="utf-8", newline="\n") as f:
+        f.write(
+            "WordSource\tWordSourceInflectedForm\tWordSource2\tQuotation\tWordDestination\tSentenceSource\tNote\tSourceURL\tSource-en-GB\tSource-en-US\tSentenceSourceIndex\tDeck\tLeitnerBox\tLeitnerDue\n"
+            "Möbelstücke\tMöbelstücke\t\t\tfurniture\tWir kauften Möbelstücke.\t\t\t\t\t\tDeckA\t1\t0\n"
+        )
+    
+    # Request hint: /h 2 1 2
+    # Expecting: Mö...s...ke (length: 11)
+    code, out, err = run_quiz(quiz_env, ["utf8_hints.tsv"], ["/h 2 1 2", "/q"])
+    assert code == 0
+    clean_out = strip_ansi(out)
+    assert "Mö...s...ke" in clean_out
+    assert "length: 11" in clean_out
+
+def test_save_error_warning(quiz_env):
+    """Test that file saving errors print a warning and don't crash the program."""
+    tmp_dir = quiz_env / "data.tsv.tmp"
+    tmp_dir.mkdir()
+    try:
+        code, out, err = run_quiz(quiz_env, ["data.tsv"], ["apple", "/q"])
+        assert code == 0
+        assert "Warning: Failed to save progress" in strip_ansi(out)
+    finally:
+        tmp_dir.rmdir()
+
+def test_unknown_command_handling(quiz_env):
+    """Test that entering an unknown slash command prints a warning and reprompts."""
+    code, out, err = run_quiz(quiz_env, ["data.tsv"], ["/invalidcmd", "apple", "/q"])
+    assert code == 0
+    assert "Unknown command: /invalidcmd" in strip_ansi(out)
+    assert "✅ Correct!" in strip_ansi(out)
+
