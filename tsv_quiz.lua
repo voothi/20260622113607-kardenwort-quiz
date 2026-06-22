@@ -199,7 +199,7 @@ local function run_quiz(vocab_list)
             if current_hint then
                 print(current_hint)
             end
-            io.write(bold("Your answer ") .. dim("(type 'h N M' for a hint, 'q' to quit): "))
+            io.write(bold("Your answer ") .. dim("(type '/h N M' for a hint, '/q' to quit): "))
             
             local user_input = io.read()
             if not user_input then
@@ -209,65 +209,70 @@ local function run_quiz(vocab_list)
 
             -- Normalise input: trim leading/trailing whitespace
             local trimmed_input = user_input:gsub("^%s+", ""):gsub("%s+$", "")
-            local lower_input = trimmed_input:lower()
 
-            -- Check for exit commands: q, quit, exit
-            if lower_input == "q" or lower_input == "quit" or lower_input == "exit" then
-                print(magenta("\nExiting quiz early."))
-                return
-            end
+            if trimmed_input:sub(1, 1) == "/" then
+                local cmd_body = trimmed_input:sub(2):gsub("^%s+", ""):gsub("%s+$", "")
+                local lower_cmd = cmd_body:lower()
 
-            -- Match hint patterns: "hint N K M", "h N K M", "hint N M", "h N M", "hint N", "h N", "hint", "h"
-            local hint_cmd, arg1, arg2, arg3 = trimmed_input:match("^(hint)%s*(%d*)%s*(%d*)%s*(%d*)$")
-            if not hint_cmd then
-                hint_cmd, arg1, arg2, arg3 = trimmed_input:match("^(h)%s*(%d*)%s*(%d*)%s*(%d*)$")
-            end
-
-            if hint_cmd then
-                local n, k, m = 1, 0, 0
-                if arg3 ~= "" then
-                    n = tonumber(arg1) or 1
-                    k = tonumber(arg2) or 0
-                    m = tonumber(arg3) or 0
-                elseif arg2 ~= "" then
-                    n = tonumber(arg1) or 1
-                    k = 0
-                    m = tonumber(arg2) or 0
-                elseif arg1 ~= "" then
-                    n = tonumber(arg1) or 1
-                    k = 0
-                    m = 0
-                end
-                
-                local len = utf8_len(target_word)
-                local part_start = utf8_sub(target_word, 1, n)
-                local part_end = ""
-                if m > 0 then
-                    part_end = utf8_sub(target_word, len - m + 1, len)
-                end
-
-                local hint_prefix = bold(cyan("💡 Hint: "))
-                if k == 0 then
-                    if n + m >= len then
-                        current_hint = string.format("%s%s (length: %d)", hint_prefix, green(target_word), len)
-                    else
-                        current_hint = string.format("%s%s...%s (length: %d)", hint_prefix, green(part_start), green(part_end), len)
-                    end
+                if lower_cmd == "q" or lower_cmd == "quit" or lower_cmd == "exit" then
+                    print(magenta("\nExiting quiz early."))
+                    return
                 else
-                    local mid_start = math.floor((len - k) / 2) + 1
-                    local mid_end = mid_start + k - 1
-                    local part_mid = utf8_sub(target_word, mid_start, mid_end)
+                    -- Match hint patterns: "hint N K M", "h N K M", "hint N M", "h N M", "hint N", "h N", "hint", "h"
+                    local hint_cmd, arg1, arg2, arg3 = cmd_body:match("^(hint)%s*(%d*)%s*(%d*)%s*(%d*)$")
+                    if not hint_cmd then
+                        hint_cmd, arg1, arg2, arg3 = cmd_body:match("^(h)%s*(%d*)%s*(%d*)%s*(%d*)$")
+                    end
 
-                    if n >= mid_start or mid_end >= len - m + 1 or n + k + m >= len then
-                        current_hint = string.format("%s%s (length: %d)", hint_prefix, green(target_word), len)
+                    if hint_cmd then
+                        local n, k, m = 1, 0, 0
+                        if arg3 ~= "" then
+                            n = tonumber(arg1) or 1
+                            k = tonumber(arg2) or 0
+                            m = tonumber(arg3) or 0
+                        elseif arg2 ~= "" then
+                            n = tonumber(arg1) or 1
+                            k = 0
+                            m = tonumber(arg2) or 0
+                        elseif arg1 ~= "" then
+                            n = tonumber(arg1) or 1
+                            k = 0
+                            m = 0
+                        end
+                        
+                        local len = utf8_len(target_word)
+                        local part_start = utf8_sub(target_word, 1, n)
+                        local part_end = ""
+                        if m > 0 then
+                            part_end = utf8_sub(target_word, len - m + 1, len)
+                        end
+
+                        local hint_prefix = bold(cyan("💡 Hint: "))
+                        if k == 0 then
+                            if n + m >= len then
+                                current_hint = string.format("%s%s (length: %d)", hint_prefix, green(target_word), len)
+                            else
+                                current_hint = string.format("%s%s...%s (length: %d)", hint_prefix, green(part_start), green(part_end), len)
+                            end
+                        else
+                            local mid_start = math.floor((len - k) / 2) + 1
+                            local mid_end = mid_start + k - 1
+                            local part_mid = utf8_sub(target_word, mid_start, mid_end)
+
+                            if n >= mid_start or mid_end >= len - m + 1 or n + k + m >= len then
+                                current_hint = string.format("%s%s (length: %d)", hint_prefix, green(target_word), len)
+                            else
+                                current_hint = string.format("%s%s...%s...%s (length: %d)", hint_prefix, green(part_start), green(part_mid), green(part_end), len)
+                            end
+                        end
+                        print("\n")
                     else
-                        current_hint = string.format("%s%s...%s...%s (length: %d)", hint_prefix, green(part_start), green(part_mid), green(part_end), len)
+                        print(bold(red("Unknown command: ")) .. trimmed_input .. ". Type '/h' for hint, '/q' to quit.\n")
                     end
                 end
-                print("\n")
             else
                 -- Clean up input (strip spaces and convert to lowercase for checking)
-                local clean_input = lower_input:gsub("%s+", "")
+                local clean_input = trimmed_input:lower():gsub("%s+", "")
                 local correct_word = target_word:gsub("%s+", ""):lower()
 
                 if clean_input == correct_word then
@@ -301,11 +306,11 @@ local function print_help()
     print(bold("Usage:"))
     print("  lua tsv_quiz.lua [file.tsv]\n")
     print(bold("Interactive Controls (during quiz):"))
-    print("  " .. bold("h") .. " / " .. bold("hint") .. "        Reveal first letter of the target word")
-    print("  " .. bold("h N") .. "          Reveal N letters from the start")
-    print("  " .. bold("h N M") .. "        Reveal N from the start and M from the end")
-    print("  " .. bold("h N K M") .. "      Reveal N from the start, K from the middle, M from the end")
-    print("  " .. bold("q") .. " / " .. bold("quit") .. " / " .. bold("exit") .. " Exit the quiz immediately\n")
+    print("  " .. bold("/h") .. " / " .. bold("/hint") .. "      Reveal first letter of the target word")
+    print("  " .. bold("/h N") .. "        Reveal N letters from the start")
+    print("  " .. bold("/h N M") .. "      Reveal N from the start and M from the end")
+    print("  " .. bold("/h N K M") .. "    Reveal N from the start, K from the middle, M from the end")
+    print("  " .. bold("/q") .. " / " .. bold("/quit") .. " / " .. bold("/exit") .. " Exit the quiz immediately\n")
     print(bold("Supported TSV Format:"))
     print("  Requires headers (e.g. Quotation/WordSource and SentenceSource/SentenceSourceContextLeft).")
 end
