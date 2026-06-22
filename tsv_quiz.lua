@@ -27,7 +27,7 @@ local function load_tsv(filename)
 
     local headers = nil
     local word_idx = nil
-    local context_idx = nil
+    local context_indices = {}
 
     for line in file:lines() do
         -- Skip comments that are not deck columns
@@ -42,25 +42,44 @@ local function load_tsv(filename)
             -- Map header names to their column indices
             local found_cols = {}
             for idx, h in ipairs(headers) do
-                local clean_header = h:gsub("%s+$", "")
+                local clean_header = h:gsub("%s+$", ""):gsub("^%s+", "")
                 found_cols[clean_header] = idx
             end
 
-            -- Find word and context sentence indices with clear priority rules
+            -- Find word index
             word_idx = found_cols["Quotation"] or found_cols["WordSource"] or 1
-            context_idx = found_cols["SentenceSourceContextLeft"] 
-                          or found_cols["SentenceSource"] 
-                          or found_cols["WordSourceContext"] 
-                          or found_cols["SentenceSourceRewriteAISentenceSource"]
-                          or 6
             
-            -- Remove debug prints to clean up console output
+            -- Define context candidates in order of preference
+            local candidates = {
+                "SentenceSource",
+                "SentenceSourceContextLeft",
+                "WordSourceContext",
+                "SentenceSourceRewriteAISentenceSource",
+                "SentenceGerman"
+            }
+            for _, name in ipairs(candidates) do
+                if found_cols[name] then
+                    table.insert(context_indices, found_cols[name])
+                end
+            end
+            if #context_indices == 0 then
+                table.insert(context_indices, 6)
+            end
         else
             -- Parse data row
             if line:match("%S") then
                 local columns = split_line(line, "\t")
                 local target_word = columns[word_idx]
-                local context_sentence = columns[context_idx]
+                
+                -- Check candidates in priority order, picking the first non-empty value
+                local context_sentence = nil
+                for _, idx in ipairs(context_indices) do
+                    local val = columns[idx]
+                    if val and val ~= "" then
+                        context_sentence = val
+                        break
+                    end
+                end
                 
                 if target_word and target_word ~= "" and context_sentence and context_sentence ~= "" then
                     table.insert(vocabulary, {
