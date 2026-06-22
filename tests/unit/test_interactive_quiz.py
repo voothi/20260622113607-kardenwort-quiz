@@ -730,12 +730,23 @@ def test_config_ignore_punctuation(quiz_env):
     assert "Diff" in out
 
 def test_interactive_repeat_command(quiz_env):
-    """Test that the /p command queues the previous card for a practice repeat."""
+    """Test that the /a command queues the previous card for a practice repeat."""
     focus_single_card(quiz_env, "20260604184114-microsoft-just-shocked-the.en.tsv", "properly")
     focus_single_card(quiz_env, "20260303214721-text1.de.tsv", "Abend vorbei. Wir schlagen")
     
-    code, out, err = run_quiz(quiz_env, ["20260604184114-microsoft-just-shocked-the.en.tsv", "20260303214721-text1.de.tsv"], ["properly", "/p", "/q"])
+    code, out, err = run_quiz(quiz_env, ["20260604184114-microsoft-just-shocked-the.en.tsv", "20260303214721-text1.de.tsv"], ["properly", "/a", "/q"])
     
     assert code == 0
     clean_out = strip_ansi(out)
     assert "Practice Repeat:" in clean_out
+
+def test_interactive_skip_command(quiz_env):
+    """Test that the /d command skips the current card."""
+    focus_single_card(quiz_env, "20260604184114-microsoft-just-shocked-the.en.tsv", "properly")
+    focus_single_card(quiz_env, "20260303214721-text1.de.tsv", "Abend vorbei. Wir schlagen")
+    
+    code, out, err = run_quiz(quiz_env, ["20260604184114-microsoft-just-shocked-the.en.tsv", "20260303214721-text1.de.tsv"], ["/d", "/q"])
+    
+    assert code == 0
+    clean_out = strip_ansi(out)
+    assert "Skipping card..." in clean_out
