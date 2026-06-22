@@ -134,7 +134,8 @@ local function load_config(filename)
         new_review_order = "review_first",
         review_sort_order = "due_date",
         new_sort_order = "order_added",
-        single_card_mode = false
+        single_card_mode = false,
+        exact_length_mask = false
     }
 
     local f = io.open(filename, "r")
@@ -188,6 +189,8 @@ local function load_config(filename)
                         end
                     elseif key == "single_card_mode" then
                         config.single_card_mode = (val == "true" or val == "1")
+                    elseif key == "exact_length_mask" then
+                        config.exact_length_mask = (val == "true" or val == "1")
                     end
                 end
             end
@@ -415,6 +418,53 @@ local function load_tsv(filename)
     return vocabulary, raw_rows, box_idx, due_idx
 end
 
+-- Helper to print the standardized quiz header
+local function print_header(config)
+    print(bold(cyan("=== Kardenwort TSV Quiz ===")))
+    if config.exact_length_mask then
+        print(dim("Fill in the blanks based on the context sentence."))
+    else
+        print(dim("Fill in the blank '") .. yellow("___") .. dim("' based on the context sentence."))
+    end
+    print(dim("Type '/q' or '/exit' to quit.\n"))
+end
+
+-- Generate placeholder for a given word/phrase based on configuration
+local function get_mask_placeholder(word, use_exact)
+    if not use_exact then
+        return "___"
+    end
+
+    local success, result = pcall(function()
+        if not utf8 then error("No utf8 lib") end
+        local s = ""
+        for _, code in utf8.codes(word) do
+            local c = utf8.char(code)
+            if c:match("%s") or c:match("[%p%s]") then
+                s = s .. c
+            else
+                s = s .. "_"
+            end
+        end
+        return s
+    end)
+
+    if success then
+        return result
+    else
+        local s = ""
+        for i = 1, #word do
+            local c = word:sub(i, i)
+            if c:match("%s") or c:match("[%p%s]") then
+                s = s .. c
+            else
+                s = s .. "_"
+            end
+        end
+        return s
+    end
+end
+
 -- 3. Run the interactive CLI quiz
 -- 3. Run the interactive CLI quiz
 local function run_quiz(study_queue, filename, raw_rows, box_idx, due_idx, config)
@@ -428,7 +478,8 @@ local function run_quiz(study_queue, filename, raw_rows, box_idx, due_idx, confi
 
     for i, entry in ipairs(study_queue) do
         local target_word = entry.word
-        local placeholder = bold(yellow("___"))
+        local mask_str = get_mask_placeholder(target_word, config.exact_length_mask)
+        local placeholder = bold(yellow(mask_str))
         local masked_context = entry.context:gsub(target_word, placeholder)
         if masked_context == entry.context then
             masked_context = entry.context:gsub(target_word:lower(), placeholder)
@@ -440,9 +491,7 @@ local function run_quiz(study_queue, filename, raw_rows, box_idx, due_idx, confi
                 clear_screen()
             end
 
-            print(bold(cyan("=== Kardenwort TSV Quiz ===")))
-            print(dim("Fill in the blank '") .. yellow("___") .. dim("' based on the context sentence."))
-            print(dim("Type '/q' or '/exit' to quit.\n"))
+            print_header(config)
 
             print(bold(cyan(string.format("Question %d/%d:", i, total))) .. dim(string.format(" [Box %d]", entry.box)))
             print(bold("Context: ") .. masked_context)
@@ -557,9 +606,7 @@ local function run_quiz(study_queue, filename, raw_rows, box_idx, due_idx, confi
                 -- BACK SIDE (Result presentation)
                 if config.single_card_mode then
                     clear_screen()
-                    print(bold(cyan("=== Kardenwort TSV Quiz ===")))
-                    print(dim("Fill in the blank '") .. yellow("___") .. dim("' based on the context sentence."))
-                    print(dim("Type '/q' or '/exit' to quit.\n"))
+                    print_header(config)
                     print(bold(cyan(string.format("Question %d/%d:", i, total))) .. dim(string.format(" [Box %d]", entry.box)))
                 end
 
