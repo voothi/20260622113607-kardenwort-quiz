@@ -657,8 +657,8 @@ def test_incorrect_answer_shows_diff(quiz_env):
     
     assert code == 0
     clean_out = strip_ansi(out)
-    assert "properle-" in clean_out
-    assert "properl-y" in clean_out
+    assert "properle" in clean_out
+    assert "properly" in clean_out
     assert "❌ Incorrect." not in clean_out
 
     # Test case 2: multi-word phrase mismatch
@@ -667,8 +667,8 @@ def test_incorrect_answer_shows_diff(quiz_env):
     
     assert code == 0
     clean_out = strip_ansi(out)
-    assert "Abent- vorbeu- wie- scho----n" in clean_out
-    assert "Aben-d vorbe-i Wi-r sch-lagen" in clean_out
+    assert "Abent vorbeu wie sch---on" in clean_out
+    assert "Abend vorbei Wir schlagen" in clean_out
     assert "❌ Incorrect." not in clean_out
 
     # Test case 3: separable verbs with ellipses / punctuation stripped
@@ -677,6 +677,6 @@ def test_incorrect_answer_shows_diff(quiz_env):
     
     assert code == 0
     clean_out = strip_ansi(out)
-    assert "stehe aus-" in clean_out
-    assert "stehe au-f" in clean_out
+    assert "stehe aus" in clean_out
+    assert "stehe auf" in clean_out
     assert "❌ Incorrect." not in clean_out

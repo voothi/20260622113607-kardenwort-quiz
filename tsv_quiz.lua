@@ -609,12 +609,20 @@ local function get_two_line_diff(user_str, target_str)
     end
 
     for i = 1, n do
+        dp[i][0] = i
+    end
+    for j = 1, m do
+        dp[0][j] = j
+    end
+
+    for i = 1, n do
         for j = 1, m do
-            if A[i]:lower() == B[j]:lower() then
-                dp[i][j] = dp[i-1][j-1] + 1
-            else
-                dp[i][j] = math.max(dp[i-1][j], dp[i][j-1])
-            end
+            local cost = (A[i]:lower() == B[j]:lower()) and 0 or 1
+            dp[i][j] = math.min(
+                dp[i-1][j] + 1,       -- deletion (extra in user)
+                dp[i][j-1] + 1,       -- insertion (missing in user)
+                dp[i-1][j-1] + cost   -- match or substitution
+            )
         end
     end
 
@@ -627,12 +635,16 @@ local function get_two_line_diff(user_str, target_str)
             table.insert(ops, { type = "match", charA = A[i], charB = B[j] })
             i = i - 1
             j = j - 1
-        elseif j > 0 and (i == 0 or dp[i][j-1] >= dp[i-1][j]) then
-            table.insert(ops, { type = "missing", charA = "-", charB = B[j] })
+        elseif i > 0 and j > 0 and dp[i][j] == dp[i-1][j-1] + 1 then
+            table.insert(ops, { type = "replace", charA = A[i], charB = B[j] })
+            i = i - 1
             j = j - 1
-        else
+        elseif i > 0 and dp[i][j] == dp[i-1][j] + 1 then
             table.insert(ops, { type = "extra", charA = A[i], charB = "-" })
             i = i - 1
+        elseif j > 0 and dp[i][j] == dp[i][j-1] + 1 then
+            table.insert(ops, { type = "missing", charA = "-", charB = B[j] })
+            j = j - 1
         end
     end
 
@@ -642,14 +654,17 @@ local function get_two_line_diff(user_str, target_str)
     for k = #ops, 1, -1 do
         local op = ops[k]
         if op.type == "match" then
-            table.insert(user_parts, dim(op.charA))
+            table.insert(user_parts, green(op.charA))
+            table.insert(target_parts, green(op.charB))
+        elseif op.type == "replace" then
+            table.insert(user_parts, red(op.charA))
             table.insert(target_parts, dim(op.charB))
         elseif op.type == "missing" then
-            table.insert(user_parts, red(op.charA))
-            table.insert(target_parts, green(op.charB))
+            table.insert(user_parts, dim(op.charA))
+            table.insert(target_parts, dim(op.charB))
         elseif op.type == "extra" then
             table.insert(user_parts, red(op.charA))
-            table.insert(target_parts, green(op.charB))
+            table.insert(target_parts, dim(op.charB))
         end
     end
 
