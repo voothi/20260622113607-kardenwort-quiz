@@ -61,8 +61,7 @@ local function load_tsv(filename)
     local vocabulary = {}
     local file, err = io.open(filename, "r")
     if not file then
-        print("Error opening file: " .. tostring(err))
-        return nil
+        return nil, "Could not open file: " .. tostring(err)
     end
 
     local headers = nil
@@ -71,7 +70,11 @@ local function load_tsv(filename)
     local quotation_idx = nil
     local context_indices = {}
 
+    local total_lines = 0
+    local parsed_rows = 0
+
     for line in file:lines() do
+        total_lines = total_lines + 1
         -- Skip comments that are not deck columns
         if line:sub(1, 1) == "#" and not line:match("^#deck") then
             -- Skip regular comments
@@ -112,6 +115,7 @@ local function load_tsv(filename)
         else
             -- Parse data row
             if line:match("%S") then
+                parsed_rows = parsed_rows + 1
                 local columns = split_line(line, "\t")
                 
                 -- Determine target word based on dictionary (WordSource) vs phrase (WordSourceInflectedForm)
@@ -148,6 +152,18 @@ local function load_tsv(filename)
         end
     end
     file:close()
+
+    if total_lines == 0 then
+        return nil, "The file is completely empty."
+    elseif not headers then
+        return nil, "No header row found (file contains only comments or is empty)."
+    elseif parsed_rows == 0 then
+        return nil, "No data rows found in the TSV file (only headers/comments present)."
+    elseif #vocabulary == 0 then
+        return nil, string.format("Found %d data rows, but 0 valid vocabulary entries could be loaded.\n" ..
+                      "Please verify that the TSV file contains a 'Quotation' (or 'WordSource') column and a populated 'SentenceSource' (or 'SentenceSourceContextLeft') column.", parsed_rows)
+    end
+
     return vocabulary
 end
 
@@ -280,11 +296,11 @@ local function main()
     end
 
     print("Loading: " .. filename)
-    local vocab = load_tsv(filename)
+    local vocab, err = load_tsv(filename)
     if vocab then
         run_quiz(vocab)
     else
-        print("Failed to load vocabulary.")
+        print(bold(red("Error: ")) .. (err or "Failed to load vocabulary."))
     end
 end
 
