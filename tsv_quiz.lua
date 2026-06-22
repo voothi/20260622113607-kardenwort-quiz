@@ -177,6 +177,7 @@ local function load_config(filename)
 		single_card_mode = false,
 		exact_length_mask = false,
 		case_sensitive_diff = true,
+		ignore_punctuation = true,
 	}
 
 	local f = io.open(filename, "r")
@@ -236,6 +237,8 @@ local function load_config(filename)
 						config.exact_length_mask = (val == "true" or val == "1")
 					elseif key == "case_sensitive_diff" then
 						config.case_sensitive_diff = (val == "true" or val == "1")
+					elseif key == "ignore_punctuation" then
+						config.ignore_punctuation = (val == "true" or val == "1")
 					end
 				end
 			end
@@ -707,9 +710,12 @@ local function print_framed_diff(u_line, t_line)
 end
 
 -- Helper to perform character-by-character diff (LCS-based) between user input and target word, returning two aligned lines
-local function get_two_line_diff(user_str, target_str, case_sensitive)
+local function get_two_line_diff(user_str, target_str, case_sensitive, ignore_punctuation)
 	local function clean_for_diff(str)
-		local cleaned = str:gsub("%p+", "")
+		local cleaned = str
+		if ignore_punctuation then
+			cleaned = cleaned:gsub("%p+", "")
+		end
 		cleaned = cleaned:gsub("%s+", " ")
 		cleaned = cleaned:gsub("^%s+", ""):gsub("%s+$", "")
 		return cleaned
@@ -824,7 +830,7 @@ local function get_two_line_diff(user_str, target_str, case_sensitive)
 	return table.concat(user_parts, ""), table.concat(target_parts, "")
 end
 
-local function get_inline_colored_diff(user_str, original_target, case_sensitive)
+local function get_inline_colored_diff(user_str, original_target, case_sensitive, ignore_punctuation)
 	local function to_chars(str)
 		local ok, chars = pcall(function()
 			local c = {}
@@ -843,8 +849,16 @@ local function get_inline_colored_diff(user_str, original_target, case_sensitive
 		return chars
 	end
 
-	local user_clean = user_str:gsub("[%p%s]+", "")
-	local target_clean = original_target:gsub("[%p%s]+", "")
+	local user_clean = user_str
+	local target_clean = original_target
+	if ignore_punctuation then
+		user_clean = user_clean:gsub("[%p%s]+", "")
+		target_clean = target_clean:gsub("[%p%s]+", "")
+	else
+		user_clean = user_clean:gsub("%s+", "")
+		target_clean = target_clean:gsub("%s+", "")
+	end
+
 	if target_clean == "" then
 		return original_target
 	end
@@ -940,7 +954,8 @@ local function mask_context(
 	hint_m,
 	is_correct,
 	user_input,
-	case_sensitive_diff
+	case_sensitive_diff,
+	ignore_punctuation
 )
 	local p1, p2 = target_word:match("^(.-)%s*%.%.%.%s*(.-)$")
 
@@ -1068,7 +1083,7 @@ local function mask_context(
 						end
 						return table.concat(m_rep_parts, " ")
 					else
-						return get_inline_colored_diff(user_input or "", m, case_sensitive_diff)
+						return get_inline_colored_diff(user_input or "", m, case_sensitive_diff, ignore_punctuation)
 					end
 				else
 					return replacement
@@ -1129,7 +1144,8 @@ local function run_quiz(study_queue, config)
 				hint_m,
 				nil,
 				nil,
-				config.case_sensitive_diff
+				config.case_sensitive_diff,
+				config.ignore_punctuation
 			)
 
 			if config.single_card_mode then
@@ -1219,9 +1235,16 @@ local function run_quiz(study_queue, config)
 					end
 				end
 			else
-				-- Clean up input (strip spaces, punctuation, and convert to lowercase for checking)
-				local clean_input = trimmed_input:lower():gsub("%s+", ""):gsub("%p+", "")
-				local correct_word = target_word:lower():gsub("%s+", ""):gsub("%p+", "")
+				local clean_input = trimmed_input:gsub("%s+", "")
+				local correct_word = target_word:gsub("%s+", "")
+				if config.ignore_punctuation then
+					clean_input = clean_input:gsub("%p+", "")
+					correct_word = correct_word:gsub("%p+", "")
+				end
+
+				-- Clean up input (convert to lowercase for checking, since grading is case-insensitive)
+				clean_input = clean_input:lower()
+				correct_word = correct_word:lower()
 
 				local is_correct = (clean_input == correct_word)
 				local save_ok, save_err = true, nil
@@ -1281,7 +1304,8 @@ local function run_quiz(study_queue, config)
 					0,
 					is_correct,
 					trimmed_input,
-					config.case_sensitive_diff
+					config.case_sensitive_diff,
+					config.ignore_punctuation
 				)
 				print(revealed_context)
 
@@ -1289,7 +1313,7 @@ local function run_quiz(study_queue, config)
 					print(bold(green("\n✅ Correct!\n")))
 				else
 					print()
-					local u_line, t_line = get_two_line_diff(trimmed_input, target_word, config.case_sensitive_diff)
+					local u_line, t_line = get_two_line_diff(trimmed_input, target_word, config.case_sensitive_diff, config.ignore_punctuation)
 					print_framed_diff(u_line, t_line)
 					print()
 				end
