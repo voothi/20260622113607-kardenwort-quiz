@@ -184,13 +184,33 @@ local function run_quiz(vocab_list)
     end
 
     print(string.format("Quiz finished! You scored %d out of %d.", score, total))
-    io.write("\nPress Enter to exit...")
-    io.read()
 end
 
 -- Main entry point
-local filename = arg[1] or "data.tsv"
-local vocab = load_tsv(filename)
-if vocab then
-    run_quiz(vocab)
+local function main()
+    local filename = arg[1] or "data.tsv"
+    
+    -- Resolve relative filename based on the script's location
+    if not filename:match("^%a:[/\\]") and not filename:match("^[/\\]") then
+        local script_path = arg[0] or ""
+        local dir = script_path:match("(.*[/\\])") or ""
+        filename = dir .. filename
+    end
+
+    print("Loading: " .. filename)
+    local vocab = load_tsv(filename)
+    if vocab then
+        run_quiz(vocab)
+    else
+        print("Failed to load vocabulary.")
+    end
 end
+
+local ok, err = pcall(main)
+if not ok then
+    print("\nExecution error:")
+    print(err)
+end
+
+io.write("\nPress Enter to exit...")
+io.read()
