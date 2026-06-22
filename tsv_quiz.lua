@@ -671,8 +671,94 @@ local function get_two_line_diff(user_str, target_str)
     return table.concat(user_parts, ""), table.concat(target_parts, "")
 end
 
+local function get_inline_colored_diff(user_str, original_target)
+    local function to_chars(str)
+        local ok, chars = pcall(function()
+            local c = {}
+            for _, code in utf8.codes(str) do
+                table.insert(c, utf8.char(code))
+            end
+            return c
+        end)
+        if ok then return chars end
+        local chars = {}
+        for i = 1, #str do
+            table.insert(chars, str:sub(i, i))
+        end
+        return chars
+    end
+
+    local user_clean = user_str:gsub("[%p%s]+", "")
+    local target_clean = original_target:gsub("[%p%s]+", "")
+    if target_clean == "" then return original_target end
+    
+    local A = to_chars(user_clean)
+    local B = to_chars(target_clean)
+    local n = #A
+    local m = #B
+    
+    local dp = {}
+    for i = 0, n do
+        dp[i] = {}
+        for j = 0, m do dp[i][j] = 0 end
+    end
+    for i = 1, n do dp[i][0] = i end
+    for j = 1, m do dp[0][j] = j end
+    
+    for i = 1, n do
+        for j = 1, m do
+            local cost = (A[i]:lower() == B[j]:lower()) and 0 or 1
+            dp[i][j] = math.min(
+                dp[i-1][j] + 1, 
+                dp[i][j-1] + 1, 
+                dp[i-1][j-1] + cost
+            )
+        end
+    end
+    
+    local i, j = n, m
+    local ops = {}
+    while i > 0 or j > 0 do
+        if i > 0 and j > 0 and A[i]:lower() == B[j]:lower() then
+            table.insert(ops, { type = "match" })
+            i, j = i - 1, j - 1
+        elseif i > 0 and j > 0 and dp[i][j] == dp[i-1][j-1] + 1 then
+            table.insert(ops, { type = "replace" })
+            i, j = i - 1, j - 1
+        elseif i > 0 and dp[i][j] == dp[i-1][j] + 1 then
+            i = i - 1
+        elseif j > 0 and dp[i][j] == dp[i][j-1] + 1 then
+            table.insert(ops, { type = "missing" })
+            j = j - 1
+        end
+    end
+    
+    local tags = {}
+    for k = #ops, 1, -1 do
+        table.insert(tags, ops[k].type)
+    end
+    
+    local res = {}
+    local tag_idx = 1
+    local orig_chars = to_chars(original_target)
+    for _, ch in ipairs(orig_chars) do
+        if ch:match("[%p%s]") then
+            table.insert(res, bold(green(ch)))
+        else
+            local tag = tags[tag_idx] or "missing"
+            tag_idx = tag_idx + 1
+            if tag == "match" then
+                table.insert(res, bold(green(ch)))
+            else
+                table.insert(res, bold(red(ch)))
+            end
+        end
+    end
+    return table.concat(res, "")
+end
+
 -- Helper to mask or reveal a target word (including separable prefix verbs) in the context sentence
-local function mask_context(context, target_word, use_exact, has_hint, hint_n, hint_k, hint_m, is_correct)
+local function mask_context(context, target_word, use_exact, has_hint, hint_n, hint_k, hint_m, is_correct, user_input)
     local p1, p2 = target_word:match("^(.-)%s*%.%.%.%s*(.-)$")
     
     local function escape_pattern(text)
@@ -682,9 +768,31 @@ local function mask_context(context, target_word, use_exact, has_hint, hint_n, h
     if p1 and p2 then
         -- Separable verb case: p1 ... p2
         local r1, r2
-        if is_correct then
-            r1 = bold(green(p1))
-            r2 = bold(green(p2))
+        if is_correct ~= nil then
+            if is_correct then
+                r1 = bold(green(p1))
+                r2 = bold(green(p2))
+            else
+                local user_p1, user_p2 = "", ""
+                if user_input then
+                    local u_parts = {}
+                    for part in user_input:gmatch("[^%s]+") do
+                        table.insert(u_parts, part)
+                    end
+                    if #u_parts >= 2 then
+                        user_p1 = u_parts[1]
+                        local rest = {}
+                        for idx = 2, #u_parts do
+                            table.insert(rest, u_parts[idx])
+                        end
+                        user_p2 = table.concat(rest, " ")
+                    elseif #u_parts == 1 then
+                        user_p1 = u_parts[1]
+                    end
+                end
+                r1 = get_inline_colored_diff(user_p1, p1)
+                r2 = get_inline_colored_diff(user_p2, p2)
+            end
         elseif has_hint and use_exact then
             local hp1 = get_hint_masked_word(p1, hint_n, hint_k, hint_m)
             local hp2 = get_hint_masked_word(p2, hint_n, hint_k, hint_m)
@@ -704,9 +812,14 @@ local function mask_context(context, target_word, use_exact, has_hint, hint_n, h
             local masked, count = context:gsub(pattern, function(m1, mid, m2)
                 local final_r1 = r1
                 local final_r2 = r2
-                if is_correct then
-                    final_r1 = bold(green(m1))
-                    final_r2 = bold(green(m2))
+                if is_correct ~= nil then
+                    if is_correct then
+                        final_r1 = bold(green(m1))
+                        final_r2 = bold(green(m2))
+                    else
+                        final_r1 = r1
+                        final_r2 = r2
+                    end
                 end
                 return final_r1 .. mid .. final_r2
             end)
@@ -754,16 +867,20 @@ local function mask_context(context, target_word, use_exact, has_hint, hint_n, h
         local function try_single_replace(word_case)
             local e_word = escape_pattern(word_case)
             local masked, count = context:gsub(e_word, function(m)
-                if is_correct then
-                    local m_parts = {}
-                    for part in m:gmatch("[^%s]+") do
-                        table.insert(m_parts, part)
+                if is_correct ~= nil then
+                    if is_correct then
+                        local m_parts = {}
+                        for part in m:gmatch("[^%s]+") do
+                            table.insert(m_parts, part)
+                        end
+                        local m_rep_parts = {}
+                        for _, part in ipairs(m_parts) do
+                            table.insert(m_rep_parts, bold(green(part)))
+                        end
+                        return table.concat(m_rep_parts, " ")
+                    else
+                        return get_inline_colored_diff(user_input or "", m)
                     end
-                    local m_rep_parts = {}
-                    for _, part in ipairs(m_parts) do
-                        table.insert(m_rep_parts, bold(green(part)))
-                    end
-                    return table.concat(m_rep_parts, " ")
                 else
                     return replacement
                 end
@@ -921,7 +1038,7 @@ local function run_quiz(study_queue, config)
                     print(bold(cyan(string.format("Question %d/%d:", i, total))) .. dim(string.format(" [File: %s | Box %d]", basename, entry.box)))
                 end
 
-                local revealed_context = mask_context(entry.context, target_word, config.exact_length_mask, false, 0, 0, 0, true)
+                local revealed_context = mask_context(entry.context, target_word, config.exact_length_mask, false, 0, 0, 0, is_correct, trimmed_input)
                 print(bold("Context: ") .. revealed_context)
 
                 if is_correct then
