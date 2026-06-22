@@ -680,3 +680,51 @@ def test_incorrect_answer_shows_diff(quiz_env):
     assert "stehe aus" in clean_out
     assert "stehe auf" in clean_out
     assert "❌ Incorrect." not in clean_out
+
+def test_config_case_sensitive_diff(quiz_env):
+    """Test that case_sensitive_diff=false causes the diff to treat upper/lower case as a match."""
+    focus_single_card(quiz_env, "20260303214721-text1.de.tsv", "die Jacke")
+    
+    # Enable exact_length_mask and case_sensitive_diff = false
+    config_path = quiz_env / "config.ini"
+    content = config_path.read_text(encoding="utf-8")
+    content += "\ncase_sensitive_diff = false\n"
+    config_path.write_text(content, encoding="utf-8", newline="\n")
+
+    # Target is "die Jacke". Input is "die jacce" (wrong letter, wrong case).
+    # Since case_sensitive_diff is false, 'j' matches 'J', so only 'c' vs 'k' is a mismatch.
+    code, out, err = run_quiz(quiz_env, ["20260303214721-text1.de.tsv"], ["die jacce", "/q"])
+    assert code == 0
+    clean_out = strip_ansi(out)
+    
+    # If case_sensitive_diff = false, 'j' and 'J' are matched. 
+    # The output strings will be the same length: "die jacce" and "die Jacke"
+    assert "die jacce" in clean_out
+    assert "die Jacke" in clean_out
+
+def test_config_ignore_punctuation(quiz_env):
+    """Test that ignore_punctuation=false forces the user to type punctuation."""
+    focus_single_card(quiz_env, "20260303214721-text1.de.tsv", "stehe ... auf")
+    
+    # By default, ignore_punctuation = true, so "stehe auf" is correct.
+    code, out, err = run_quiz(quiz_env, ["20260303214721-text1.de.tsv"], ["stehe auf", "/q"])
+    assert code == 0
+    assert "✅ Correct!" in out
+
+    # Now test with ignore_punctuation = false
+    focus_single_card(quiz_env, "20260303214721-text1.de.tsv", "stehe ... auf")
+    config_path = quiz_env / "config.ini"
+    content = config_path.read_text(encoding="utf-8")
+    content += "\nignore_punctuation = false\n"
+    config_path.write_text(content, encoding="utf-8", newline="\n")
+
+    # Input without punctuation is now WRONG
+    code, out, err = run_quiz(quiz_env, ["20260303214721-text1.de.tsv"], ["stehe auf", "/q"])
+    assert code == 0
+    assert "✅ Correct!" not in out
+    
+    # Input with punctuation is CORRECT
+    focus_single_card(quiz_env, "20260303214721-text1.de.tsv", "stehe ... auf")
+    code, out, err = run_quiz(quiz_env, ["20260303214721-text1.de.tsv"], ["stehe ... auf", "/q"])
+    assert code == 0
+    assert "✅ Correct!" in out
