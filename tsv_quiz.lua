@@ -284,15 +284,57 @@ local function run_quiz(vocab_list)
     print(bold(green(string.format("Quiz finished! You scored %d out of %d.", score, total))))
 end
 
+-- Helper to check if file exists
+local function file_exists(name)
+    local f = io.open(name, "r")
+    if f then
+        f:close()
+        return true
+    end
+    return false
+end
+
+-- Print standard help menu
+local function print_help()
+    print(bold(cyan("=== Kardenwort TSV Quiz ===")))
+    print("An interactive CLI study tool for German vocabulary TSV files.\n")
+    print(bold("Usage:"))
+    print("  lua tsv_quiz.lua [file.tsv]\n")
+    print(bold("Interactive Controls (during quiz):"))
+    print("  " .. bold("h") .. " / " .. bold("hint") .. "        Reveal first letter of the target word")
+    print("  " .. bold("h N") .. "          Reveal N letters from the start")
+    print("  " .. bold("h N M") .. "        Reveal N from the start and M from the end")
+    print("  " .. bold("h N K M") .. "      Reveal N from the start, K from the middle, M from the end")
+    print("  " .. bold("q") .. " / " .. bold("quit") .. " / " .. bold("exit") .. " Exit the quiz immediately\n")
+    print(bold("Supported TSV Format:"))
+    print("  Requires headers (e.g. Quotation/WordSource and SentenceSource/SentenceSourceContextLeft).")
+end
+
 -- Main entry point
 local function main()
-    local filename = arg[1] or "data.tsv"
+    local arg1 = arg[1]
+    if arg1 == "--help" or arg1 == "-h" then
+        print_help()
+        return
+    end
+
+    local filename = arg1 or "data.tsv"
     
     -- Resolve relative filename based on the script's location
     if not filename:match("^%a:[/\\]") and not filename:match("^[/\\]") then
         local script_path = arg[0] or ""
         local dir = script_path:match("(.*[/\\])") or ""
         filename = dir .. filename
+    end
+
+    if not file_exists(filename) then
+        if not arg1 then
+            print_help()
+            print(bold(red("\nError: ")) .. "Default vocabulary file '" .. filename .. "' not found. Please provide a TSV file path.")
+        else
+            print(bold(red("Error: ")) .. "File not found: " .. filename)
+        end
+        return
     end
 
     print("Loading: " .. filename)
