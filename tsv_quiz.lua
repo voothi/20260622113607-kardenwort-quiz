@@ -176,6 +176,7 @@ local function load_config(filename)
 		new_sort_order = "order_added",
 		single_card_mode = false,
 		exact_length_mask = false,
+		case_sensitive_diff = true,
 	}
 
 	local f = io.open(filename, "r")
@@ -233,6 +234,8 @@ local function load_config(filename)
 						config.single_card_mode = (val == "true" or val == "1")
 					elseif key == "exact_length_mask" then
 						config.exact_length_mask = (val == "true" or val == "1")
+					elseif key == "case_sensitive_diff" then
+						config.case_sensitive_diff = (val == "true" or val == "1")
 					end
 				end
 			end
@@ -704,7 +707,7 @@ local function print_framed_diff(u_line, t_line)
 end
 
 -- Helper to perform character-by-character diff (LCS-based) between user input and target word, returning two aligned lines
-local function get_two_line_diff(user_str, target_str)
+local function get_two_line_diff(user_str, target_str, case_sensitive)
 	local function clean_for_diff(str)
 		local cleaned = str:gsub("%p+", "")
 		cleaned = cleaned:gsub("%s+", " ")
@@ -755,7 +758,12 @@ local function get_two_line_diff(user_str, target_str)
 
 	for i = 1, n do
 		for j = 1, m do
-			local cost = (A[i] == B[j]) and 0 or 1
+			local cost
+			if case_sensitive then
+				cost = (A[i] == B[j]) and 0 or 1
+			else
+				cost = (A[i]:lower() == B[j]:lower()) and 0 or 1
+			end
 			dp[i][j] = math.min(
 				dp[i - 1][j] + 1, -- deletion (extra in user)
 				dp[i][j - 1] + 1, -- insertion (missing in user)
@@ -769,7 +777,14 @@ local function get_two_line_diff(user_str, target_str)
 	local ops = {}
 
 	while i > 0 or j > 0 do
-		if i > 0 and j > 0 and A[i] == B[j] then
+		local match
+		if case_sensitive then
+			match = (i > 0 and j > 0 and A[i] == B[j])
+		else
+			match = (i > 0 and j > 0 and A[i]:lower() == B[j]:lower())
+		end
+
+		if match then
 			table.insert(ops, { type = "match", charA = A[i], charB = B[j] })
 			i = i - 1
 			j = j - 1
@@ -809,7 +824,7 @@ local function get_two_line_diff(user_str, target_str)
 	return table.concat(user_parts, ""), table.concat(target_parts, "")
 end
 
-local function get_inline_colored_diff(user_str, original_target)
+local function get_inline_colored_diff(user_str, original_target, case_sensitive)
 	local function to_chars(str)
 		local ok, chars = pcall(function()
 			local c = {}
@@ -855,7 +870,12 @@ local function get_inline_colored_diff(user_str, original_target)
 
 	for i = 1, n do
 		for j = 1, m do
-			local cost = (A[i] == B[j]) and 0 or 1
+			local cost
+			if case_sensitive then
+				cost = (A[i] == B[j]) and 0 or 1
+			else
+				cost = (A[i]:lower() == B[j]:lower()) and 0 or 1
+			end
 			dp[i][j] = math.min(dp[i - 1][j] + 1, dp[i][j - 1] + 1, dp[i - 1][j - 1] + cost)
 		end
 	end
@@ -863,7 +883,14 @@ local function get_inline_colored_diff(user_str, original_target)
 	local i, j = n, m
 	local ops = {}
 	while i > 0 or j > 0 do
-		if i > 0 and j > 0 and A[i] == B[j] then
+		local match
+		if case_sensitive then
+			match = (i > 0 and j > 0 and A[i] == B[j])
+		else
+			match = (i > 0 and j > 0 and A[i]:lower() == B[j]:lower())
+		end
+
+		if match then
 			table.insert(ops, { type = "match" })
 			i, j = i - 1, j - 1
 		elseif i > 0 and j > 0 and dp[i][j] == dp[i - 1][j - 1] + 1 then
@@ -901,8 +928,20 @@ local function get_inline_colored_diff(user_str, original_target)
 	return table.concat(res, "")
 end
 
--- Helper to mask or reveal a target word (including separable prefix verbs) in the context sentence
-local function mask_context(context, target_word, use_exact, has_hint, hint_n, hint_k, hint_m, is_correct, user_input)
+-- Replace the target word in the context sentence with a blank line (or exact length blank)
+-- Also handles displaying the inline diff if the user's answer is incorrect.
+local function mask_context(
+	context,
+	target_word,
+	use_exact,
+	has_hint,
+	hint_n,
+	hint_k,
+	hint_m,
+	is_correct,
+	user_input,
+	case_sensitive_diff
+)
 	local p1, p2 = target_word:match("^(.-)%s*%.%.%.%s*(.-)$")
 
 	local function escape_pattern(text)
@@ -1029,7 +1068,7 @@ local function mask_context(context, target_word, use_exact, has_hint, hint_n, h
 						end
 						return table.concat(m_rep_parts, " ")
 					else
-						return get_inline_colored_diff(user_input or "", m)
+						return get_inline_colored_diff(user_input or "", m, case_sensitive_diff)
 					end
 				else
 					return replacement
@@ -1088,7 +1127,9 @@ local function run_quiz(study_queue, config)
 				hint_n,
 				hint_k,
 				hint_m,
-				nil
+				nil,
+				nil,
+				config.case_sensitive_diff
 			)
 
 			if config.single_card_mode then
@@ -1239,7 +1280,8 @@ local function run_quiz(study_queue, config)
 					0,
 					0,
 					is_correct,
-					trimmed_input
+					trimmed_input,
+					config.case_sensitive_diff
 				)
 				print(revealed_context)
 
@@ -1247,7 +1289,7 @@ local function run_quiz(study_queue, config)
 					print(bold(green("\n✅ Correct!\n")))
 				else
 					print()
-					local u_line, t_line = get_two_line_diff(trimmed_input, target_word)
+					local u_line, t_line = get_two_line_diff(trimmed_input, target_word, config.case_sensitive_diff)
 					print_framed_diff(u_line, t_line)
 					print()
 				end
