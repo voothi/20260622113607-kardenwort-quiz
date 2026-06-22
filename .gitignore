@@ -1,0 +1,13 @@
+.history
+.obsidian
+desktop.ini
+**/desktop.ini
+
+# Python files
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Local settings config
+# config.ini
