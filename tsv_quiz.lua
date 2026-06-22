@@ -1227,24 +1227,20 @@ local function run_quiz(study_queue, config)
 						print("\n")
 					elseif lower_cmd == "s" then
 						if i > 1 then
-							local prev_entry = study_queue[i - 1]
 							local repeat_entry = {}
-							for k, v in pairs(prev_entry) do
+							for k, v in pairs(study_queue[i - 1]) do
 								repeat_entry[k] = v
 							end
 							repeat_entry.is_repeat = true
-
-							table.insert(study_queue, i + 1, entry)
+							
 							table.insert(study_queue, i + 1, repeat_entry)
+							-- Re-insert current card so we can return to it after the repeat
+							table.insert(study_queue, i + 2, entry)
 
 							if not entry.is_repeat then
 								question_num = question_num - 1
 							end
 
-							print(bold(cyan("\nQueued previous card for practice repeat.")))
-							if config.single_card_mode then
-								press_any_key("Press Enter or Space to continue...")
-							end
 							break
 						else
 							print(bold(red("There is no previous card to repeat.")))

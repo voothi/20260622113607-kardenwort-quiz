@@ -738,4 +738,4 @@ def test_interactive_repeat_command(quiz_env):
     
     assert code == 0
     clean_out = strip_ansi(out)
-    assert "Queued previous card for practice repeat." in clean_out
+    assert "Practice Repeat:" in clean_out
