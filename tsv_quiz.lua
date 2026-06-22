@@ -1245,12 +1245,14 @@ local function run_quiz(study_queue, config)
 						has_hint = true
 						print("\n")
 					elseif lower_cmd == "a" then
-						if i > 1 then
+						local target_idx = entry.is_repeat and ((entry.repeat_target_idx or i) - 1) or (i - 1)
+						if target_idx >= 1 then
 							local repeat_entry = {}
-							for k, v in pairs(study_queue[i - 1]) do
+							for k, v in pairs(study_queue[target_idx]) do
 								repeat_entry[k] = v
 							end
 							repeat_entry.is_repeat = true
+							repeat_entry.repeat_target_idx = target_idx
 							
 							table.insert(study_queue, i + 1, repeat_entry)
 							-- Re-insert current card so we can return to it after the repeat
@@ -1375,6 +1377,7 @@ local function run_quiz(study_queue, config)
 							repeat_entry[k] = v
 						end
 						repeat_entry.is_repeat = true
+						repeat_entry.repeat_target_idx = entry.repeat_target_idx or i
 						table.insert(study_queue, i + 1, repeat_entry)
 					end
 				end
