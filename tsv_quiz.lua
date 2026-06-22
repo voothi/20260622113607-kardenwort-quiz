@@ -571,7 +571,8 @@ local function run_quiz(study_queue, config)
 
             print_header(config)
 
-            print(bold(cyan(string.format("Question %d/%d:", i, total))) .. dim(string.format(" [Box %d]", entry.box)))
+            local basename = entry.filename:match("([^/\\]+)$") or entry.filename
+            print(bold(cyan(string.format("Question %d/%d:", i, total))) .. dim(string.format(" [File: %s | Box %d]", basename, entry.box)))
             print(bold("Context: ") .. masked_context)
             if current_hint then
                 print(current_hint)
@@ -689,7 +690,8 @@ local function run_quiz(study_queue, config)
                 if config.single_card_mode then
                     clear_screen()
                     print_header(config)
-                    print(bold(cyan(string.format("Question %d/%d:", i, total))) .. dim(string.format(" [Box %d]", entry.box)))
+                    local basename = entry.filename:match("([^/\\]+)$") or entry.filename
+                    print(bold(cyan(string.format("Question %d/%d:", i, total))) .. dim(string.format(" [File: %s | Box %d]", basename, entry.box)))
                 end
 
                 -- Print the context sentence with the target word highlighted
