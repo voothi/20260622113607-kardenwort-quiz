@@ -648,7 +648,7 @@ def test_boundary_multi_word_hints(quiz_env):
     assert "Er kommt heute Ab___ vo____. Wi_ sc______ einen neuen Weg ein." in clean_out
 
 def test_incorrect_answer_shows_diff(quiz_env):
-    """Test that incorrect answers display a character-by-character correction diff."""
+    """Test that incorrect answers display a character-by-character correction diff inline in the Context line."""
     # Test case 1: simple substitution / typo
     focus_single_card(quiz_env, "20260604184114-microsoft-just-shocked-the.en.tsv", "properly")
     code, out, err = run_quiz(quiz_env, ["20260604184114-microsoft-just-shocked-the.en.tsv"], ["properle", "/q"])
@@ -657,7 +657,9 @@ def test_incorrect_answer_shows_diff(quiz_env):
     clean_out = strip_ansi(out)
     assert "❌ Incorrect." in clean_out
     assert "The correct word is: 'properly'" in clean_out
-    assert "Correction:   properle[y]" in clean_out
+    assert "Context: " in clean_out
+    assert "properley" in clean_out
+    assert "Correction:" not in clean_out
 
     # Test case 2: multi-word phrase mismatch
     focus_single_card(quiz_env, "20260303214721-text1.de.tsv", "Abend vorbei. Wir schlagen")
@@ -667,7 +669,9 @@ def test_incorrect_answer_shows_diff(quiz_env):
     clean_out = strip_ansi(out)
     assert "❌ Incorrect." in clean_out
     assert "The correct word is: 'Abend vorbei. Wir schlagen'" in clean_out
-    assert "Correction:   Abent[d] vorbeu[i] Wie[r] scho[lage]n" in clean_out
+    assert "Context: " in clean_out
+    assert "Abentd vorbeui Wier scholagen" in clean_out
+    assert "Correction:" not in clean_out
 
     # Test case 3: separable verbs with ellipses / punctuation stripped
     focus_single_card(quiz_env, "20260303214721-text1.de.tsv", "stehe ... auf")
@@ -677,4 +681,7 @@ def test_incorrect_answer_shows_diff(quiz_env):
     clean_out = strip_ansi(out)
     assert "❌ Incorrect." in clean_out
     assert "The correct word is: 'stehe ... auf'" in clean_out
-    assert "Correction:   stehe aus[f]" in clean_out
+    assert "Context: " in clean_out
+    assert "stehe" in clean_out
+    assert "ausf" in clean_out
+    assert "Correction:" not in clean_out

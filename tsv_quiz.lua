@@ -644,10 +644,18 @@ local function get_char_diff(user_str, target_str)
     local parts = {}
     local missing_group = {}
 
+    local function missing_style(text)
+        return string.format("\27[36;1;4m%s\27[0m", text)
+    end
+
+    local function extra_style(text)
+        return string.format("\27[31;1m%s\27[0m", text)
+    end
+
     local function flush_missing()
         if #missing_group > 0 then
             local missing_str = table.concat(missing_group)
-            table.insert(parts, cyan(bold("[" .. missing_str .. "]")))
+            table.insert(parts, missing_style(missing_str))
             missing_group = {}
         end
     end
@@ -660,7 +668,7 @@ local function get_char_diff(user_str, target_str)
             if op.type == "match" then
                 table.insert(parts, green(op.char))
             elseif op.type == "extra" then
-                table.insert(parts, red(bold(op.char)))
+                table.insert(parts, extra_style(op.char))
             end
         end
     end
@@ -670,7 +678,7 @@ local function get_char_diff(user_str, target_str)
 end
 
 -- Helper to mask or reveal a target word (including separable prefix verbs) in the context sentence
-local function mask_context(context, target_word, use_exact, has_hint, hint_n, hint_k, hint_m, is_correct)
+local function mask_context(context, target_word, use_exact, has_hint, hint_n, hint_k, hint_m, is_correct, user_input)
     local p1, p2 = target_word:match("^(.-)%s*%.%.%.%s*(.-)$")
     
     local function escape_pattern(text)
@@ -681,8 +689,30 @@ local function mask_context(context, target_word, use_exact, has_hint, hint_n, h
         -- Separable verb case: p1 ... p2
         local r1, r2
         if is_correct ~= nil then
-            r1 = is_correct and bold(green(p1)) or bold(red(p1))
-            r2 = is_correct and bold(green(p2)) or bold(red(p2))
+            if is_correct then
+                r1 = bold(green(p1))
+                r2 = bold(green(p2))
+            else
+                local user_p1, user_p2 = "", ""
+                if user_input then
+                    local u_parts = {}
+                    for part in user_input:gmatch("[^%s]+") do
+                        table.insert(u_parts, part)
+                    end
+                    if #u_parts >= 2 then
+                        user_p1 = u_parts[1]
+                        local rest = {}
+                        for idx = 2, #u_parts do
+                            table.insert(rest, u_parts[idx])
+                        end
+                        user_p2 = table.concat(rest, " ")
+                    elseif #u_parts == 1 then
+                        user_p1 = u_parts[1]
+                    end
+                end
+                r1 = get_char_diff(user_p1, p1)
+                r2 = get_char_diff(user_p2, p2)
+            end
         elseif has_hint and use_exact then
             local hp1 = get_hint_masked_word(p1, hint_n, hint_k, hint_m)
             local hp2 = get_hint_masked_word(p2, hint_n, hint_k, hint_m)
@@ -703,8 +733,13 @@ local function mask_context(context, target_word, use_exact, has_hint, hint_n, h
                 local final_r1 = r1
                 local final_r2 = r2
                 if is_correct ~= nil then
-                    final_r1 = is_correct and bold(green(m1)) or bold(red(m1))
-                    final_r2 = is_correct and bold(green(m2)) or bold(red(m2))
+                    if is_correct then
+                        final_r1 = bold(green(m1))
+                        final_r2 = bold(green(m2))
+                    else
+                        final_r1 = r1
+                        final_r2 = r2
+                    end
                 end
                 return final_r1 .. mid .. final_r2
             end)
@@ -743,25 +778,34 @@ local function mask_context(context, target_word, use_exact, has_hint, hint_n, h
             end
         end
         
-        local rep_parts = {}
-        for _, part in ipairs(parts) do
-            table.insert(rep_parts, get_part_replacement(part))
+        local replacement
+        if is_correct == false and user_input then
+            replacement = get_char_diff(user_input, target_word)
+        else
+            local rep_parts = {}
+            for _, part in ipairs(parts) do
+                table.insert(rep_parts, get_part_replacement(part))
+            end
+            replacement = table.concat(rep_parts, " ")
         end
-        local replacement = table.concat(rep_parts, " ")
         
         local function try_single_replace(word_case)
             local e_word = escape_pattern(word_case)
             local masked, count = context:gsub(e_word, function(m)
                 if is_correct ~= nil then
-                    local m_parts = {}
-                    for part in m:gmatch("[^%s]+") do
-                        table.insert(m_parts, part)
+                    if is_correct then
+                        local m_parts = {}
+                        for part in m:gmatch("[^%s]+") do
+                            table.insert(m_parts, part)
+                        end
+                        local m_rep_parts = {}
+                        for _, part in ipairs(m_parts) do
+                            table.insert(m_rep_parts, bold(green(part)))
+                        end
+                        return table.concat(m_rep_parts, " ")
+                    else
+                        return replacement
                     end
-                    local m_rep_parts = {}
-                    for _, part in ipairs(m_parts) do
-                        table.insert(m_rep_parts, is_correct and bold(green(part)) or bold(red(part)))
-                    end
-                    return table.concat(m_rep_parts, " ")
                 else
                     return replacement
                 end
@@ -919,15 +963,13 @@ local function run_quiz(study_queue, config)
                     print(bold(cyan(string.format("Question %d/%d:", i, total))) .. dim(string.format(" [File: %s | Box %d]", basename, entry.box)))
                 end
 
-                local revealed_context = mask_context(entry.context, target_word, config.exact_length_mask, false, 0, 0, 0, is_correct)
+                local revealed_context = mask_context(entry.context, target_word, config.exact_length_mask, false, 0, 0, 0, is_correct, trimmed_input)
                 print(bold("Context: ") .. revealed_context)
 
                 if is_correct then
                     print(bold(green("✅ Correct!\n")))
                 else
-                    print(string.format(bold(red("❌ Incorrect.")) .. " The correct word is: '" .. green("%s") .. "'", target_word))
-                    local diff_str = get_char_diff(trimmed_input, target_word)
-                    print(bold("Correction:   ") .. diff_str .. "\n")
+                    print(string.format(bold(red("❌ Incorrect.")) .. " The correct word is: '" .. green("%s") .. "'\n", target_word))
                 end
 
                 if not save_ok then
