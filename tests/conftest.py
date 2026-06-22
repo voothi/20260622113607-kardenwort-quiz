@@ -32,22 +32,12 @@ def quiz_env():
                 "incorrect_penalty = reset\n"
             )
         
-        # Create mock data.tsv
-        data_tsv = tmpdir / "data.tsv"
-        with open(data_tsv, "w", encoding="utf-8", newline="\n") as f:
-            f.write(
-                "WordSource\tWordSourceInflectedForm\tWordSource2\tQuotation\tWordDestination\tSentenceSource\tNote\tSourceURL\tSource-en-GB\tSource-en-US\tSentenceSourceIndex\tDeck\tLeitnerBox\tLeitnerDue\n"
-                "apple\tapple\t\t\tяблоко\tI ate an apple today.\t\t\t\t\t\tDeckA\t1\t0\n"
-                "banana\tbanana\t\t\tбанан\tA yellow banana.\t\t\t\t\t\tDeckA\t2\t0\n"
-            )
-        
-        # Create another mock data file for multi-file tests
-        data2_tsv = tmpdir / "data2.tsv"
-        with open(data2_tsv, "w", encoding="utf-8", newline="\n") as f:
-            f.write(
-                "WordSource\tWordSourceInflectedForm\tWordSource2\tQuotation\tWordDestination\tSentenceSource\tNote\tSourceURL\tSource-en-GB\tSource-en-US\tSentenceSourceIndex\tDeck\tLeitnerBox\tLeitnerDue\n"
-                "cherry\tcherry\t\t\tвишня\tA sweet cherry.\t\t\t\t\t\tDeckB\t1\t0\n"
-            )
+        # Copy all real fixtures from tests/fixtures
+        fixtures_dir = repo_root / "tests" / "fixtures"
+        if fixtures_dir.is_dir():
+            for item in fixtures_dir.iterdir():
+                if item.is_file():
+                    shutil.copy2(item, tmpdir / item.name)
         
         yield tmpdir
 

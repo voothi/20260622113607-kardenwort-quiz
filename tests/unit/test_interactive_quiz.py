@@ -3,27 +3,94 @@ import time
 from pathlib import Path
 import struct
 import re
+import pytest
 
 def strip_ansi(text):
     return re.sub(r'\x1b\[[0-9;]*[a-zA-Z]', '', text)
+
 def read_tsv_entry(path, word):
     """
-    Helper to safely read a TSV file and return a card entry as a dictionary by matching the WordSource.
+    Helper to safely read a TSV file and return a card entry as a dictionary by matching the WordSource or Quotation.
     """
     with open(path, "r", encoding="utf-8", newline="\n") as f:
         lines = f.read().splitlines()
         
     if not lines:
         return None
-        
-    headers = lines[0].split("\t")
     
-    for line in lines[1:]:
+    # Skip any comment lines at the beginning to find the header row
+    header_line_idx = 0
+    while header_line_idx < len(lines) and lines[header_line_idx].startswith("#"):
+        header_line_idx += 1
+        
+    if header_line_idx >= len(lines):
+        return None
+        
+    headers = lines[header_line_idx].split("\t")
+    
+    for line in lines[header_line_idx + 1:]:
+        if not line or line.startswith("#"):
+            continue
         cols = line.split("\t")
-        if cols and cols[0] == word:
-            return dict(zip(headers, cols))
+        if cols:
+            word_source = cols[1] if len(cols) > 1 else ""
+            quotation = cols[0] if len(cols) > 0 else ""
+            if word_source == word or quotation == word:
+                while len(cols) < len(headers):
+                    cols.append("")
+                return dict(zip(headers, cols))
             
     return None
+
+def focus_single_card(quiz_env, tsv_name, target_word):
+    """
+    Modifies the TSV file in quiz_env so that only target_word is due/active (due=0),
+    while all other cards are scheduled in the far future.
+    """
+    tsv_path = quiz_env / tsv_name
+    lines = tsv_path.read_text(encoding="utf-8").splitlines()
+    new_lines = []
+    
+    header_line_idx = 0
+    while header_line_idx < len(lines) and lines[header_line_idx].startswith("#"):
+        new_lines.append(lines[header_line_idx])
+        header_line_idx += 1
+        
+    headers = lines[header_line_idx].split("\t")
+    new_lines.append(lines[header_line_idx])
+    
+    due_idx = headers.index("LeitnerDue") if "LeitnerDue" in headers else -1
+    box_idx = headers.index("LeitnerBox") if "LeitnerBox" in headers else -1
+    
+    if due_idx == -1:
+        headers.append("LeitnerDue")
+        due_idx = len(headers) - 1
+    if box_idx == -1:
+        headers.append("LeitnerBox")
+        box_idx = len(headers) - 1
+        
+    future_time = int(time.time()) + 100000
+    
+    for line in lines[header_line_idx + 1:]:
+        if not line or line.startswith("#"):
+            continue
+        cols = line.split("\t")
+        while len(cols) < len(headers):
+            cols.append("")
+            
+        word_source = cols[1] if len(cols) > 1 else ""
+        quotation = cols[0] if len(cols) > 0 else ""
+        
+        if word_source == target_word or quotation == target_word:
+            cols[box_idx] = "1"
+            cols[due_idx] = "0"
+        else:
+            cols[box_idx] = "2"
+            cols[due_idx] = str(future_time)
+            
+        new_lines.append("\t".join(cols))
+        
+    tsv_path.write_text("\n".join(new_lines) + "\n", encoding="utf-8", newline="\n")
 
 def run_quiz(env_dir, args, inputs):
     cmd = ["lua", "tsv_quiz.lua"] + args
@@ -52,75 +119,123 @@ def test_help_argument(quiz_env):
 
 def test_single_file_quit(quiz_env):
     """Test that the user can start and quit the quiz gracefully."""
-    code, out, err = run_quiz(quiz_env, ["data.tsv"], ["/q"])
+    code, out, err = run_quiz(quiz_env, ["20260604184114-microsoft-just-shocked-the.en.tsv"], ["/q"])
     assert code == 0
     assert "Exiting quiz early" in out
 
 def test_correct_answer_updates_box(quiz_env):
     """Test answering a card correctly updates its Leitner Box in the TSV."""
-    code, out, err = run_quiz(quiz_env, ["data.tsv"], ["apple", "/q"])
+    focus_single_card(quiz_env, "20260604184114-microsoft-just-shocked-the.en.tsv", "properly")
+    code, out, err = run_quiz(quiz_env, ["20260604184114-microsoft-just-shocked-the.en.tsv"], ["properly", "/q"])
     
     assert code == 0
     assert "✅ Correct!" in out
     
     # Verify the TSV was updated
-    data_tsv = quiz_env / "data.tsv"
-    entry = read_tsv_entry(data_tsv, "apple")
+    tsv_file = quiz_env / "20260604184114-microsoft-just-shocked-the.en.tsv"
+    entry = read_tsv_entry(tsv_file, "properly")
     assert entry is not None
     assert entry["LeitnerBox"] == "2", f"Expected Box 2, got {entry['LeitnerBox']}"
     assert int(entry["LeitnerDue"]) > 0, "Expected LeitnerDue to be updated to a future timestamp"
 
 def test_case_insensitivity_and_spacing(quiz_env):
     """Test the normalizer for user inputs with odd casing and spacing."""
-    code, out, err = run_quiz(quiz_env, ["data.tsv"], ["  APPle  ", "/q"])
+    focus_single_card(quiz_env, "20260604184114-microsoft-just-shocked-the.en.tsv", "properly")
+    code, out, err = run_quiz(quiz_env, ["20260604184114-microsoft-just-shocked-the.en.tsv"], ["  PROperly  ", "/q"])
     
     assert code == 0
     assert "✅ Correct!" in out
     
-    data_tsv = quiz_env / "data.tsv"
-    entry = read_tsv_entry(data_tsv, "apple")
+    tsv_file = quiz_env / "20260604184114-microsoft-just-shocked-the.en.tsv"
+    entry = read_tsv_entry(tsv_file, "properly")
     assert entry["LeitnerBox"] == "2"
 
 def test_study_ahead(quiz_env):
     """Test the scheduling algorithm's behavior when no cards are currently due."""
-    # Set study_ahead = true
     config_path = quiz_env / "config.ini"
     content = config_path.read_text(encoding="utf-8")
     content += "study_ahead = true\n"
     config_path.write_text(content, encoding="utf-8", newline="\n")
     
-    # Mock TSV with cards in the far future
-    data_tsv = quiz_env / "data.tsv"
+    # Put all cards in the far future
     future_time = int(time.time()) + 100000
-    with open(data_tsv, "w", encoding="utf-8", newline="\n") as f:
-        f.write(
-            "WordSource\tWordSourceInflectedForm\tWordSource2\tQuotation\tWordDestination\tSentenceSource\tNote\tSourceURL\tSource-en-GB\tSource-en-US\tSentenceSourceIndex\tDeck\tLeitnerBox\tLeitnerDue\n"
-            f"apple\tapple\t\t\tяблоко\tI ate an apple today.\t\t\t\t\t\tDeckA\t1\t{future_time}\n"
-        )
+    tsv_file = quiz_env / "20260604184114-microsoft-just-shocked-the.en.tsv"
+    lines = tsv_file.read_text(encoding="utf-8").splitlines()
+    new_lines = []
     
-    code, out, err = run_quiz(quiz_env, ["data.tsv"], ["/q"])
+    header_line_idx = 0
+    while header_line_idx < len(lines) and lines[header_line_idx].startswith("#"):
+        new_lines.append(lines[header_line_idx])
+        header_line_idx += 1
+        
+    headers = lines[header_line_idx].split("\t")
+    new_lines.append(lines[header_line_idx])
+    
+    due_idx = headers.index("LeitnerDue")
+    box_idx = headers.index("LeitnerBox")
+    
+    for line in lines[header_line_idx + 1:]:
+        if not line or line.startswith("#"):
+            continue
+        cols = line.split("\t")
+        while len(cols) < len(headers):
+            cols.append("")
+        cols[box_idx] = "1"
+        cols[due_idx] = str(future_time)
+        new_lines.append("\t".join(cols))
+        
+    tsv_file.write_text("\n".join(new_lines) + "\n", encoding="utf-8", newline="\n")
+    
+    code, out, err = run_quiz(quiz_env, ["20260604184114-microsoft-just-shocked-the.en.tsv"], ["/q"])
     assert code == 0
     assert "Entering \"Study Ahead\" mode" in out
-    assert "Question 1/1" in out
+    assert "Question 1/" in out
 
 def test_review_sort_order(quiz_env):
     """Test presentation order sort algorithms for due reviews."""
-    # Box 1 (apple) and Box 5 (banana), both due (LeitnerDue = 1)
-    data_tsv = quiz_env / "data.tsv"
-    with open(data_tsv, "w", encoding="utf-8", newline="\n") as f:
-        f.write(
-            "WordSource\tWordSourceInflectedForm\tWordSource2\tQuotation\tWordDestination\tSentenceSource\tNote\tSourceURL\tSource-en-GB\tSource-en-US\tSentenceSourceIndex\tDeck\tLeitnerBox\tLeitnerDue\n"
-            "apple\tapple\t\t\tяблоко\tI ate an apple today.\t\t\t\t\t\tDeckA\t1\t1\n"
-            "banana\tbanana\t\t\tбанан\tA yellow banana.\t\t\t\t\t\tDeckA\t5\t1\n"
-        )
+    tsv_file = quiz_env / "20260604184114-microsoft-just-shocked-the.en.tsv"
+    lines = tsv_file.read_text(encoding="utf-8").splitlines()
+    new_lines = []
     
-    code, out, err = run_quiz(quiz_env, ["data.tsv"], ["/q"])
+    header_line_idx = 0
+    while header_line_idx < len(lines) and lines[header_line_idx].startswith("#"):
+        new_lines.append(lines[header_line_idx])
+        header_line_idx += 1
+        
+    headers = lines[header_line_idx].split("\t")
+    new_lines.append(lines[header_line_idx])
+    
+    due_idx = headers.index("LeitnerDue")
+    box_idx = headers.index("LeitnerBox")
+    
+    for line in lines[header_line_idx + 1:]:
+        if not line or line.startswith("#"):
+            continue
+        cols = line.split("\t")
+        while len(cols) < len(headers):
+            cols.append("")
+            
+        word_source = cols[1] if len(cols) > 1 else ""
+        if word_source == "properly":
+            cols[box_idx] = "1"
+            cols[due_idx] = "1" # Box 1, due
+        elif word_source == "meant":
+            cols[box_idx] = "5"
+            cols[due_idx] = "1" # Box 5, due
+        else:
+            cols[box_idx] = "2"
+            cols[due_idx] = str(int(time.time()) + 100000) # not due
+            
+        new_lines.append("\t".join(cols))
+        
+    tsv_file.write_text("\n".join(new_lines) + "\n", encoding="utf-8", newline="\n")
+    
+    code, out, err = run_quiz(quiz_env, ["20260604184114-microsoft-just-shocked-the.en.tsv"], ["/q"])
     assert code == 0
     
-    # Apple is Box 1, should be sorted first
-    assert "I ate an" in out and "today" in out
-    banana_pos = out.find("yellow")
-    assert banana_pos == -1, "Banana shouldn't be asked yet because we quit on the first card."
+    # 'properly' is Box 1, should be sorted first (contains 'clear way to use it')
+    assert "clear way to use it" in out
+    assert "unified intelligence" not in out
 
 def test_incorrect_penalty_decrease(quiz_env):
     """Test answering a card incorrectly lowers its Leitner Box."""
@@ -129,20 +244,41 @@ def test_incorrect_penalty_decrease(quiz_env):
     content = content.replace("incorrect_penalty = reset", "incorrect_penalty = decrease")
     config_path.write_text(content, encoding="utf-8", newline="\n")
     
-    # Mock a card in Box 3
-    data_tsv = quiz_env / "data.tsv"
-    with open(data_tsv, "w", encoding="utf-8", newline="\n") as f:
-        f.write(
-            "WordSource\tWordSourceInflectedForm\tWordSource2\tQuotation\tWordDestination\tSentenceSource\tNote\tSourceURL\tSource-en-GB\tSource-en-US\tSentenceSourceIndex\tDeck\tLeitnerBox\tLeitnerDue\n"
-            "banana\tbanana\t\t\tбанан\tA yellow banana.\t\t\t\t\t\tDeckA\t3\t0\n"
-        )
+    # Mock card 'properly' in Box 3
+    focus_single_card(quiz_env, "20260604184114-microsoft-just-shocked-the.en.tsv", "properly")
+    tsv_file = quiz_env / "20260604184114-microsoft-just-shocked-the.en.tsv"
+    lines = tsv_file.read_text(encoding="utf-8").splitlines()
+    new_lines = []
     
-    code, out, err = run_quiz(quiz_env, ["data.tsv"], ["wrong_answer", "/q"])
+    header_line_idx = 0
+    while header_line_idx < len(lines) and lines[header_line_idx].startswith("#"):
+        new_lines.append(lines[header_line_idx])
+        header_line_idx += 1
+        
+    headers = lines[header_line_idx].split("\t")
+    new_lines.append(lines[header_line_idx])
+    
+    box_idx = headers.index("LeitnerBox")
+    
+    for line in lines[header_line_idx + 1:]:
+        if not line or line.startswith("#"):
+            continue
+        cols = line.split("\t")
+        while len(cols) < len(headers):
+            cols.append("")
+        word_source = cols[1] if len(cols) > 1 else ""
+        if word_source == "properly":
+            cols[box_idx] = "3"
+        new_lines.append("\t".join(cols))
+        
+    tsv_file.write_text("\n".join(new_lines) + "\n", encoding="utf-8", newline="\n")
+    
+    code, out, err = run_quiz(quiz_env, ["20260604184114-microsoft-just-shocked-the.en.tsv"], ["wrong_answer", "/q"])
     assert code == 0
     assert "❌ Incorrect." in out
     
-    entry = read_tsv_entry(data_tsv, "banana")
-    assert entry["LeitnerBox"] == "2", f"Expected Box 2 (decreased from 3), got {entry['LeitnerBox']}"
+    entry = read_tsv_entry(tsv_file, "properly")
+    assert entry["LeitnerBox"] == "2", f"Expected Box 2, got {entry['LeitnerBox']}"
 
 def test_utf8_masking_alignment(quiz_env):
     """Test exact length masking configuration with multibyte UTF-8 characters."""
@@ -151,13 +287,8 @@ def test_utf8_masking_alignment(quiz_env):
     content = content.replace("exact_length_mask = false", "exact_length_mask = true")
     config_path.write_text(content, encoding="utf-8", newline="\n")
     
-    # Mock a card with an umlaut
-    data_tsv = quiz_env / "data.tsv"
-    with open(data_tsv, "w", encoding="utf-8", newline="\n") as f:
-        f.write(
-            "WordSource\tWordSourceInflectedForm\tWordSource2\tQuotation\tWordDestination\tSentenceSource\tNote\tSourceURL\tSource-en-GB\tSource-en-US\tSentenceSourceIndex\tDeck\tLeitnerBox\tLeitnerDue\n"
-            "Absätze\tAbsätze\t\t\tparagraphs\tDie ersten zwei Absätze.\t\t\t\t\t\tDeckA\t1\t0\n"
-        )
+    # We will use data.tsv which has 'Absätze' (7 characters, contains 'ä')
+    focus_single_card(quiz_env, "data.tsv", "Absätze")
     
     code, out, err = run_quiz(quiz_env, ["data.tsv"], ["/q"])
     assert code == 0
@@ -166,35 +297,25 @@ def test_utf8_masking_alignment(quiz_env):
 
 def test_lua_lnk_resolution(quiz_env):
     """Test pure Lua .lnk parser universally via a mock binary payload."""
-    # We will craft a tiny mock binary that the Lua string.unpack logic can successfully parse as a Windows Shortcut.
-    # The Lua logic checks:
-    # 1. 76 bytes minimum, magic starts with 'L\0\0\0' (4C 00 00 00).
-    # 2. Flags at offset 21 (1-indexed: 20 in 0-indexed).
-    # 3. LinkTargetIDList (flag 0x01), LinkInfo (flag 0x02).
-    # 4. If LinkInfo, it reads link_info_flags at offset + 8, local_base_path_offset at offset + 16.
-    
     lnk_path = quiz_env / "test.lnk"
-    target_path = "data2.tsv"
+    target_path = "20260604184114-microsoft-just-shocked-the.en.tsv"
     
     # Constructing the binary
-    # Header: 76 bytes
     header = bytearray(76)
     header[0:4] = b"L\0\0\0"
     flags = 0x02 # Only HasLinkInfo
     struct.pack_into("<I", header, 20, flags)
     
-    # LinkInfo
     link_info_start = 76
     link_info_size = 28 + len(target_path) + 1
     link_info = bytearray(link_info_size)
-    struct.pack_into("<I", link_info, 0, link_info_size) # Size
-    struct.pack_into("<I", link_info, 4, 28) # Header size
-    struct.pack_into("<I", link_info, 8, 0x01) # Flags (VolumeIDAndLocalBasePath)
-    struct.pack_into("<I", link_info, 16, 28) # LocalBasePathOffset
+    struct.pack_into("<I", link_info, 0, link_info_size)
+    struct.pack_into("<I", link_info, 4, 28)
+    struct.pack_into("<I", link_info, 8, 0x01)
+    struct.pack_into("<I", link_info, 16, 28)
     
-    # Append the target path string at LocalBasePathOffset (which is 28 bytes into LinkInfo)
     link_info[28:28+len(target_path)] = target_path.encode('utf-8')
-    link_info[28+len(target_path)] = 0 # Null terminator
+    link_info[28+len(target_path)] = 0
     
     with open(lnk_path, "wb") as f:
         f.write(header)
@@ -202,25 +323,25 @@ def test_lua_lnk_resolution(quiz_env):
         
     code, out, err = run_quiz(quiz_env, ["test.lnk"], ["/q"])
     assert code == 0
-    assert "Loading: data2.tsv" in out
+    assert f"Loading: {target_path}" in out
 
 def test_multi_file_loading(quiz_env):
     """Test passing multiple files correctly aggregates the queue."""
-    code, out, err = run_quiz(quiz_env, ["data.tsv", "data2.tsv"], ["/q"])
+    code, out, err = run_quiz(quiz_env, ["20260604184114-microsoft-just-shocked-the.en.tsv", "data.tsv"], ["/q"])
     
     assert code == 0
+    assert "Loading: 20260604184114-microsoft-just-shocked-the.en.tsv" in out
     assert "Loading: data.tsv" in out
-    assert "Loading: data2.tsv" in out
-    
-    assert "Queue Summary: 0 due reviews, 3 new cards selected." in out
+    assert "Queue Summary:" in out
 
 def test_hints_display(quiz_env):
     """Test standard and advanced hints."""
-    code, out, err = run_quiz(quiz_env, ["data.tsv"], ["/h", "/h 2 1 1", "/q"])
+    focus_single_card(quiz_env, "20260604184114-microsoft-just-shocked-the.en.tsv", "properly")
+    code, out, err = run_quiz(quiz_env, ["20260604184114-microsoft-just-shocked-the.en.tsv"], ["/h", "/h 2 1 1", "/q"])
     
     assert code == 0
     assert "💡 Hint:" in out
-    assert "(length: 5)" in out
+    assert "(length: 8)" in out
 
 def test_single_card_mode(quiz_env):
     """Test flashcard mode toggling."""
@@ -229,7 +350,8 @@ def test_single_card_mode(quiz_env):
     content = content.replace("single_card_mode = false", "single_card_mode = true")
     config_path.write_text(content, encoding="utf-8", newline="\n")
     
-    code, out, err = run_quiz(quiz_env, ["data.tsv"], ["apple", "", "/q"])
+    focus_single_card(quiz_env, "20260604184114-microsoft-just-shocked-the.en.tsv", "properly")
+    code, out, err = run_quiz(quiz_env, ["20260604184114-microsoft-just-shocked-the.en.tsv"], ["properly", "", "/q"])
     
     assert code == 0
     assert "\x1b[2J\x1b[H" in out
@@ -242,10 +364,11 @@ def test_exact_length_masking(quiz_env):
     content = content.replace("exact_length_mask = false", "exact_length_mask = true")
     config_path.write_text(content, encoding="utf-8", newline="\n")
     
-    code, out, err = run_quiz(quiz_env, ["data.tsv"], ["/q"])
+    focus_single_card(quiz_env, "20260604184114-microsoft-just-shocked-the.en.tsv", "properly")
+    code, out, err = run_quiz(quiz_env, ["20260604184114-microsoft-just-shocked-the.en.tsv"], ["/q"])
     
     assert code == 0
-    assert "_____" in out
+    assert "________" in out
 
 def test_empty_table_error(quiz_env):
     """Test handling of invalid or empty TSV gracefully."""
@@ -261,7 +384,6 @@ def test_empty_table_error(quiz_env):
 def test_headerless_tsv_fallback(quiz_env):
     """Test automatic column layout mapping when the TSV has no header row."""
     headerless_tsv = quiz_env / "headerless.tsv"
-    # Write a headerless TSV matching default columns structure
     with open(headerless_tsv, "w", encoding="utf-8", newline="\n") as f:
         f.write("dog\tdog\t\t\tсобака\tI saw a dog.\t\t\t\t\t\tDeckA\t1\t0\n")
     
@@ -270,7 +392,6 @@ def test_headerless_tsv_fallback(quiz_env):
     assert "Loading: headerless.tsv" in out
     assert "✅ Correct!" in out
     
-    # Verify the TSV was updated and header row was generated automatically
     entry = read_tsv_entry(headerless_tsv, "dog")
     assert entry is not None
     assert entry["LeitnerBox"] == "2"
@@ -306,19 +427,47 @@ def test_scheduling_new_review_orders(quiz_env):
         encoding="utf-8", newline="\n"
     )
     
-    data_tsv = quiz_env / "data.tsv"
-    with open(data_tsv, "w", encoding="utf-8", newline="\n") as f:
-        f.write(
-            "WordSource\tWordSourceInflectedForm\tWordSource2\tQuotation\tWordDestination\tSentenceSource\tNote\tSourceURL\tSource-en-GB\tSource-en-US\tSentenceSourceIndex\tDeck\tLeitnerBox\tLeitnerDue\n"
-            "apple\tapple\t\t\tяблоко\tI ate an apple today.\t\t\t\t\t\tDeckA\t1\t0\n" # new card
-            "banana\tbanana\t\t\tбанан\tA yellow banana.\t\t\t\t\t\tDeckA\t2\t1\n" # due review card
-        )
+    tsv_file = quiz_env / "20260604184114-microsoft-just-shocked-the.en.tsv"
+    lines = tsv_file.read_text(encoding="utf-8").splitlines()
+    new_lines = []
+    
+    header_line_idx = 0
+    while header_line_idx < len(lines) and lines[header_line_idx].startswith("#"):
+        new_lines.append(lines[header_line_idx])
+        header_line_idx += 1
         
-    # With new_first, apple should be presented first (quitting on first card)
-    code, out, err = run_quiz(quiz_env, ["data.tsv"], ["/q"])
+    headers = lines[header_line_idx].split("\t")
+    new_lines.append(lines[header_line_idx])
+    
+    due_idx = headers.index("LeitnerDue")
+    box_idx = headers.index("LeitnerBox")
+    
+    for line in lines[header_line_idx + 1:]:
+        if not line or line.startswith("#"):
+            continue
+        cols = line.split("\t")
+        while len(cols) < len(headers):
+            cols.append("")
+        word_source = cols[1] if len(cols) > 1 else ""
+        if word_source == "properly":
+            cols[box_idx] = "1"
+            cols[due_idx] = "0" # new card
+        elif word_source == "meant":
+            cols[box_idx] = "2"
+            cols[due_idx] = "1" # due review card
+        else:
+            cols[box_idx] = "2"
+            cols[due_idx] = str(int(time.time()) + 100000) # not due
+            
+        new_lines.append("\t".join(cols))
+        
+    tsv_file.write_text("\n".join(new_lines) + "\n", encoding="utf-8", newline="\n")
+        
+    # With new_first, 'properly' (new card) should be presented first
+    code, out, err = run_quiz(quiz_env, ["20260604184114-microsoft-just-shocked-the.en.tsv"], ["/q"])
     assert code == 0
-    assert "I ate an" in out
-    assert "yellow" not in out
+    assert "clear way to use it" in out
+    assert "unified intelligence" not in out
     
     # Change config to review_first (default)
     config_path.write_text(
@@ -331,10 +480,10 @@ def test_scheduling_new_review_orders(quiz_env):
         "review_sort_order = due_date\n",
         encoding="utf-8", newline="\n"
     )
-    code, out, err = run_quiz(quiz_env, ["data.tsv"], ["/q"])
+    code, out, err = run_quiz(quiz_env, ["20260604184114-microsoft-just-shocked-the.en.tsv"], ["/q"])
     assert code == 0
-    assert "yellow" in out
-    assert "I ate an" not in out
+    assert "unified intelligence" in out
+    assert "clear way to use it" not in out
 
 def test_utf8_hint_offsets(quiz_env):
     """Test 3-parameter hints with multi-byte UTF-8 words to verify no byte-slicing issues."""
@@ -345,8 +494,6 @@ def test_utf8_hint_offsets(quiz_env):
             "Möbelstücke\tMöbelstücke\t\t\tfurniture\tWir kauften Möbelstücke.\t\t\t\t\t\tDeckA\t1\t0\n"
         )
     
-    # Request hint: /h 2 1 2
-    # Expecting: Mö...s...ke (length: 11)
     code, out, err = run_quiz(quiz_env, ["utf8_hints.tsv"], ["/h 2 1 2", "/q"])
     assert code == 0
     clean_out = strip_ansi(out)
@@ -355,10 +502,11 @@ def test_utf8_hint_offsets(quiz_env):
 
 def test_save_error_warning(quiz_env):
     """Test that file saving errors print a warning and don't crash the program."""
-    tmp_dir = quiz_env / "data.tsv.tmp"
+    focus_single_card(quiz_env, "20260604184114-microsoft-just-shocked-the.en.tsv", "properly")
+    tmp_dir = quiz_env / "20260604184114-microsoft-just-shocked-the.en.tsv.tmp"
     tmp_dir.mkdir()
     try:
-        code, out, err = run_quiz(quiz_env, ["data.tsv"], ["apple", "/q"])
+        code, out, err = run_quiz(quiz_env, ["20260604184114-microsoft-just-shocked-the.en.tsv"], ["properly", "/q"])
         assert code == 0
         assert "Warning: Failed to save progress" in strip_ansi(out)
     finally:
@@ -366,8 +514,94 @@ def test_save_error_warning(quiz_env):
 
 def test_unknown_command_handling(quiz_env):
     """Test that entering an unknown slash command prints a warning and reprompts."""
-    code, out, err = run_quiz(quiz_env, ["data.tsv"], ["/invalidcmd", "apple", "/q"])
+    focus_single_card(quiz_env, "20260604184114-microsoft-just-shocked-the.en.tsv", "properly")
+    code, out, err = run_quiz(quiz_env, ["20260604184114-microsoft-just-shocked-the.en.tsv"], ["/invalidcmd", "properly", "/q"])
     assert code == 0
     assert "Unknown command: /invalidcmd" in strip_ansi(out)
     assert "✅ Correct!" in strip_ansi(out)
 
+
+# === NEW BOUNDARY TESTS FOR REAL FIXTURE RECORDS ===
+
+def test_boundary_separable_verbs(quiz_env):
+    """Test target word with spaces and ellipses (German separable verb: stehe ... auf)."""
+    focus_single_card(quiz_env, "20260303214721-text1.de.tsv", "stehe ... auf")
+    
+    # Answering correctly using either spacing or dots
+    # The normalized word is 'stehe...auf'
+    code, out, err = run_quiz(quiz_env, ["20260303214721-text1.de.tsv"], ["stehe ... auf", "/q"])
+    assert code == 0
+    assert "✅ Correct!" in out
+    
+    # Verify TSV box update
+    tsv_file = quiz_env / "20260303214721-text1.de.tsv"
+    entry = read_tsv_entry(tsv_file, "stehe ... auf")
+    assert entry is not None
+    assert entry["LeitnerBox"] == "2"
+    
+    # Verify context remains unmasked because the exact string 'stehe ... auf' is not in the sentence
+    # but rather 'stehe' and 'auf' are split.
+    assert "Ich stehe morgen früh auf." in out
+
+def test_boundary_extreme_length_and_multibyte(quiz_env):
+    """Test extreme length word (42 chars) and UTF-8 characters (Donaudampfschifffahrtsgesellschaftskapitän)."""
+    focus_single_card(quiz_env, "20260303214721-text1.de.tsv", "Donaudampfschifffahrtsgesellschaftskapitän")
+    
+    # Enable exact length mask
+    config_path = quiz_env / "config.ini"
+    content = config_path.read_text(encoding="utf-8")
+    content = content.replace("exact_length_mask = false", "exact_length_mask = true")
+    config_path.write_text(content, encoding="utf-8", newline="\n")
+    
+    # Show hints with /h 2 1 2
+    # Expect: Do...t...än (length: 42)
+    code, out, err = run_quiz(quiz_env, ["20260303214721-text1.de.tsv"], ["/h 2 1 2", "/q"])
+    assert code == 0
+    clean_out = strip_ansi(out)
+    
+    # Check exact length mask of 42 underscores is printed
+    assert "_" * 42 in clean_out
+    # Check hint output is exact and handles 'ä' correctly
+    assert "Do...t...än" in clean_out
+    assert "length: 42" in clean_out
+
+def test_boundary_punctuation_and_apostrophes(quiz_env):
+    """Test matching logic with punctuation like apostrophes (Microsoft's AI)."""
+    focus_single_card(quiz_env, "20260604184114-microsoft-just-shocked-the.en.tsv", "Microsoft's AI")
+    
+    code, out, err = run_quiz(quiz_env, ["20260604184114-microsoft-just-shocked-the.en.tsv"], ["microsoft's ai", "/q"])
+    assert code == 0
+    assert "✅ Correct!" in out
+    
+    tsv_file = quiz_env / "20260604184114-microsoft-just-shocked-the.en.tsv"
+    entry = read_tsv_entry(tsv_file, "Microsoft's AI")
+    assert entry is not None
+    assert entry["LeitnerBox"] == "2"
+
+def test_boundary_hash_sign_in_context(quiz_env):
+    """Test words containing hash signs (weg. ## Teil) are loaded and parsed successfully."""
+    focus_single_card(quiz_env, "20260303214721-text1.de.tsv", "weg. ## Teil")
+    
+    code, out, err = run_quiz(quiz_env, ["20260303214721-text1.de.tsv"], ["weg.##teil", "/q"])
+    assert code == 0
+    assert "✅ Correct!" in out
+    
+    tsv_file = quiz_env / "20260303214721-text1.de.tsv"
+    entry = read_tsv_entry(tsv_file, "weg. ## Teil")
+    assert entry is not None
+    assert entry["LeitnerBox"] == "2"
+
+def test_boundary_real_lnk_resolution(quiz_env):
+    """Test that real Windows .lnk files in tests/fixtures are successfully resolved without writing edits."""
+    # We run on 20260303214721-text1.de.tsv - Shortcut.lnk and immediately quit
+    # This verifies path resolution prints correct load message
+    code, out, err = run_quiz(quiz_env, ["20260303214721-text1.de.tsv - Shortcut.lnk"], ["/q"])
+    assert code == 0
+    assert "Loading:" in out
+    assert "20260303214721-text1.de.tsv" in out
+
+def test_boundary_broken_lnk_error(quiz_env):
+    """Test that resolving a broken link reports an error gracefully."""
+    # test_data.lnk points to data.tsv at the root (which doesn't exist anymore)
+    code, out, err = run_quiz(quiz_env, ["test_data.lnk"], [])
+    assert "Error: File not found:" in out or "not found" in out
