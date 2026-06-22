@@ -93,13 +93,30 @@ local function parse_duration_to_seconds(duration_str)
     end
 end
 
+local seeded = false
+local function shuffle_table(t)
+    if not seeded then
+        math.randomseed(os.time())
+        math.random() math.random() math.random()
+        seeded = true
+    end
+    for i = #t, 2, -1 do
+        local j = math.random(i)
+        t[i], t[j] = t[j], t[i]
+    end
+    return t
+end
+
 -- Simple INI parser for config.ini
 local function load_config(filename)
     local config = {
         intervals = { 300, 3600, 86400, 259200, 604800 }, -- default seconds: 5m, 1h, 1d, 3d, 7d
         new_cards_per_day = 20,
         study_ahead = false,
-        incorrect_penalty = "reset"
+        incorrect_penalty = "reset",
+        new_review_order = "review_first",
+        review_sort_order = "due_date",
+        new_sort_order = "order_added"
     }
 
     local f = io.open(filename, "r")
@@ -135,6 +152,21 @@ local function load_config(filename)
                         val = val:lower()
                         if val == "reset" or val == "decrease" then
                             config.incorrect_penalty = val
+                        end
+                    elseif key == "new_review_order" then
+                        val = val:lower()
+                        if val == "review_first" or val == "new_first" or val == "mix" then
+                            config.new_review_order = val
+                        end
+                    elseif key == "review_sort_order" then
+                        val = val:lower()
+                        if val == "due_date" or val == "order_added" or val == "random" then
+                            config.review_sort_order = val
+                        end
+                    elseif key == "new_sort_order" then
+                        val = val:lower()
+                        if val == "order_added" or val == "random" then
+                            config.new_sort_order = val
                         end
                     end
                 end
@@ -597,22 +629,51 @@ local function main()
         end
     end
 
-    -- Sort due queue: lower box levels first (more urgent), then older due times
-    table.sort(due_queue, function(a, b)
-        if a.box ~= b.box then
-            return a.box < b.box
-        else
-            return a.due < b.due
-        end
-    end)
-
-    -- Assemble final study queue
-    local study_queue = {}
-    for _, card in ipairs(due_queue) do
-        table.insert(study_queue, card)
+    -- 1. Sort due reviews based on review_sort_order
+    if config.review_sort_order == "random" then
+        shuffle_table(due_queue)
+    elseif config.review_sort_order == "order_added" then
+        -- Already in sequential order, do nothing
+    else -- "due_date" (default)
+        table.sort(due_queue, function(a, b)
+            if a.box ~= b.box then
+                return a.box < b.box
+            else
+                return a.due < b.due
+            end
+        end)
     end
-    for _, card in ipairs(active_new) do
-        table.insert(study_queue, card)
+
+    -- 2. Sort new cards based on new_sort_order
+    if config.new_sort_order == "random" then
+        shuffle_table(active_new)
+    end
+
+    -- 3. Assemble study queue based on new_review_order
+    local study_queue = {}
+    if config.new_review_order == "new_first" then
+        for _, card in ipairs(active_new) do
+            table.insert(study_queue, card)
+        end
+        for _, card in ipairs(due_queue) do
+            table.insert(study_queue, card)
+        end
+    elseif config.new_review_order == "mix" then
+        -- Mix them together
+        for _, card in ipairs(due_queue) do
+            table.insert(study_queue, card)
+        end
+        for _, card in ipairs(active_new) do
+            table.insert(study_queue, card)
+        end
+        shuffle_table(study_queue)
+    else -- "review_first" (default)
+        for _, card in ipairs(due_queue) do
+            table.insert(study_queue, card)
+        end
+        for _, card in ipairs(active_new) do
+            table.insert(study_queue, card)
+        end
     end
 
     -- Check if we have anything to study
