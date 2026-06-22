@@ -236,4 +236,4 @@ if not ok then
 end
 
 io.write("\nPress Enter to exit...")
-io.read()
+local _ = io.read()
