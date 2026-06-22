@@ -1319,7 +1319,7 @@ local function run_quiz(study_queue, config)
 				end
 
 				if entry.is_repeat then
-					print(dim("This was a practice repeat. Your score and card progress were not affected.\n"))
+					print(dim("This was a practice repeat. Your score and card progress were not affected."))
 				end
 
 				if not save_ok then
