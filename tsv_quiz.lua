@@ -38,19 +38,23 @@ local function load_tsv(filename)
         elseif not headers then
             -- The first non-comment line contains the headers
             headers = split_line(line, "\t")
-            -- Find index of "Quotation" (target word) and the context column
+            
+            -- Map header names to their column indices
+            local found_cols = {}
             for idx, h in ipairs(headers) do
-                if h == "Quotation" then
-                    word_idx = idx
-                elseif h == "SentenceSourceContextLeft" or h == "SentenceSource" or h == "WordSourceContext" then
-                    if not context_idx then
-                        context_idx = idx
-                    end
-                end
+                local clean_header = h:gsub("%s+$", "")
+                found_cols[clean_header] = idx
             end
-            -- Fallbacks if headers not matched
-            word_idx = word_idx or 1
-            context_idx = context_idx or 6
+
+            -- Find word and context sentence indices with clear priority rules
+            word_idx = found_cols["Quotation"] or found_cols["WordSource"] or 1
+            context_idx = found_cols["SentenceSourceContextLeft"] 
+                          or found_cols["SentenceSource"] 
+                          or found_cols["WordSourceContext"] 
+                          or found_cols["SentenceSourceRewriteAISentenceSource"]
+                          or 6
+            
+            -- Remove debug prints to clean up console output
         else
             -- Parse data row
             if line:match("%S") then
