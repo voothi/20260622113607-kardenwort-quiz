@@ -1299,6 +1299,17 @@ local function run_quiz(study_queue, config)
 		local hint_n, hint_k, hint_m = 0, 0, 0
 		local has_hint = false
 
+		local function defer_current_card()
+			local deferred_entry = {}
+			for k, v in pairs(entry) do
+				deferred_entry[k] = v
+			end
+			table.insert(study_queue, deferred_entry)
+			if not entry.is_repeat then
+				question_num = question_num - 1
+			end
+		end
+
 		while true do
 			local masked_context = mask_context(
 				entry.context,
@@ -1444,6 +1455,7 @@ local function run_quiz(study_queue, config)
 						end
 					elseif lower_cmd == "d" then
 						print(bold(yellow("\nSkipping card...")))
+						defer_current_card()
 						break
 					else
 						print(bold(red("Unknown command: ")) .. trimmed_input .. ". Type '/?' for help.\n")
@@ -1571,6 +1583,7 @@ local function run_quiz(study_queue, config)
 								table.insert(study_queue, i + 1, repeat_entry)
 								break
 							elseif lkey == "d" or lkey == "\x1b" then
+								defer_current_card()
 								break
 							else
 								break
@@ -1656,6 +1669,7 @@ local function run_quiz(study_queue, config)
 							table.insert(study_queue, i + 1, repeat_entry)
 							break
 						elseif lkey == "d" or lkey == "\x1b" then
+							defer_current_card()
 							break
 						else
 							local graded_correct
