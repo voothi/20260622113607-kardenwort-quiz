@@ -1350,7 +1350,7 @@ local function run_quiz(study_queue, config)
 					print_interactive_help()
 					print()
 					if config.single_card_mode then
-						press_any_key("press 'Enter' or 'Space' to return to quiz...", { "\r", "\n", " " })
+						press_any_key("Press 'Enter' or 'Space' to return to quiz...", { "\r", "\n", " " })
 					end
 				else
 					-- Match hint patterns: "hint N K M", "h N K M", "hint N M", "h N M", "hint N", "h N", "hint", "h"
@@ -1414,7 +1414,7 @@ local function run_quiz(study_queue, config)
 						else
 							print(bold(red("There is no previous card to repeat.")))
 							if config.single_card_mode then
-								press_any_key("press 'Enter' or 'Space' to retry...", { "\r", "\n", " " })
+								press_any_key("Press 'Enter' or 'Space' to retry...", { "\r", "\n", " " })
 							end
 						end
 					elseif lower_cmd == "d" then
@@ -1423,7 +1423,7 @@ local function run_quiz(study_queue, config)
 					else
 						print(bold(red("Unknown command: ")) .. trimmed_input .. ". Type '/?' for help.\n")
 						if config.single_card_mode then
-							press_any_key("press 'Enter' or 'Space' to retry...", { "\r", "\n", " " })
+							press_any_key("Press 'Enter' or 'Space' to retry...", { "\r", "\n", " " })
 						end
 					end
 				end
@@ -1502,7 +1502,7 @@ local function run_quiz(study_queue, config)
 					if config.single_card_mode then
 						while true do
 							local key = press_any_key(
-								dim("press 'Enter' or 'Space' to continue, type '?' for help..."),
+								dim("Press 'Enter' or 'Space' to continue, type '?' for help..."),
 								{ "\r", "\n", " ", "s", "a", "d", "q", "?" }
 							)
 							if key == "" then
@@ -1555,7 +1555,7 @@ local function run_quiz(study_queue, config)
 				else
 					-- Anki manual grading mode
 					while true do
-						local prompt_str = bold(cyan("Grade: ")) .. dim("press '1' Again, '3' Good, '?' for help: ")
+						local prompt_str = bold(cyan("Grade: ")) .. dim("Press '1' Again, '3' Good, '?' for help: ")
 
 						local allowed = { "\r", "\n", " ", "1", "3", "q", "?" }
 						if config.single_card_mode then
@@ -1664,7 +1664,7 @@ local function run_quiz(study_queue, config)
 		clear_screen()
 	end
 	print(bold(green(string.format("Quiz finished! You scored %d out of %d.", score, total))))
-	press_any_key("\npress 'Enter' or 'Space' to exit...\n", { "\r", "\n", " " })
+	press_any_key("\nPress 'Enter' or 'Space' to exit...\n", { "\r", "\n", " " })
 end
 
 -- Helper to check if file exists
