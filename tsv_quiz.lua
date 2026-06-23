@@ -7,7 +7,7 @@ local print_interactive_help
 
 -- Resolve directory of the running script for helper lookups
 local _script_dir = (arg[0] or ""):match("(.*[/\\])") or ""
-local _input_helper = _script_dir .. "_input_helper.py"
+local input_helper = _script_dir .. "input_helper.py"
 
 -- 1. Helper function to split a string by a delimiter (tab), preserving empty columns
 local function split_line(line, delimiter)
@@ -180,7 +180,7 @@ local function press_any_key(prompt, allowed_keys)
 	while true do
 		local key = ""
 		if package.config:sub(1, 1) == "\\" then
-			local f = io.popen(string.format('python "%s" --key 2>nul', _input_helper))
+			local f = io.popen(string.format('python "%s" --key 2>nul', input_helper))
 			if f then
 				key = f:read("*a")
 				f:close()
@@ -1261,7 +1261,7 @@ end
 local function read_line_with_esc()
 	io.flush()
 	if package.config:sub(1, 1) == "\\" then
-		local f = io.popen(string.format('python "%s" --line 2>nul', _input_helper))
+		local f = io.popen(string.format('python "%s" --line 2>nul', input_helper))
 		if f then
 			local res = f:read("*a")
 			f:close()

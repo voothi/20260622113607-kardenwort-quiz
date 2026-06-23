@@ -18,7 +18,7 @@ def quiz_env():
         
         # Copy the lua script and python helper
         shutil.copy2(lua_script, tmpdir / "tsv_quiz.lua")
-        shutil.copy2(repo_root / "_input_helper.py", tmpdir / "_input_helper.py")
+        shutil.copy2(repo_root / "input_helper.py", tmpdir / "input_helper.py")
         
         # Create a mock config.ini
         config_path = tmpdir / "config.ini"
