@@ -1326,7 +1326,7 @@ local function run_quiz(study_queue, config)
 			if current_hint then
 				print(current_hint)
 			end
-			io.write(bold("Your answer ") .. dim("(Esc skip, '/?' for help): "))
+			io.write(bold("Your answer ") .. dim("(type '/?' for help, Esc to skip): "))
 
 			local user_input = read_line_with_esc()
 			if not user_input then
@@ -1504,7 +1504,7 @@ local function run_quiz(study_queue, config)
 					if config.single_card_mode then
 						while true do
 							local key = press_any_key(
-								dim("Press Enter/Space to continue (? for help)..."),
+								dim("Press Enter or Space to continue, type '?' for help..."),
 								{ "\r", "\n", " ", "s", "a", "d", "q", "?" }
 							)
 							if key == "" then
@@ -1557,7 +1557,7 @@ local function run_quiz(study_queue, config)
 				else
 					-- Anki manual grading mode
 					while true do
-						local prompt_str = bold(cyan("Grade: ")) .. dim("[1] Again  [3] Good  (? for help): ")
+						local prompt_str = bold(cyan("Grade: ")) .. dim("press '1' Again, '3' Good, '?' for help: ")
 
 						local allowed = { "\r", "\n", " ", "1", "3", "q", "?" }
 						if config.single_card_mode then
