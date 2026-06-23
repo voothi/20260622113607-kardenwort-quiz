@@ -91,7 +91,125 @@ case_sensitive_diff = true
 
 # Ignore punctuation marks when validating answers and generating diffs (true/false)
 ignore_punctuation = true
+
+[fields]
+# Ordered list of headers for headerless files. Empty lines (holes) are supported
+# to correctly align columns when some headers are blank or unused.
+Quotation
+WordSource
+WordSource2
+WordSourceInflectedForm
+WordSourceInflectedForm2
+WordDestination
+WordDestinationInflectedForm
+WordSourceContext
+SentenceSourceContextLeft
+SentenceSource
+SentenceSourceContextRight
+SentenceDestinationContextLeft
+SentenceDestination
+SentenceDestinationContextRight
+SentenceDestination2ContextLeft
+SentenceDestination2
+SentenceDestination2ContextRight
+SentenceSourceWordlist
+SentenceSourceCloze
+SentenceSourceRewriteAISentenceSource
+SentenceSourceRewriteAISentenceDestination
+WordSourceMorphologyAI
+Note
+WordRussian
+WordUkrainian
+WordEnglish
+WordGerman
+WordSourceMorphemeFirst
+WordSourceMorphemeFirstDefinition
+WordSourceMorphemeSecond
+WordSourceMorphemeSecondDefinition
+WordSourceMorphemeThird
+WordSourceMorphemeThirdDefinition
+WordSourceMorphemeFourth
+WordSourceMorphemeFourthDefinition
+WordSourceMorphemeFifth
+WordSourceMorphemeFifthDefinition
+WordSourceIPA
+WordSourceSynonymAI
+WordSourceDefinitionAISentenceSource
+WordSourceDefinitionAISentenceDestination
+WordSourceDefinitionFirst
+WordSourceDefinitionFirstClipping
+WordSourceDefinitionSecond
+WordDestinationDefinitionFirst
+WordDestinationDefinitionSecond
+WordSourceAudio
+SentenceSourceIPA
+SentenceSourceAudio
+Image
+WordSourceCloze
+WordSourceContextAI
+TextSource
+TextDestination
+TextSourceURL
+SentenceEnglish
+SentenceGerman
+SentenceUkrainian
+SentenceRussian
+Source
+SourceURL
+SeparatorAudio
+Source-en-GB
+Source-en-US
+Source-de-DE
+Source-uk-UA
+Source-ru-RU
+Destination-en-GB
+Destination-en-US
+Destination-de-DE
+Destination-uk-UA
+Destination-ru-RU
+Overlapping
+ToggleAlwaysEmptyField
+Note ID
+am-all-morphs
+am-all-morphs-count
+am-unknown-morphs
+am-unknown-morphs-count
+am-highlighted
+am-score
+am-score-terms
+am-study-morphs
+SentenceSourceIndex
+Deck
+LeitnerBox
+LeitnerDue
+
+[fields_mapping.word]
+# Mapping rules for single word cards
+WordSourceInflectedForm = source_word
+SentenceSource = source_sentence
+SentenceSourceIndex = source_index
+LeitnerBox = leitner_box
+LeitnerDue = leitner_due
+
+[fields_mapping.sentence]
+# Mapping rules for sentence-level cards
+WordSourceInflectedForm = source_word
+SentenceSource = source_sentence
+SentenceSourceIndex = source_index
+LeitnerBox = leitner_box
+LeitnerDue = leitner_due
 ```
+
+### Dynamic Field Mapping
+- **`[fields]`**: A list of fallback header names to assign to files that lack a header row. Empty lines (holes) within this list represent empty columns.
+- **`[fields_mapping.word]` / `[fields_mapping.sentence]`**: Allows mapping arbitrary TSV headers to five target keys:
+  - `source_word`: The vocabulary term.
+  - `source_sentence`: The context sentence.
+  - `source_index` (optional): Position index of the term.
+  - `leitner_box`: Column name for the Leitner box level.
+  - `leitner_due`: Column name for the Leitner due date timestamp.
+- **Custom Leitner Columns**: If the mapped `leitner_box` or `leitner_due` columns are not found in the TSV file, they are automatically appended during the quiz run.
+
 
 [Return to Top](#kardenwort-tsv-quiz)
 
