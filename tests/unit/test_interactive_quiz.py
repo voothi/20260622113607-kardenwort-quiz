@@ -866,3 +866,93 @@ def test_headerless_tsv_fields_with_holes(quiz_env):
     assert headers[1] == ""  # Hole preserved
 
 
+def test_anki_grading_good_override(quiz_env):
+    """Test that when anki_grading is true, an incorrect typed answer can be manually rated as Good (correct)."""
+    config_path = quiz_env / "config.ini"
+    content = config_path.read_text(encoding="utf-8")
+    content += "\nanki_grading = true\nsingle_card_mode = true\n"
+    config_path.write_text(content, encoding="utf-8", newline="\n")
+
+    focus_single_card(quiz_env, "20260604184114-microsoft-just-shocked-the.en.tsv", "properly")
+    
+    code, out, err = run_quiz(
+        quiz_env, 
+        ["20260604184114-microsoft-just-shocked-the.en.tsv"], 
+        ["wrong_answer", "2", ""]
+    )
+    assert code == 0
+    assert "Grade: [1] Again (incorrect), [2] Good (correct)" in out
+    
+    tsv_file = quiz_env / "20260604184114-microsoft-just-shocked-the.en.tsv"
+    entry = read_tsv_entry(tsv_file, "properly")
+    assert entry is not None
+    assert entry["LeitnerBox"] == "2"
+    assert int(entry["LeitnerDue"]) > 0
+
+
+def test_anki_grading_again_override(quiz_env):
+    """Test that when anki_grading is true, a correct typed answer can be manually rated as Again (incorrect)."""
+    config_path = quiz_env / "config.ini"
+    content = config_path.read_text(encoding="utf-8")
+    content += "\nanki_grading = true\nsingle_card_mode = true\n"
+    config_path.write_text(content, encoding="utf-8", newline="\n")
+
+    focus_single_card(quiz_env, "20260604184114-microsoft-just-shocked-the.en.tsv", "properly")
+    
+    code, out, err = run_quiz(
+        quiz_env, 
+        ["20260604184114-microsoft-just-shocked-the.en.tsv"], 
+        ["properly", "1", ""]
+    )
+    assert code == 0
+    
+    tsv_file = quiz_env / "20260604184114-microsoft-just-shocked-the.en.tsv"
+    entry = read_tsv_entry(tsv_file, "properly")
+    assert entry is not None
+    assert entry["LeitnerBox"] == "1"
+
+
+def test_anki_grading_default_enter_correct(quiz_env):
+    """Test that when anki_grading is true, pressing Enter/Space defaults to correct if typed answer was correct."""
+    config_path = quiz_env / "config.ini"
+    content = config_path.read_text(encoding="utf-8")
+    content += "\nanki_grading = true\nsingle_card_mode = true\n"
+    config_path.write_text(content, encoding="utf-8", newline="\n")
+
+    focus_single_card(quiz_env, "20260604184114-microsoft-just-shocked-the.en.tsv", "properly")
+    
+    code, out, err = run_quiz(
+        quiz_env, 
+        ["20260604184114-microsoft-just-shocked-the.en.tsv"], 
+        ["properly", "", ""]
+    )
+    assert code == 0
+    
+    tsv_file = quiz_env / "20260604184114-microsoft-just-shocked-the.en.tsv"
+    entry = read_tsv_entry(tsv_file, "properly")
+    assert entry is not None
+    assert entry["LeitnerBox"] == "2"
+
+
+def test_anki_grading_default_enter_incorrect(quiz_env):
+    """Test that when anki_grading is true, pressing Enter/Space defaults to incorrect if typed answer was incorrect."""
+    config_path = quiz_env / "config.ini"
+    content = config_path.read_text(encoding="utf-8")
+    content += "\nanki_grading = true\nsingle_card_mode = true\n"
+    config_path.write_text(content, encoding="utf-8", newline="\n")
+
+    focus_single_card(quiz_env, "20260604184114-microsoft-just-shocked-the.en.tsv", "properly")
+    
+    code, out, err = run_quiz(
+        quiz_env, 
+        ["20260604184114-microsoft-just-shocked-the.en.tsv"], 
+        ["wrong_answer", "", ""]
+    )
+    assert code == 0
+    
+    tsv_file = quiz_env / "20260604184114-microsoft-just-shocked-the.en.tsv"
+    entry = read_tsv_entry(tsv_file, "properly")
+    assert entry is not None
+    assert entry["LeitnerBox"] == "1"
+
+

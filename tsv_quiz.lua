@@ -223,6 +223,7 @@ local function load_config(filename)
 		exact_length_mask = false,
 		case_sensitive_diff = true,
 		ignore_punctuation = true,
+		anki_grading = false,
 		fields = {},
 		fields_mapping_word = {},
 		fields_mapping_sentence = {},
@@ -302,6 +303,8 @@ local function load_config(filename)
 								config.case_sensitive_diff = (val == "true" or val == "1")
 							elseif key == "ignore_punctuation" then
 								config.ignore_punctuation = (val == "true" or val == "1")
+							elseif key == "anki_grading" then
+								config.anki_grading = (val == "true" or val == "1")
 							end
 						elseif current_section == "fields_mapping.word" then
 							config.fields_mapping_word[key] = val
@@ -1219,6 +1222,36 @@ local function mask_context(
 	end
 end
 
+local function update_and_save_progress(entry, is_correct, config)
+	if entry.is_repeat then
+		return true, nil
+	end
+
+	local now = os.time()
+	local new_box = entry.box
+
+	if is_correct then
+		new_box = math.min(entry.box + 1, #config.intervals)
+	else
+		if config.incorrect_penalty == "reset" then
+			new_box = 1
+		else
+			new_box = math.max(1, entry.box - 1)
+		end
+	end
+
+	local interval = config.intervals[new_box]
+	local new_due = now + interval
+
+	-- Save state
+	entry.box = new_box
+	entry.due = new_due
+	entry.raw_columns[entry.box_idx] = tostring(new_box)
+	entry.raw_columns[entry.due_idx] = tostring(new_due)
+
+	return save_tsv(entry.filename, entry.raw_rows)
+end
+
 -- 3. Run the interactive CLI quiz
 local function run_quiz(study_queue, config)
 	if not study_queue or #study_queue == 0 then
@@ -1385,31 +1418,13 @@ local function run_quiz(study_queue, config)
 				local is_correct = (clean_input == correct_word)
 				local save_ok, save_err = true, nil
 
-				if not entry.is_repeat then
-					local now = os.time()
-					local new_box = entry.box
-
-					if is_correct then
-						score = score + 1
-						new_box = math.min(entry.box + 1, #config.intervals)
-					else
-						if config.incorrect_penalty == "reset" then
-							new_box = 1
-						else
-							new_box = math.max(1, entry.box - 1)
+				if not config.anki_grading then
+					if not entry.is_repeat then
+						if is_correct then
+							score = score + 1
 						end
+						save_ok, save_err = update_and_save_progress(entry, is_correct, config)
 					end
-
-					local interval = config.intervals[new_box]
-					local new_due = now + interval
-
-					-- Save state
-					entry.box = new_box
-					entry.due = new_due
-					entry.raw_columns[entry.box_idx] = tostring(new_box)
-					entry.raw_columns[entry.due_idx] = tostring(new_due)
-
-					save_ok, save_err = save_tsv(entry.filename, entry.raw_rows)
 				end
 
 				-- BACK SIDE (Result presentation)
@@ -1455,17 +1470,74 @@ local function run_quiz(study_queue, config)
 					print(dim("This was a practice repeat. Your score and card progress were not affected."))
 				end
 
-				if not save_ok then
-					print(bold(red("Warning: ")) .. "Failed to save progress: " .. tostring(save_err))
-				end
+				if not config.anki_grading then
+					if not save_ok then
+						print(bold(red("Warning: ")) .. "Failed to save progress: " .. tostring(save_err))
+					end
 
-				if config.single_card_mode then
+					if config.single_card_mode then
+						while true do
+							local key = press_any_key(
+								dim("Press Enter/Space to continue ('s' repeat, 'a' previous, 'd' skip, 'q' quit)..."),
+								{ "\r", "\n", " ", "s", "a", "d", "q" }
+							)
+							local lkey = key and key:lower()
+							if lkey == "q" then
+								print(magenta("\nExiting quiz early."))
+								return
+							elseif lkey == "a" then
+								local target_idx = entry.is_repeat and ((entry.repeat_target_idx or i) - 1) or (i - 1)
+								if target_idx >= 1 then
+									local repeat_entry = {}
+									for k, v in pairs(study_queue[target_idx]) do
+										repeat_entry[k] = v
+									end
+									repeat_entry.is_repeat = true
+									repeat_entry.repeat_target_idx = target_idx
+									table.insert(study_queue, i + 1, repeat_entry)
+									break
+								else
+									io.write("\27[1F\27[J")
+									print(bold(red("There is no previous card to repeat.")))
+								end
+							elseif lkey == "s" then
+								local repeat_entry = {}
+								for k, v in pairs(entry) do
+									repeat_entry[k] = v
+								end
+								repeat_entry.is_repeat = true
+								repeat_entry.repeat_target_idx = entry.repeat_target_idx or i
+								table.insert(study_queue, i + 1, repeat_entry)
+								break
+							else
+								break
+							end
+						end
+					end
+				else
+					-- Anki manual grading mode
 					while true do
-						local key = press_any_key(
-							dim("Press Enter/Space to continue ('s' repeat, 'a' previous, 'd' skip, 'q' quit)..."),
-							{ "\r", "\n", " ", "s", "a", "d", "q" }
-						)
+						local prompt_str = dim("Grade: [1] Again (incorrect), [2] Good (correct)")
+						if config.single_card_mode then
+							prompt_str = prompt_str .. dim(" ('s' repeat, 'a' prev, 'd' skip, 'q' quit)...")
+						else
+							prompt_str = prompt_str .. dim(" ('q' quit)...")
+						end
+
+						local allowed = { "\r", "\n", " ", "1", "2", "q" }
+						if config.single_card_mode then
+							table.insert(allowed, "s")
+							table.insert(allowed, "a")
+							table.insert(allowed, "d")
+						end
+
+						local key = press_any_key(prompt_str, allowed)
+						if key == "" then
+							local line = io.read()
+							key = line and line:sub(1, 1) or ""
+						end
 						local lkey = key and key:lower()
+
 						if lkey == "q" then
 							print(magenta("\nExiting quiz early."))
 							return
@@ -1481,10 +1553,23 @@ local function run_quiz(study_queue, config)
 								table.insert(study_queue, i + 1, repeat_entry)
 								break
 							else
-								io.write("\27[1F\27[J")
+								if config.single_card_mode then
+									io.write("\27[1F\27[J")
+								end
 								print(bold(red("There is no previous card to repeat.")))
 							end
 						elseif lkey == "s" then
+							local graded_correct = is_correct
+							if not entry.is_repeat then
+								if graded_correct then
+									score = score + 1
+								end
+								save_ok, save_err = update_and_save_progress(entry, graded_correct, config)
+								if not save_ok then
+									print(bold(red("Warning: ")) .. "Failed to save progress: " .. tostring(save_err))
+								end
+							end
+
 							local repeat_entry = {}
 							for k, v in pairs(entry) do
 								repeat_entry[k] = v
@@ -1493,8 +1578,27 @@ local function run_quiz(study_queue, config)
 							repeat_entry.repeat_target_idx = entry.repeat_target_idx or i
 							table.insert(study_queue, i + 1, repeat_entry)
 							break
+						elseif lkey == "d" then
+							break
 						else
-							-- For 'd', '\r', '\n', ' ' we just continue to the next card
+							local graded_correct
+							if lkey == "1" then
+								graded_correct = false
+							elseif lkey == "2" then
+								graded_correct = true
+							else
+								graded_correct = is_correct
+							end
+
+							if not entry.is_repeat then
+								if graded_correct then
+									score = score + 1
+								end
+								save_ok, save_err = update_and_save_progress(entry, graded_correct, config)
+								if not save_ok then
+									print(bold(red("Warning: ")) .. "Failed to save progress: " .. tostring(save_err))
+								end
+							end
 							break
 						end
 					end
