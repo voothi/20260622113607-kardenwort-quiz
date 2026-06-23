@@ -1504,7 +1504,7 @@ local function run_quiz(study_queue, config)
 						while true do
 							local key = press_any_key(
 								dim("Press 'Enter' or 'Space' to continue, type '?' for help..."),
-								{ "\r", "\n", " ", "s", "a", "d", "q", "?" }
+								{ "\r", "\n", " ", "s", "a", "d", "\x1b", "q", "?" }
 							)
 							if key == "" then
 								local line = io.read()
@@ -1516,7 +1516,7 @@ local function run_quiz(study_queue, config)
 								print("  " .. bold("Enter, Space") .. "            Continue to the next card.")
 								print("  " .. bold("s") .. "                       Repeat the current card.")
 								print("  " .. bold("a") .. "                       Repeat the previous card.")
-								print("  " .. bold("d") .. "                       Skip the current card.")
+								print("  " .. bold("d") .. ", " .. bold("Esc") .. "                  Skip the current card.")
 								print("  " .. bold("q") .. "                       Exit the quiz.")
 								print()
 							elseif lkey == "q" then
@@ -1546,7 +1546,7 @@ local function run_quiz(study_queue, config)
 								repeat_entry.repeat_target_idx = entry.repeat_target_idx or i
 								table.insert(study_queue, i + 1, repeat_entry)
 								break
-							elseif lkey == "d" then
+							elseif lkey == "d" or lkey == "\x1b" then
 								break
 							else
 								break
@@ -1563,6 +1563,7 @@ local function run_quiz(study_queue, config)
 							table.insert(allowed, "s")
 							table.insert(allowed, "a")
 							table.insert(allowed, "d")
+							table.insert(allowed, "\x1b")
 						end
 
 						local key = press_any_key(prompt_str, allowed)
@@ -1586,7 +1587,7 @@ local function run_quiz(study_queue, config)
 							if config.single_card_mode then
 								print("  " .. bold("s") .. "                       Save and repeat the current card.")
 								print("  " .. bold("a") .. "                       Repeat the previous card.")
-								print("  " .. bold("d") .. "                       Skip the current card.")
+								print("  " .. bold("d") .. ", " .. bold("Esc") .. "                  Skip the current card.")
 							end
 							print("  " .. bold("q") .. "                       Exit the quiz.")
 							print()
@@ -1630,7 +1631,7 @@ local function run_quiz(study_queue, config)
 							repeat_entry.repeat_target_idx = entry.repeat_target_idx or i
 							table.insert(study_queue, i + 1, repeat_entry)
 							break
-						elseif lkey == "d" then
+						elseif lkey == "d" or lkey == "\x1b" then
 							break
 						else
 							local graded_correct
