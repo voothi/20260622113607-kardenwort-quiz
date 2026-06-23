@@ -1675,6 +1675,7 @@ print_help = function()
 end
 
 print_interactive_help = function()
+	print()
 	print(bold(cyan("Interactive Controls")))
 	print("  " .. bold("/h") .. " / " .. bold("/hint") .. "      Reveal first letter of the target word")
 	print("  " .. bold("/h N") .. "        Reveal N letters from the start")
