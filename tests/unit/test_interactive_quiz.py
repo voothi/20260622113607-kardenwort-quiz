@@ -827,3 +827,42 @@ def test_headerless_tsv_fields(quiz_env):
     assert row["CustomWord"] == "dog"
     assert row["CustomBox"] == "2"
 
+
+def test_headerless_tsv_fields_with_holes(quiz_env):
+    """Test headerless TSV fallback parsing with custom [fields] list containing blank placeholders (holes)."""
+    headerless_tsv = quiz_env / "headerless_holes.tsv"
+    headerless_tsv.write_text(
+        "#deck:MyDeck\n"
+        "dog\tсобака\tI saw a dog.\t1\t0\n",
+        encoding="utf-8", newline="\n"
+    )
+    
+    config_path = quiz_env / "config.ini"
+    config_path.write_text(
+        "[fields]\n"
+        "CustomWord\n"
+        "\n"  # Empty line placeholder (hole) representing CustomTranslation
+        "CustomSentence\n"
+        "CustomBox\n"
+        "CustomDue\n\n"
+        "[fields_mapping.word]\n"
+        "CustomWord = source_word\n"
+        "CustomSentence = source_sentence\n"
+        "CustomBox = leitner_box\n"
+        "CustomDue = leitner_due\n",
+        encoding="utf-8", newline="\n"
+    )
+    
+    code, out, err = run_quiz(quiz_env, ["headerless_holes.tsv"], ["dog", "/q"])
+    assert code == 0
+    assert "Diff" in out
+    
+    with open(headerless_tsv, "r", encoding="utf-8", newline="\n") as f:
+        lines = f.read().splitlines()
+        
+    assert lines[0] == "#deck:MyDeck"
+    assert lines[1] == "CustomWord\t\tCustomSentence\tCustomBox\tCustomDue"
+    headers = lines[1].split("\t")
+    assert headers[1] == ""  # Hole preserved
+
+

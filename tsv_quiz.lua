@@ -238,9 +238,10 @@ local function load_config(filename)
 
 	local current_section = nil
 	for line in f:lines() do
-		-- Remove comments and whitespace
-		local clean = line:gsub("%s*#.*", ""):gsub("%s*;.*", ""):gsub("^%s+", ""):gsub("%s+$", "")
-		if clean ~= "" then
+		local raw_clean = line:match("^%s*(.-)%s*$")
+		local is_comment = raw_clean:match("^#") or raw_clean:match("^;")
+		if raw_clean ~= "" and not is_comment then
+			local clean = raw_clean:gsub("%s*#.*", ""):gsub("%s*;.*", ""):gsub("^%s+", ""):gsub("%s+$", "")
 			local section = clean:match("^%[(.+)%]$")
 			if section then
 				current_section = section:lower()
@@ -314,9 +315,16 @@ local function load_config(filename)
 					end
 				end
 			end
+		elseif raw_clean == "" then
+			if current_section == "fields" then
+				table.insert(config.fields, "")
+			end
 		end
 	end
 	f:close()
+	while #config.fields > 0 and config.fields[#config.fields] == "" do
+		table.remove(config.fields)
+	end
 	return config
 end
 
