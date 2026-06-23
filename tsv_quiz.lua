@@ -506,7 +506,7 @@ local function print_header(config)
 	else
 		print(dim("Fill in the blank '") .. yellow("___") .. dim("' based on the context sentence."))
 	end
-	print(dim("Type '/q' or '/exit' to quit."))
+	print(dim("Type '/q' or '/exit' to quit.\n"))
 end
 
 -- Generate placeholder for a given word/phrase based on configuration
