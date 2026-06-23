@@ -1394,7 +1394,8 @@ local function run_quiz(study_queue, config)
 								table.insert(study_queue, i + 1, repeat_entry)
 								break
 							else
-								print(bold(red("\nThere is no previous card to repeat.")))
+								io.write("\27[1F\27[J")
+								print(bold(red("There is no previous card to repeat.")))
 							end
 						elseif lkey == "s" then
 							local repeat_entry = {}
