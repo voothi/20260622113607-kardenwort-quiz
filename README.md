@@ -24,6 +24,7 @@ The Kardenwort TSV Quiz is a flashcard study tool written in Lua that helps you 
 ## Features
 - **Leitner System**: Spaced repetition with customizable intervals for each box level.
 - **Diff Highlighting**: Highlights exact capitalization errors in your answers and optionally ignores punctuation for a smoother study experience.
+- **Multi-File Support**: Pass multiple TSV files at once to consolidate all vocabulary into a single quiz session.
 - **Flexible Ordering**: Sort due reviews and new cards by due date, added order, or randomly.
 - **Flashcard Mode**: Clear terminal screen stages for front and back viewing.
 - **Context Masking**: Option to use underscores matching the exact length of the target word for better hints.
@@ -107,9 +108,14 @@ python install.py
 2. Right-click the file → **Send to** → **Kardenwort TSV Quiz**.
 
 ### 3. Command Line Execution
-Alternatively, you can run the script manually against any valid TSV file:
+Alternatively, you can run the script manually against a TSV file:
 ```powershell
 lua tsv_quiz.lua path/to/your/vocabulary.tsv
+```
+
+You can also pass multiple files at once to consolidate all vocabulary into a single quiz session:
+```powershell
+lua tsv_quiz.lua vocab1.tsv vocab2.tsv
 ```
 
 [Return to Top](#kardenwort-tsv-quiz)
