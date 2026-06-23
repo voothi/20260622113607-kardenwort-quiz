@@ -15,11 +15,11 @@ def read_key():
         return
     import msvcrt
 
-    ch = msvcrt.getch()
-    if ch in (b"\x00", b"\xe0"):
-        msvcrt.getch()  # consume extended key second byte
+    ch = msvcrt.getwch()
+    if ch in ("\x00", "\xe0"):
+        msvcrt.getwch()  # consume extended key second byte
         return
-    print(ch.decode("utf-8", "ignore"), end="")
+    print(ch, end="")
 
 
 def read_line(enable_arrows=False):
@@ -30,54 +30,93 @@ def read_line(enable_arrows=False):
     import msvcrt
 
     chars = []
+    cursor_pos = 0
     con = open("CONOUT$", "w", encoding="utf-8")
+    
     while True:
         try:
-            c = msvcrt.getch()
+            c = msvcrt.getwch()
         except Exception:
             break
-        if c == b"\x1b":  # Esc
+            
+        if c == "\x1b":  # Esc
             print("/d", end="")
             break
-        if c in (b"\r", b"\n"):  # Enter
+        elif c in ("\r", "\n"):  # Enter
             print("".join(chars), end="")
             break
-        if c == b"\x08":  # Backspace
-            if chars:
-                chars.pop()
-                con.write("\b \b")
+        elif c == "\x08":  # Backspace
+            if cursor_pos > 0:
+                chars.pop(cursor_pos - 1)
+                cursor_pos -= 1
+                con.write("\b")
+                con.write("".join(chars[cursor_pos:]) + " ")
+                con.write("\b" * (len(chars) - cursor_pos + 1))
                 con.flush()
             continue
-        if c in (b"\x00", b"\xe0"):  # extended keys (arrows, F-keys)
-            ext = msvcrt.getch()
+        elif c in ("\x00", "\xe0"):  # extended keys (arrows, F-keys)
+            ext = msvcrt.getwch()
             if enable_arrows:
                 hint_cmd = None
-                if ext == b"K":  # Left
+                if ext == "K":  # Left
                     hint_cmd = "/hint_left"
-                elif ext == b"M":  # Right
+                elif ext == "M":  # Right
                     hint_cmd = "/hint_right"
-                elif ext == b"P":  # Down
+                elif ext == "P":  # Down
                     hint_cmd = "/hint_down"
-                elif ext == b"H":  # Up
+                elif ext == "H":  # Up
                     hint_cmd = "/hint_up"
                 
                 if hint_cmd:
-                    for _ in chars:
-                        con.write("\b \b")
+                    if cursor_pos > 0:
+                        con.write("\b" * cursor_pos)
+                    con.write(" " * len(chars))
+                    con.write("\b" * len(chars))
                     con.flush()
                     print(hint_cmd, end="")
                     break
+            else:
+                # Line navigation when arrow hints are disabled
+                if ext == "K":  # Left
+                    if cursor_pos > 0:
+                        cursor_pos -= 1
+                        con.write("\b")
+                        con.flush()
+                elif ext == "M":  # Right
+                    if cursor_pos < len(chars):
+                        con.write(chars[cursor_pos])
+                        cursor_pos += 1
+                        con.flush()
+                elif ext == "S":  # Delete
+                    if cursor_pos < len(chars):
+                        chars.pop(cursor_pos)
+                        con.write("".join(chars[cursor_pos:]) + " ")
+                        con.write("\b" * (len(chars) - cursor_pos + 1))
+                        con.flush()
+                elif ext == "G":  # Home
+                    if cursor_pos > 0:
+                        con.write("\b" * cursor_pos)
+                        cursor_pos = 0
+                        con.flush()
+                elif ext == "O":  # End
+                    if cursor_pos < len(chars):
+                        con.write("".join(chars[cursor_pos:]))
+                        cursor_pos = len(chars)
+                        con.flush()
             continue
-        if c == b"\x03":  # Ctrl+C
+        elif c == "\x03":  # Ctrl+C
             print("/q", end="")
             break
-        try:
-            char = c.decode("utf-8")
-            con.write(char)
-            con.flush()
-            chars.append(char)
-        except Exception:
-            pass
+        else:
+            try:
+                chars.insert(cursor_pos, c)
+                con.write("".join(chars[cursor_pos:]))
+                cursor_pos += 1
+                if cursor_pos < len(chars):
+                    con.write("\b" * (len(chars) - cursor_pos))
+                con.flush()
+            except Exception:
+                pass
     con.close()
 
 
