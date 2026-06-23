@@ -1496,7 +1496,7 @@ local function run_quiz(study_queue, config)
 							end
 							local lkey = key and key:lower()
 							if lkey == "?" then
-								print(bold(cyan("\n=== Back Side Options ===")))
+								print(bold(cyan("\nBack Side Options")))
 								print("  " .. bold("Enter/Space") .. " Continue to the next card")
 								print("  " .. bold("s") .. "           Repeat card in this session")
 								print("  " .. bold("a") .. "           Previous card practice (repeat previous)")
