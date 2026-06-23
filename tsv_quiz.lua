@@ -1329,6 +1329,9 @@ local function run_quiz(study_queue, config)
 				elseif lower_cmd == "help" or lower_cmd == "?" then
 					print_help()
 					print("\n")
+					if config.single_card_mode then
+						press_any_key("Press Enter or Space to return to quiz...", { "\r", "\n", " " })
+					end
 				else
 					-- Match hint patterns: "hint N K M", "h N K M", "hint N M", "h N M", "hint N", "h N", "hint", "h"
 					local hint_cmd, arg1, arg2, arg3 = cmd_body:match("^(hint)%s*(%d*)%s*(%d*)%s*(%d*)$")
