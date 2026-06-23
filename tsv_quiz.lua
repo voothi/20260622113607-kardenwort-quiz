@@ -1512,12 +1512,12 @@ local function run_quiz(study_queue, config)
 							end
 							local lkey = key and key:lower()
 							if lkey == "?" then
-								print(bold(cyan("\nBack Side Options")))
-								print("  " .. bold("Enter/Space") .. " Continue to the next card")
-								print("  " .. bold("s") .. "           Repeat card in this session")
-								print("  " .. bold("a") .. "           Previous card practice (repeat previous)")
-								print("  " .. bold("d") .. "           Skip card (do not save progress)")
-								print("  " .. bold("q") .. "           Quit the quiz immediately")
+								print(bold(cyan("\nBack Side Options:")))
+								print("  " .. bold("Enter/Space") .. "             Continue to the next card")
+								print("  " .. bold("s") .. "                       Repeat card in this session")
+								print("  " .. bold("a") .. "                       Previous card practice (repeat previous)")
+								print("  " .. bold("d") .. "                       Skip card (do not save progress)")
+								print("  " .. bold("q") .. "                       Quit the quiz immediately")
 								print()
 							elseif lkey == "q" then
 								print(magenta("\nExiting quiz early."))
@@ -1573,22 +1573,22 @@ local function run_quiz(study_queue, config)
 						local lkey = key and key:lower()
 
 						if lkey == "?" then
-							print(bold(cyan("\nBack Side Options")))
-							print("  " .. bold("1") .. "           Grade as Again (incorrect / penalize card)")
-							print("  " .. bold("3") .. "           Grade as Good (correct / advance card)")
+							print(bold(cyan("\nBack Side Options:")))
+							print("  " .. bold("1") .. "                       Grade as Again (incorrect / penalize card)")
+							print("  " .. bold("3") .. "                       Grade as Good (correct / advance card)")
 							print(
 								"  "
 									.. bold("Enter/Space")
-									.. " Default to auto-grade ("
+									.. "             Default to auto-grade ("
 									.. (is_correct and "Good" or "Again")
 									.. ")"
 							)
 							if config.single_card_mode then
-								print("  " .. bold("s") .. "           Save grade and repeat card in this session")
-								print("  " .. bold("a") .. "           Previous card practice (repeat previous)")
-								print("  " .. bold("d") .. "           Skip card (do not save progress)")
+								print("  " .. bold("s") .. "                       Save grade and repeat card in this session")
+								print("  " .. bold("a") .. "                       Previous card practice (repeat previous)")
+								print("  " .. bold("d") .. "                       Skip card (do not save progress)")
 							end
-							print("  " .. bold("q") .. "           Quit the quiz immediately")
+							print("  " .. bold("q") .. "                       Quit the quiz immediately")
 							print()
 						elseif lkey == "q" then
 							print(magenta("\nExiting quiz early."))
@@ -1699,7 +1699,7 @@ end
 
 print_interactive_help = function()
 	print()
-	print(bold(cyan("Interactive Controls")))
+	print(bold(cyan("Interactive Controls:")))
 	print("  " .. bold("/h") .. ", " .. bold("/hint") .. "               Reveal first letter of the target word")
 	print("  " .. bold("/h N") .. "                    Reveal N letters from the start")
 	print("  " .. bold("/h N M") .. "                  Reveal N from the start and M from the end")
