@@ -1517,14 +1517,14 @@ local function run_quiz(study_queue, config)
 				else
 					-- Anki manual grading mode
 					while true do
-						local prompt_str = dim("Grade: [1] Again (incorrect), [2] Good (correct)")
+						local prompt_str = dim("Grade: [1] Again (incorrect), [3] Good (correct)")
 						if config.single_card_mode then
 							prompt_str = prompt_str .. dim(" ('s' repeat, 'a' prev, 'd' skip, 'q' quit)...")
 						else
 							prompt_str = prompt_str .. dim(" ('q' quit)...")
 						end
 
-						local allowed = { "\r", "\n", " ", "1", "2", "q" }
+						local allowed = { "\r", "\n", " ", "1", "3", "q" }
 						if config.single_card_mode then
 							table.insert(allowed, "s")
 							table.insert(allowed, "a")
@@ -1584,7 +1584,7 @@ local function run_quiz(study_queue, config)
 							local graded_correct
 							if lkey == "1" then
 								graded_correct = false
-							elseif lkey == "2" then
+							elseif lkey == "3" then
 								graded_correct = true
 							else
 								graded_correct = is_correct

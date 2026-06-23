@@ -878,10 +878,10 @@ def test_anki_grading_good_override(quiz_env):
     code, out, err = run_quiz(
         quiz_env, 
         ["20260604184114-microsoft-just-shocked-the.en.tsv"], 
-        ["wrong_answer", "2", ""]
+        ["wrong_answer", "3", ""]
     )
     assert code == 0
-    assert "Grade: [1] Again (incorrect), [2] Good (correct)" in out
+    assert "Grade: [1] Again (incorrect), [3] Good (correct)" in out
     
     tsv_file = quiz_env / "20260604184114-microsoft-just-shocked-the.en.tsv"
     entry = read_tsv_entry(tsv_file, "properly")
