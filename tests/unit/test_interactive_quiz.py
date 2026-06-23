@@ -1044,5 +1044,38 @@ def test_source_index_duplicate_words(quiz_env):
     assert "Sie hören ___" not in clean_out
 
 
+def test_source_index_shifted_duplicates(quiz_env):
+    """Test that if the TSV sentence is shifted (e.g. has an extra word at start), we still target the correct occurrence using the closest logical index."""
+    # original index of second 'die' is 7.
+    # shifted sentence: "Bitte hören Sie die Nachrichtensendung nur einmal die Woche." (added "Bitte" at start, pushing second 'die' to index 8)
+    dup_tsv = quiz_env / "duplicates_shifted.tsv"
+    dup_tsv.write_text(
+        "WordSource\tWordSourceInflectedForm\tWordSource2\tQuotation\tWordDestination\tSentenceSource\tNote\tSourceURL\tSource-en-GB\tSource-en-US\tSentenceSourceIndex\tDeck\tLeitnerBox\tLeitnerDue\n"
+        "die\tdie\t\t\tthe\tBitte hören Sie die Nachrichtensendung nur einmal die Woche.\t\t\t\t\t7\tDeckA\t1\t0\n",
+        encoding="utf-8", newline="\n"
+    )
+
+    config_path = quiz_env / "config.ini"
+    config_path.write_text(
+        "[Leitner]\n"
+        "intervals = 5m, 1h, 1d\n"
+        "new_cards_per_day = 10\n"
+        "single_card_mode = false\n"
+        "exact_length_mask = false\n"
+        "new_review_order = review_first\n"
+        "review_sort_order = due_date\n",
+        encoding="utf-8", newline="\n"
+    )
+
+    code, out, err = run_quiz(quiz_env, ["duplicates_shifted.tsv"], ["/q"])
+    assert code == 0
+    clean_out = strip_ansi(out)
+
+    # Verify only the second occurrence (now at index 8) is masked
+    assert "Bitte hören Sie die Nachrichtensendung nur einmal ___ Woche." in clean_out
+    assert "Bitte hören Sie ___" not in clean_out
+
+
+
 
 

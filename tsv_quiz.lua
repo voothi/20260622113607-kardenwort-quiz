@@ -1222,46 +1222,78 @@ local function mask_context(
 			local ep1 = escape_pattern(p1_case)
 			local ep2 = escape_pattern(p2_case)
 			local pattern = "()(" .. ep1 .. ")(.-)(" .. ep2 .. ")()"
-			-- We search for matches, and only replace if the matched start index maps to source_index (if provided)
-			local last_pos = 1
-			local res_parts = {}
-			local replaced = false
 
+			-- Phase 1: Collect all match positions
+			local matches = {}
+			local last_pos = 1
 			while true do
 				local start_pos, m1, mid, m2, end_pos = context:match(pattern, last_pos)
 				if not start_pos then
 					break
 				end
-				table.insert(res_parts, context:sub(last_pos, start_pos - 1))
+				table.insert(matches, {
+					start_pos = start_pos,
+					end_pos = end_pos,
+					m1 = m1,
+					mid = mid,
+					m2 = m2,
+					logical_idx = char_word_indices[start_pos] or 0
+				})
+				last_pos = end_pos
+			end
 
-				-- Check if source_index matches the logical word index of the first word
-				local first_word_logical_idx = char_word_indices[start_pos]
-				local matches_idx = true
-				if source_index and first_word_logical_idx ~= source_index then
-					matches_idx = false
+			if #matches == 0 then
+				return context, false
+			end
+
+			-- Phase 2: Identify which matches to replace
+			local replaced_indices = {}
+			if source_index then
+				-- Find the match closest to source_index
+				local best_match = nil
+				local min_diff = math.huge
+				for _, match in ipairs(matches) do
+					local diff = math.abs(match.logical_idx - source_index)
+					if diff < min_diff then
+						min_diff = diff
+						best_match = match
+					end
 				end
+				if best_match then
+					replaced_indices[best_match.start_pos] = true
+				end
+			else
+				-- Replace all matches
+				for _, match in ipairs(matches) do
+					replaced_indices[match.start_pos] = true
+				end
+			end
 
-				if matches_idx then
+			-- Phase 3: Build the result string
+			local last_pos_write = 1
+			local res_parts = {}
+			for _, match in ipairs(matches) do
+				table.insert(res_parts, context:sub(last_pos_write, match.start_pos - 1))
+				if replaced_indices[match.start_pos] then
 					local final_r1 = r1
 					local final_r2 = r2
 					if is_correct ~= nil then
 						if is_correct then
-							final_r1 = bold(green(m1))
-							final_r2 = bold(green(m2))
+							final_r1 = bold(green(match.m1))
+							final_r2 = bold(green(match.m2))
 						else
 							final_r1 = r1
 							final_r2 = r2
 						end
 					end
-					table.insert(res_parts, final_r1 .. mid .. final_r2)
-					replaced = true
+					table.insert(res_parts, final_r1 .. match.mid .. final_r2)
 				else
-					table.insert(res_parts, m1 .. mid .. m2)
+					table.insert(res_parts, match.m1 .. match.mid .. match.m2)
 				end
-				last_pos = end_pos
+				last_pos_write = match.end_pos
 			end
-			table.insert(res_parts, context:sub(last_pos))
-			return table.concat(res_parts, ""), replaced
+			table.insert(res_parts, context:sub(last_pos_write))
+			return table.concat(res_parts, ""), next(replaced_indices) ~= nil
 		end
 
 		-- Try exact casing
@@ -1311,30 +1343,62 @@ local function mask_context(
 		local function try_single_replace(word_case)
 			local e_word = escape_pattern(word_case)
 			local pattern = "()(" .. e_word .. ")()"
-			local last_pos = 1
-			local res_parts = {}
-			local replaced = false
 
+			-- Phase 1: Collect all match positions
+			local matches = {}
+			local last_pos = 1
 			while true do
 				local start_pos, m, end_pos = context:match(pattern, last_pos)
 				if not start_pos then
 					break
 				end
-				table.insert(res_parts, context:sub(last_pos, start_pos - 1))
+				table.insert(matches, {
+					start_pos = start_pos,
+					end_pos = end_pos,
+					m = m,
+					logical_idx = char_word_indices[start_pos] or 0
+				})
+				last_pos = end_pos
+			end
 
-				-- Check if source_index matches the logical word index of the first word
-				local first_word_logical_idx = char_word_indices[start_pos]
-				local matches_idx = true
-				if source_index and first_word_logical_idx ~= source_index then
-					matches_idx = false
+			if #matches == 0 then
+				return context, false
+			end
+
+			-- Phase 2: Identify which matches to replace
+			local replaced_indices = {}
+			if source_index then
+				-- Find the match closest to source_index
+				local best_match = nil
+				local min_diff = math.huge
+				for _, match in ipairs(matches) do
+					local diff = math.abs(match.logical_idx - source_index)
+					if diff < min_diff then
+						min_diff = diff
+						best_match = match
+					end
 				end
+				if best_match then
+					replaced_indices[best_match.start_pos] = true
+				end
+			else
+				-- Replace all matches
+				for _, match in ipairs(matches) do
+					replaced_indices[match.start_pos] = true
+				end
+			end
 
-				if matches_idx then
+			-- Phase 3: Build the result string
+			local last_pos_write = 1
+			local res_parts = {}
+			for _, match in ipairs(matches) do
+				table.insert(res_parts, context:sub(last_pos_write, match.start_pos - 1))
+				if replaced_indices[match.start_pos] then
 					local rep
 					if is_correct ~= nil then
 						if is_correct then
 							local m_parts = {}
-							for part in m:gmatch("[^%s]+") do
+							for part in match.m:gmatch("[^%s]+") do
 								table.insert(m_parts, part)
 							end
 							local m_rep_parts = {}
@@ -1343,20 +1407,19 @@ local function mask_context(
 							end
 							rep = table.concat(m_rep_parts, " ")
 						else
-							rep = get_inline_colored_diff(user_input or "", m, case_sensitive_diff, ignore_punctuation)
+							rep = get_inline_colored_diff(user_input or "", match.m, case_sensitive_diff, ignore_punctuation)
 						end
 					else
 						rep = replacement
 					end
 					table.insert(res_parts, rep)
-					replaced = true
 				else
-					table.insert(res_parts, m)
+					table.insert(res_parts, match.m)
 				end
-				last_pos = end_pos
+				last_pos_write = match.end_pos
 			end
-			table.insert(res_parts, context:sub(last_pos))
-			return table.concat(res_parts, ""), replaced
+			table.insert(res_parts, context:sub(last_pos_write))
+			return table.concat(res_parts, ""), next(replaced_indices) ~= nil
 		end
 
 		local masked, replaced = try_single_replace(target_word)
