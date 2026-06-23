@@ -225,6 +225,7 @@ local function load_config(filename)
 		review_sort_order = "due_date",
 		new_sort_order = "order_added",
 		single_card_mode = false,
+		arrow_hints = false,
 		exact_length_mask = false,
 		case_sensitive_diff = true,
 		ignore_punctuation = true,
@@ -258,7 +259,7 @@ local function load_config(filename)
 					local key, val = clean:match("^%s*([^=]+)%s*=%s*(.-)%s*$")
 					if key and val then
 						key = key:gsub("^%s+", ""):gsub("%s+$", "")
-						val = val:gsub("^%s+", ""):gsub("%s+$", "")
+						val = val:gsub("%s+", ""):gsub("%s+$", "")
 						-- Strip quotes from val if any
 						if val:match('^".*"$') or val:match("^'.*'$") then
 							val = val:sub(2, -2)
@@ -302,6 +303,8 @@ local function load_config(filename)
 								end
 							elseif key == "single_card_mode" then
 								config.single_card_mode = (val == "true" or val == "1")
+							elseif key == "arrow_hints" then
+								config.arrow_hints = (val == "true" or val == "1")
 							elseif key == "exact_length_mask" then
 								config.exact_length_mask = (val == "true" or val == "1")
 							elseif key == "case_sensitive_diff" then
@@ -1259,10 +1262,11 @@ local function update_and_save_progress(entry, is_correct, config)
 end
 
 -- Read a line of input, intercepting Esc (skip) and Ctrl+C (quit) on Windows
-local function read_line_with_esc()
+local function read_line_with_esc(config)
 	io.flush()
 	if package.config:sub(1, 1) == "\\" then
-		local f = io.popen(string.format('python "%s" --line 2>nul', input_helper))
+		local arrow_arg = config.arrow_hints and " --arrows" or ""
+		local f = io.popen(string.format('python "%s" --line%s 2>nul', input_helper, arrow_arg))
 		if f then
 			local res = f:read("*a")
 			f:close()
@@ -1331,7 +1335,7 @@ local function run_quiz(study_queue, config)
 			end
 			io.write(bold("Your answer ") .. dim("(type '/?' for help, Esc to skip): "))
 
-			local user_input = read_line_with_esc()
+			local user_input = read_line_with_esc(config)
 			if not user_input then
 				print(magenta("\nExiting quiz early."))
 				return
@@ -1354,13 +1358,44 @@ local function run_quiz(study_queue, config)
 						press_any_key("Press 'Enter' or 'Space' to return to quiz...", { "\r", "\n", " " })
 					end
 				else
-					-- Match hint patterns: "hint N K M", "h N K M", "hint N M", "h N M", "hint N", "h N", "hint", "h"
+					local function generate_hint_string(target, n, k, m)
+						local len = utf8_len(target)
+						local parts = {}
+						for part in target:gmatch("[^%s]+") do
+							table.insert(parts, part)
+						end
+						local hint_parts = {}
+						for _, part in ipairs(parts) do
+							table.insert(hint_parts, format_hint_text(part, n, k, m))
+						end
+						local hint_str = table.concat(hint_parts, " ")
+						return bold(cyan("💡 Hint: ")) .. hint_str .. dim(string.format(" (length: %d)", len))
+					end
+
 					local hint_cmd, arg1, arg2, arg3 = cmd_body:match("^(hint)%s*(%d*)%s*(%d*)%s*(%d*)$")
 					if not hint_cmd then
 						hint_cmd, arg1, arg2, arg3 = cmd_body:match("^(h)%s*(%d*)%s*(%d*)%s*(%d*)$")
 					end
 
-					if hint_cmd then
+					if lower_cmd == "hint_left" then
+						hint_n = hint_n + 1
+						current_hint = generate_hint_string(target_word, hint_n, hint_k, hint_m)
+						has_hint = true
+					elseif lower_cmd == "hint_right" then
+						hint_m = hint_m + 1
+						current_hint = generate_hint_string(target_word, hint_n, hint_k, hint_m)
+						has_hint = true
+					elseif lower_cmd == "hint_down" then
+						hint_k = hint_k + 1
+						current_hint = generate_hint_string(target_word, hint_n, hint_k, hint_m)
+						has_hint = true
+					elseif lower_cmd == "hint_up" then
+						hint_n = 0
+						hint_k = 0
+						hint_m = 0
+						current_hint = nil
+						has_hint = false
+					elseif hint_cmd then
 						local n, k, m = 1, 0, 0
 						if arg3 ~= "" then
 							n = tonumber(arg1) or 1
@@ -1376,21 +1411,10 @@ local function run_quiz(study_queue, config)
 							m = 0
 						end
 
-						local len = utf8_len(target_word)
-						local parts = {}
-						for part in target_word:gmatch("[^%s]+") do
-							table.insert(parts, part)
-						end
-
-						local hint_parts = {}
-						for _, part in ipairs(parts) do
-							table.insert(hint_parts, format_hint_text(part, n, k, m))
-						end
-						local hint_str = table.concat(hint_parts, " ")
-						current_hint = bold(cyan("💡 Hint: ")) .. hint_str .. dim(string.format(" (length: %d)", len))
 						hint_n = n
 						hint_k = k
 						hint_m = m
+						current_hint = generate_hint_string(target_word, hint_n, hint_k, hint_m)
 						has_hint = true
 						print("\n")
 					elseif lower_cmd == "a" then
@@ -1693,6 +1717,7 @@ print_help = function()
 	print("  " .. bold("/h N K M") .. "                Reveal N from the start, K from the middle, M from the end.")
 	print("  " .. bold("/a") .. "                      Repeat the previous card.")
 	print("  " .. bold("/d") .. ", " .. bold("Esc") .. "                 Skip the current card.")
+	print("  " .. bold("Arrows") .. "                  Dynamic visual hints (if arrow_hints is enabled).")
 	print("  " .. bold("/q") .. ", " .. bold("/quit") .. ", " .. bold("/exit") .. "        Exit the quiz.\n")
 	print(bold("Supported TSV Format:"))
 	print("  Requires headers (e.g. Quotation/WordSource and SentenceSource/SentenceSourceContextLeft).")
@@ -1707,6 +1732,7 @@ print_interactive_help = function()
 	print("  " .. bold("/h N K M") .. "                Reveal N from the start, K from the middle, M from the end.")
 	print("  " .. bold("/a") .. "                      Repeat the previous card.")
 	print("  " .. bold("/d") .. ", " .. bold("Esc") .. "                 Skip the current card.")
+	print("  " .. bold("Arrows") .. "                  Dynamic visual hints (if arrow_hints is enabled).")
 	print("  " .. bold("/q") .. ", " .. bold("/quit") .. ", " .. bold("/exit") .. "        Exit the quiz.")
 end
 

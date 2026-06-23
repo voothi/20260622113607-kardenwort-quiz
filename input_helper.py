@@ -22,7 +22,7 @@ def read_key():
     print(ch.decode("utf-8", "ignore"), end="")
 
 
-def read_line():
+def read_line(enable_arrows=False):
     """Read a full line, echoing to console. Esc -> /d, Ctrl+C -> /q."""
     if not sys.stdin.isatty():
         print("NOT_TTY", end="")
@@ -49,7 +49,20 @@ def read_line():
                 con.flush()
             continue
         if c in (b"\x00", b"\xe0"):  # extended keys (arrows, F-keys)
-            msvcrt.getch()
+            ext = msvcrt.getch()
+            if enable_arrows:
+                if ext == b"K":  # Left
+                    print("/hint_left", end="")
+                    break
+                elif ext == b"M":  # Right
+                    print("/hint_right", end="")
+                    break
+                elif ext == b"P":  # Down
+                    print("/hint_down", end="")
+                    break
+                elif ext == b"H":  # Up
+                    print("/hint_up", end="")
+                    break
             continue
         if c == b"\x03":  # Ctrl+C
             print("/q", end="")
@@ -65,8 +78,15 @@ def read_line():
 
 
 if __name__ == "__main__":
-    mode = sys.argv[1] if len(sys.argv) > 1 else "--key"
+    mode = "--key"
+    enable_arrows = False
+    if len(sys.argv) > 1:
+        mode = sys.argv[1]
+    if "--arrows" in sys.argv:
+        enable_arrows = True
+
     if mode == "--line":
-        read_line()
+        read_line(enable_arrows)
     else:
         read_key()
+
