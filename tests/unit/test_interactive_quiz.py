@@ -357,7 +357,7 @@ def test_single_card_mode(quiz_env):
     
     assert code == 0
     assert "\x1b[2J\x1b[H" in out
-    assert "Press Enter/Space to continue ('s' repeat, 'a' previous, 'd' skip, 'q' quit)..." in out
+    assert "Press Enter/Space to continue (? help)..." in out
 
 def test_exact_length_masking(quiz_env):
     """Test exact length masking configuration."""
@@ -881,7 +881,7 @@ def test_anki_grading_good_override(quiz_env):
         ["wrong_answer", "3", ""]
     )
     assert code == 0
-    assert "Grade: [1] Again (incorrect), [3] Good (correct)" in out
+    assert "Grade: [1] Again  [3] Good  (? help):" in strip_ansi(out)
     
     tsv_file = quiz_env / "20260604184114-microsoft-just-shocked-the.en.tsv"
     entry = read_tsv_entry(tsv_file, "properly")
@@ -954,5 +954,56 @@ def test_anki_grading_default_enter_incorrect(quiz_env):
     entry = read_tsv_entry(tsv_file, "properly")
     assert entry is not None
     assert entry["LeitnerBox"] == "1"
+
+
+def test_front_help_command(quiz_env):
+    """Test that typing /help or /? on the front side displays the help message."""
+    code, out, err = run_quiz(
+        quiz_env, 
+        ["20260604184114-microsoft-just-shocked-the.en.tsv"], 
+        ["/?", "/q"]
+    )
+    assert code == 0
+    assert "Usage:" in out
+    assert "Interactive Controls (during quiz):" in out
+
+
+def test_back_help_command_normal(quiz_env):
+    """Test that pressing ? on the back side in normal grading mode shows controls help."""
+    config_path = quiz_env / "config.ini"
+    content = config_path.read_text(encoding="utf-8")
+    content += "\nsingle_card_mode = true\n"
+    config_path.write_text(content, encoding="utf-8", newline="\n")
+
+    focus_single_card(quiz_env, "20260604184114-microsoft-just-shocked-the.en.tsv", "properly")
+    
+    code, out, err = run_quiz(
+        quiz_env, 
+        ["20260604184114-microsoft-just-shocked-the.en.tsv"], 
+        ["properly", "?", ""]
+    )
+    assert code == 0
+    assert "=== Back Side Options ===" in out
+    assert "Continue to the next card" in out
+
+
+def test_back_help_command_anki(quiz_env):
+    """Test that pressing ? on the back side in anki manual grading mode shows manual grading help."""
+    config_path = quiz_env / "config.ini"
+    content = config_path.read_text(encoding="utf-8")
+    content += "\nanki_grading = true\nsingle_card_mode = true\n"
+    config_path.write_text(content, encoding="utf-8", newline="\n")
+
+    focus_single_card(quiz_env, "20260604184114-microsoft-just-shocked-the.en.tsv", "properly")
+    
+    code, out, err = run_quiz(
+        quiz_env, 
+        ["20260604184114-microsoft-just-shocked-the.en.tsv"], 
+        ["properly", "?", "3", ""]
+    )
+    assert code == 0
+    assert "=== Back Side Options ===" in out
+    assert "Grade as Again" in out
+
 
 

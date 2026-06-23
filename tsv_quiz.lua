@@ -2,6 +2,8 @@
 -- A command-line utility to parse vocabulary from a TSV file and run a study quiz.
 -- Demonstrates core Lua concepts: File I/O, tables, loops, string parsing, and interactive console input.
 
+local print_help
+
 -- 1. Helper function to split a string by a delimiter (tab), preserving empty columns
 local function split_line(line, delimiter)
 	local result = {}
@@ -1306,7 +1308,7 @@ local function run_quiz(study_queue, config)
 			if current_hint then
 				print(current_hint)
 			end
-			io.write(bold("Your answer ") .. dim("(type '/h N M' for a hint, '/q' to quit): "))
+			io.write(bold("Your answer ") .. dim("(type '/?' for help): "))
 
 			local user_input = io.read()
 			if not user_input then
@@ -1324,6 +1326,9 @@ local function run_quiz(study_queue, config)
 				if lower_cmd == "q" or lower_cmd == "quit" or lower_cmd == "exit" then
 					print(magenta("\nExiting quiz early."))
 					return
+				elseif lower_cmd == "help" or lower_cmd == "?" then
+					print_help()
+					print("\n")
 				else
 					-- Match hint patterns: "hint N K M", "h N K M", "hint N M", "h N M", "hint N", "h N", "hint", "h"
 					local hint_cmd, arg1, arg2, arg3 = cmd_body:match("^(hint)%s*(%d*)%s*(%d*)%s*(%d*)$")
@@ -1396,7 +1401,7 @@ local function run_quiz(study_queue, config)
 						print(
 							bold(red("Unknown command: "))
 								.. trimmed_input
-								.. ". Type '/h' for hint, '/q' to quit, '/a' to repeat previous, '/d' to skip.\n"
+								.. ". Type '/?' for help.\n"
 						)
 						if config.single_card_mode then
 							press_any_key("Press Enter or Space to retry...", { "\r", "\n", " " })
@@ -1467,7 +1472,7 @@ local function run_quiz(study_queue, config)
 				print()
 
 				if entry.is_repeat then
-					print(dim("This was a practice repeat. Your score and card progress were not affected."))
+					print(magenta("ℹ ") .. dim("Practice Repeat — progress & score unaffected"))
 				end
 
 				if not config.anki_grading then
@@ -1478,11 +1483,23 @@ local function run_quiz(study_queue, config)
 					if config.single_card_mode then
 						while true do
 							local key = press_any_key(
-								dim("Press Enter/Space to continue ('s' repeat, 'a' previous, 'd' skip, 'q' quit)..."),
-								{ "\r", "\n", " ", "s", "a", "d", "q" }
+								dim("Press Enter/Space to continue (? help)..."),
+								{ "\r", "\n", " ", "s", "a", "d", "q", "?" }
 							)
+							if key == "" then
+								local line = io.read()
+								key = line and line:sub(1, 1) or ""
+							end
 							local lkey = key and key:lower()
-							if lkey == "q" then
+							if lkey == "?" then
+								print(bold(cyan("\n=== Back Side Options ===")))
+								print("  " .. bold("Enter/Space") .. " Continue to the next card")
+								print("  " .. bold("s") .. "           Repeat card in this session")
+								print("  " .. bold("a") .. "           Previous card practice (repeat previous)")
+								print("  " .. bold("d") .. "           Skip card (do not save progress)")
+								print("  " .. bold("q") .. "           Quit the quiz immediately")
+								print()
+							elseif lkey == "q" then
 								print(magenta("\nExiting quiz early."))
 								return
 							elseif lkey == "a" then
@@ -1509,6 +1526,8 @@ local function run_quiz(study_queue, config)
 								repeat_entry.repeat_target_idx = entry.repeat_target_idx or i
 								table.insert(study_queue, i + 1, repeat_entry)
 								break
+							elseif lkey == "d" then
+								break
 							else
 								break
 							end
@@ -1517,14 +1536,9 @@ local function run_quiz(study_queue, config)
 				else
 					-- Anki manual grading mode
 					while true do
-						local prompt_str = dim("Grade: [1] Again (incorrect), [3] Good (correct)")
-						if config.single_card_mode then
-							prompt_str = prompt_str .. dim(" ('s' repeat, 'a' prev, 'd' skip, 'q' quit)...")
-						else
-							prompt_str = prompt_str .. dim(" ('q' quit)...")
-						end
+						local prompt_str = bold(cyan("Grade: ")) .. dim("[1] Again  [3] Good  (? help): ")
 
-						local allowed = { "\r", "\n", " ", "1", "3", "q" }
+						local allowed = { "\r", "\n", " ", "1", "3", "q", "?" }
 						if config.single_card_mode then
 							table.insert(allowed, "s")
 							table.insert(allowed, "a")
@@ -1538,7 +1552,19 @@ local function run_quiz(study_queue, config)
 						end
 						local lkey = key and key:lower()
 
-						if lkey == "q" then
+						if lkey == "?" then
+							print(bold(cyan("\n=== Back Side Options ===")))
+							print("  " .. bold("1") .. "           Grade as Again (incorrect / penalize card)")
+							print("  " .. bold("3") .. "           Grade as Good (correct / advance card)")
+							print("  " .. bold("Enter/Space") .. " Default to auto-grade (" .. (is_correct and "Good" or "Again") .. ")")
+							if config.single_card_mode then
+								print("  " .. bold("s") .. "           Save grade and repeat card in this session")
+								print("  " .. bold("a") .. "           Previous card practice (repeat previous)")
+								print("  " .. bold("d") .. "           Skip card (do not save progress)")
+							end
+							print("  " .. bold("q") .. "           Quit the quiz immediately")
+							print()
+						elseif lkey == "q" then
 							print(magenta("\nExiting quiz early."))
 							return
 						elseif lkey == "a" then
@@ -1627,7 +1653,7 @@ local function file_exists(name)
 end
 
 -- Print standard help menu
-local function print_help()
+print_help = function()
 	print(bold(cyan("=== Kardenwort TSV Quiz ===")))
 	print("An interactive CLI study tool for vocabulary TSV files.\n")
 	print(bold("Usage:"))
