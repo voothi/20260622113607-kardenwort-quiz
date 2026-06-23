@@ -1097,3 +1097,28 @@ def test_source_index_coordinate_map_separable(quiz_env):
 
 
 
+
+def test_config_separable_verb_inline_diff(quiz_env):
+    """Test that separable verbs respect case_sensitive_diff and ignore_punctuation in inline diffs."""
+    focus_single_card(quiz_env, "20260303214721-text1.de.tsv", "stehe ... auf")
+    
+    # Disable case sensitive diff
+    config_path = quiz_env / "config.ini"
+    content = config_path.read_text(encoding="utf-8")
+    content += "\ncase_sensitive_diff = false\n"
+    config_path.write_text(content, encoding="utf-8", newline="\n")
+
+    # Target is "stehe ... auf". Input is "STEHE AUS".
+    # Since case_sensitive_diff is false, 'STEHE' matches 'stehe' perfectly.
+    # We test that the context sentence outputs 'stehe' in green instead of red.
+    code, out, err = run_quiz(quiz_env, ["20260303214721-text1.de.tsv"], ["STEHE AUS", "/q"])
+    assert code == 0
+    
+    # bold(green("s")) -> \x1b[1m\x1b[32ms\x1b[0m\x1b[0m
+    # We can just check that \x1b[31ms\x1b[0m (red 's') is NOT in the output,
+    # but \x1b[32ms\x1b[0m (green 's') IS in the output, specifically for the context sentence.
+    # To be safe, we verify that the red 's' is not applied to 'stehe'.
+    # If the bug is present (case_sensitive_diff=nil/true), 's' and 'S' mismatch, so 's' becomes red.
+    
+    assert "\x1b[31ms\x1b[0m" not in out
+    assert "\x1b[32ms\x1b[0m" in out
