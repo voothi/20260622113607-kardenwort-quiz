@@ -1458,7 +1458,10 @@ local function resolve_lnk(path)
 		while end_pos <= #data and string.byte(data, end_pos) ~= 0 do
 			end_pos = end_pos + 1
 		end
-		return data:sub(start_pos, end_pos - 1)
+		local target = data:sub(start_pos, end_pos - 1)
+		-- Map legacy project folder name to the current directory name
+		target = target:gsub("20260622113607%-german", "20260622113607-kardenwort-quiz")
+		return target
 	end
 
 	return path
