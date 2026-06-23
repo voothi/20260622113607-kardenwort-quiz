@@ -1006,4 +1006,43 @@ def test_back_help_command_anki(quiz_env):
     assert "Mark as incorrect." in strip_ansi(out)
 
 
+def test_source_index_duplicate_words(quiz_env):
+    """Test that only the duplicate word at the logical SentenceSourceIndex is masked."""
+    # Write a test TSV where 'die' appears twice, and we target the second 'die' at logical word index 6.
+    # Sentence: "Sie hören die Nachrichtensendung nur einmal die Woche."
+    # Logical index mapping:
+    # 1: Sie, 2: hören, 3: die, 4: Nachrichtensendung, 5: nur, 6: einmal, 7: die, 8: Woche
+    # Wait, in "Sie hören die Nachrichtensendung nur einmal die Woche.", the second 'die' is at logical word index 7.
+    dup_tsv = quiz_env / "duplicates.tsv"
+    dup_tsv.write_text(
+        "WordSource\tWordSourceInflectedForm\tWordSource2\tQuotation\tWordDestination\tSentenceSource\tNote\tSourceURL\tSource-en-GB\tSource-en-US\tSentenceSourceIndex\tDeck\tLeitnerBox\tLeitnerDue\n"
+        "die\tdie\t\t\tthe\tSie hören die Nachrichtensendung nur einmal die Woche.\t\t\t\t\t7\tDeckA\t1\t0\n",
+        encoding="utf-8", newline="\n"
+    )
+
+    # Let's enable exact_length_mask to make verification unambiguous:
+    # Expect: "Sie hören die Nachrichtensendung nur einmal ___ Woche."
+    # If the first 'die' was masked instead, it would be: "Sie hören ___ Nachrichtensendung nur einmal die Woche."
+    config_path = quiz_env / "config.ini"
+    config_path.write_text(
+        "[Leitner]\n"
+        "intervals = 5m, 1h, 1d\n"
+        "new_cards_per_day = 10\n"
+        "single_card_mode = false\n"
+        "exact_length_mask = false\n"
+        "new_review_order = review_first\n"
+        "review_sort_order = due_date\n",
+        encoding="utf-8", newline="\n"
+    )
+
+    code, out, err = run_quiz(quiz_env, ["duplicates.tsv"], ["/q"])
+    assert code == 0
+    clean_out = strip_ansi(out)
+
+    # Verify only the second occurrence is masked with '___'
+    assert "Sie hören die Nachrichtensendung nur einmal ___ Woche." in clean_out
+    assert "Sie hören ___" not in clean_out
+
+
+
 

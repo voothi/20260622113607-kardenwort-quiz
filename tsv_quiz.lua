@@ -625,11 +625,18 @@ local function load_tsv(filename, config)
 				local box_val = tonumber(columns[box_idx]) or 1
 				local due_val = tonumber(columns[due_idx]) or 0
 
+				local source_index_idx = found_cols["SentenceSourceIndex"]
+				local source_idx_val = nil
+				if source_index_idx then
+					source_idx_val = tonumber(columns[source_index_idx])
+				end
+
 				table.insert(vocabulary, {
 					word = final_word,
 					context = final_context,
 					box = box_val,
 					due = due_val,
+					source_index = source_idx_val,
 					raw_columns = columns,
 				})
 			end
@@ -1106,13 +1113,70 @@ local function mask_context(
 	is_correct,
 	user_input,
 	case_sensitive_diff,
-	ignore_punctuation
+	ignore_punctuation,
+	source_index
 )
 	local p1, p2 = target_word:match("^(.-)%s*%.%.%.%s*(.-)$")
 
 	local function escape_pattern(text)
 		return text:gsub("([^%w])", "%%%1")
 	end
+
+	-- Helper to check if a word character is a word constituent (alphanumeric/letter or underscore)
+	-- Punctuation, symbols, space are ignored. ASS tags are handled specially.
+	-- We want to map characters of `context` to their 1-indexed logical word positions.
+	local function get_char_word_indices(text)
+		local indices = {} -- maps byte index to logical word index (or nil/0 if non-word)
+		local current_word_index = 0
+		local in_word = false
+
+		local i = 1
+		while i <= #text do
+			-- Check for ASS tag: {\...}
+			if text:sub(i, i) == "{" then
+				local close_idx = text:find("}", i, true)
+				if close_idx then
+					for j = i, close_idx do
+						indices[j] = 0 -- metadata
+					end
+					i = close_idx + 1
+				else
+					indices[i] = 0
+					i = i + 1
+				end
+			else
+				local c = text:sub(i, i)
+				-- Determine if it's a word character
+				-- In UTF-8, characters starting with bytes >= 128 are part of multibyte characters.
+				-- For simplicity, since the spec says "Non-word tokens: Punctuation, symbols, and whitespace... ignored",
+				-- we consider any byte >= 128 as a word character (letters like ä, ß, etc.),
+				-- and for ASCII bytes, we check if they are alphanumeric.
+				local byte_val = string.byte(c)
+				local is_word_char = false
+				if byte_val >= 128 then
+					is_word_char = true
+				elseif c:match("%w") then
+					is_word_char = true
+				end
+
+				if is_word_char then
+					if not in_word then
+						current_word_index = current_word_index + 1
+						in_word = true
+					end
+					indices[i] = current_word_index
+					i = i + 1
+				else
+					in_word = false
+					indices[i] = 0
+					i = i + 1
+				end
+			end
+		end
+		return indices
+	end
+
+	local char_word_indices = get_char_word_indices(context)
 
 	if p1 and p2 then
 		-- Separable verb case: p1 ... p2
@@ -1157,41 +1221,66 @@ local function mask_context(
 		local function try_replace(p1_case, p2_case)
 			local ep1 = escape_pattern(p1_case)
 			local ep2 = escape_pattern(p2_case)
-			local pattern = "(" .. ep1 .. ")(.-)(" .. ep2 .. ")"
-			local masked, count = context:gsub(pattern, function(m1, mid, m2)
-				local final_r1 = r1
-				local final_r2 = r2
-				if is_correct ~= nil then
-					if is_correct then
-						final_r1 = bold(green(m1))
-						final_r2 = bold(green(m2))
-					else
-						final_r1 = r1
-						final_r2 = r2
-					end
+			local pattern = "()(" .. ep1 .. ")(.-)(" .. ep2 .. ")()"
+			-- We search for matches, and only replace if the matched start index maps to source_index (if provided)
+			local last_pos = 1
+			local res_parts = {}
+			local replaced = false
+
+			while true do
+				local start_pos, m1, mid, m2, end_pos = context:match(pattern, last_pos)
+				if not start_pos then
+					break
 				end
-				return final_r1 .. mid .. final_r2
-			end)
-			return masked, count
+				table.insert(res_parts, context:sub(last_pos, start_pos - 1))
+
+				-- Check if source_index matches the logical word index of the first word
+				local first_word_logical_idx = char_word_indices[start_pos]
+				local matches_idx = true
+				if source_index and first_word_logical_idx ~= source_index then
+					matches_idx = false
+				end
+
+				if matches_idx then
+					local final_r1 = r1
+					local final_r2 = r2
+					if is_correct ~= nil then
+						if is_correct then
+							final_r1 = bold(green(m1))
+							final_r2 = bold(green(m2))
+						else
+							final_r1 = r1
+							final_r2 = r2
+						end
+					end
+					table.insert(res_parts, final_r1 .. mid .. final_r2)
+					replaced = true
+				else
+					table.insert(res_parts, m1 .. mid .. m2)
+				end
+				last_pos = end_pos
+			end
+			table.insert(res_parts, context:sub(last_pos))
+			return table.concat(res_parts, ""), replaced
 		end
 
 		-- Try exact casing
-		local res, count = try_replace(p1, p2)
-		if count > 0 then
+		local res, replaced = try_replace(p1, p2)
+		if replaced then
 			return res
 		end
 
 		-- Try lowercase parts
-		res, count = try_replace(p1:lower(), p2:lower())
-		if count > 0 then
+		res, replaced = try_replace(p1:lower(), p2:lower())
+		if replaced then
 			return res
 		end
 
 		-- Try capitalized part1 and lowercase part2 (common in German sentences)
 		local first = utf8_sub(p1, 1, 1):upper()
 		local rest = utf8_sub(p1, 2)
-		res, count = try_replace(first .. rest, p2:lower())
-		if count > 0 then
+		res, replaced = try_replace(first .. rest, p2:lower())
+		if replaced then
 			return res
 		end
 
@@ -1221,42 +1310,69 @@ local function mask_context(
 
 		local function try_single_replace(word_case)
 			local e_word = escape_pattern(word_case)
-			local masked, count = context:gsub(e_word, function(m)
-				if is_correct ~= nil then
-					if is_correct then
-						local m_parts = {}
-						for part in m:gmatch("[^%s]+") do
-							table.insert(m_parts, part)
-						end
-						local m_rep_parts = {}
-						for _, part in ipairs(m_parts) do
-							table.insert(m_rep_parts, bold(green(part)))
-						end
-						return table.concat(m_rep_parts, " ")
-					else
-						return get_inline_colored_diff(user_input or "", m, case_sensitive_diff, ignore_punctuation)
-					end
-				else
-					return replacement
+			local pattern = "()(" .. e_word .. ")()"
+			local last_pos = 1
+			local res_parts = {}
+			local replaced = false
+
+			while true do
+				local start_pos, m, end_pos = context:match(pattern, last_pos)
+				if not start_pos then
+					break
 				end
-			end)
-			return masked, count
+				table.insert(res_parts, context:sub(last_pos, start_pos - 1))
+
+				-- Check if source_index matches the logical word index of the first word
+				local first_word_logical_idx = char_word_indices[start_pos]
+				local matches_idx = true
+				if source_index and first_word_logical_idx ~= source_index then
+					matches_idx = false
+				end
+
+				if matches_idx then
+					local rep
+					if is_correct ~= nil then
+						if is_correct then
+							local m_parts = {}
+							for part in m:gmatch("[^%s]+") do
+								table.insert(m_parts, part)
+							end
+							local m_rep_parts = {}
+							for _, part in ipairs(m_parts) do
+								table.insert(m_rep_parts, bold(green(part)))
+							end
+							rep = table.concat(m_rep_parts, " ")
+						else
+							rep = get_inline_colored_diff(user_input or "", m, case_sensitive_diff, ignore_punctuation)
+						end
+					else
+						rep = replacement
+					end
+					table.insert(res_parts, rep)
+					replaced = true
+				else
+					table.insert(res_parts, m)
+				end
+				last_pos = end_pos
+			end
+			table.insert(res_parts, context:sub(last_pos))
+			return table.concat(res_parts, ""), replaced
 		end
 
-		local masked, count = try_single_replace(target_word)
-		if count > 0 then
+		local masked, replaced = try_single_replace(target_word)
+		if replaced then
 			return masked
 		end
 
-		masked, count = try_single_replace(target_word:lower())
-		if count > 0 then
+		masked, replaced = try_single_replace(target_word:lower())
+		if replaced then
 			return masked
 		end
 
 		local first = utf8_sub(target_word, 1, 1):upper()
 		local rest = utf8_sub(target_word, 2)
-		masked, count = try_single_replace(first .. rest)
-		if count > 0 then
+		masked, replaced = try_single_replace(first .. rest)
+		if replaced then
 			return masked
 		end
 
@@ -1354,7 +1470,8 @@ local function run_quiz(study_queue, config)
 				nil,
 				nil,
 				config.case_sensitive_diff,
-				config.ignore_punctuation
+				config.ignore_punctuation,
+				entry.source_index
 			)
 
 			if config.single_card_mode then
@@ -1557,7 +1674,8 @@ local function run_quiz(study_queue, config)
 					is_correct,
 					trimmed_input,
 					config.case_sensitive_diff,
-					config.ignore_punctuation
+					config.ignore_punctuation,
+					entry.source_index
 				)
 				print(revealed_context)
 
