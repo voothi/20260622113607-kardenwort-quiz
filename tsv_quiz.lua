@@ -639,7 +639,8 @@ end
 
 -- Helper to print the standardized quiz header
 local function print_header(config)
-	print(bold(cyan("=== Kardenwort TSV Quiz ===")))
+	print(bold(cyan("Kardenwort TSV Quiz")))
+	print(bold(cyan("-------------------")))
 	if config.exact_length_mask then
 		print(dim("Fill in the blanks based on the context sentence."))
 	else
@@ -1679,18 +1680,19 @@ end
 
 -- Print standard help menu
 print_help = function()
-	print(bold(cyan("=== Kardenwort TSV Quiz ===")))
+	print(bold(cyan("Kardenwort TSV Quiz")))
+	print(bold(cyan("-------------------")))
 	print("An interactive CLI study tool for vocabulary TSV files.\n")
 	print(bold("Usage:"))
 	print("  lua tsv_quiz.lua [file.tsv]\n")
 	print(bold("Interactive Controls (during quiz):"))
-	print("  " .. bold("/h") .. " / " .. bold("/hint") .. "              Reveal first letter of the target word")
+	print("  " .. bold("/h") .. ", " .. bold("/hint") .. "               Reveal first letter of the target word")
 	print("  " .. bold("/h N") .. "                    Reveal N letters from the start")
 	print("  " .. bold("/h N M") .. "                  Reveal N from the start and M from the end")
 	print("  " .. bold("/h N K M") .. "                Reveal N from start, K from middle, M from end")
 	print("  " .. bold("/a") .. "                      Practice repeat the previous card")
-	print("  " .. bold("/d") .. " / " .. bold("Esc") .. "                Skip directly to the next card")
-	print("  " .. bold("/q") .. " / " .. bold("/quit") .. " / " .. bold("/exit") .. "  Exit the quiz immediately\n")
+	print("  " .. bold("/d") .. ", " .. bold("Esc") .. "                 Skip directly to the next card")
+	print("  " .. bold("/q") .. ", " .. bold("/quit") .. ", " .. bold("/exit") .. "        Exit the quiz immediately\n")
 	print(bold("Supported TSV Format:"))
 	print("  Requires headers (e.g. Quotation/WordSource and SentenceSource/SentenceSourceContextLeft).")
 end
@@ -1698,13 +1700,13 @@ end
 print_interactive_help = function()
 	print()
 	print(bold(cyan("Interactive Controls")))
-	print("  " .. bold("/h") .. " / " .. bold("/hint") .. "              Reveal first letter of the target word")
+	print("  " .. bold("/h") .. ", " .. bold("/hint") .. "               Reveal first letter of the target word")
 	print("  " .. bold("/h N") .. "                    Reveal N letters from the start")
 	print("  " .. bold("/h N M") .. "                  Reveal N from the start and M from the end")
 	print("  " .. bold("/h N K M") .. "                Reveal N from start, K from middle, M from end")
 	print("  " .. bold("/a") .. "                      Practice repeat the previous card")
-	print("  " .. bold("/d") .. " / " .. bold("Esc") .. "                Skip directly to the next card")
-	print("  " .. bold("/q") .. " / " .. bold("/quit") .. " / " .. bold("/exit") .. "  Exit the quiz immediately")
+	print("  " .. bold("/d") .. ", " .. bold("Esc") .. "                 Skip directly to the next card")
+	print("  " .. bold("/q") .. ", " .. bold("/quit") .. ", " .. bold("/exit") .. "        Exit the quiz immediately")
 end
 
 -- Helper to resolve Windows .lnk shortcuts in pure Lua
