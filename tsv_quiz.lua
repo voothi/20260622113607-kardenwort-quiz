@@ -1688,7 +1688,7 @@ print_help = function()
 	print("  " .. bold("/h N K M") .. "                Reveal N from start, K from middle, M from end")
 	print("  " .. bold("/a") .. "                      Practice repeat the previous card")
 	print("  " .. bold("/d") .. " / " .. bold("Esc") .. "                Skip directly to the next card")
-	print("  " .. bold("/q") .. " / " .. bold("quit") .. " / " .. bold("exit") .. "         Exit the quiz immediately\n")
+	print("  " .. bold("/q") .. " / " .. bold("quit") .. " / " .. bold("exit") .. "        Exit the quiz immediately\n")
 	print(bold("Supported TSV Format:"))
 	print("  Requires headers (e.g. Quotation/WordSource and SentenceSource/SentenceSourceContextLeft).")
 end
@@ -1702,7 +1702,7 @@ print_interactive_help = function()
 	print("  " .. bold("/h N K M") .. "                Reveal N from start, K from middle, M from end")
 	print("  " .. bold("/a") .. "                      Practice repeat the previous card")
 	print("  " .. bold("/d") .. " / " .. bold("Esc") .. "                Skip directly to the next card")
-	print("  " .. bold("/q") .. " / " .. bold("quit") .. " / " .. bold("exit") .. "         Exit the quiz immediately")
+	print("  " .. bold("/q") .. " / " .. bold("quit") .. " / " .. bold("exit") .. "        Exit the quiz immediately")
 end
 
 -- Helper to resolve Windows .lnk shortcuts in pure Lua
