@@ -750,3 +750,123 @@ def test_interactive_skip_command(quiz_env):
     assert code == 0
     clean_out = strip_ansi(out)
     assert "Skipping card..." in clean_out
+
+
+def test_custom_field_mapping(quiz_env):
+    """Test custom header mapping and custom Leitner fields."""
+    custom_tsv = quiz_env / "custom.tsv"
+    custom_tsv.write_text(
+        "MyCustomWord\tMyCustomTranslation\tMyCustomSentence\tCustomBox\tCustomDue\n"
+        "dog\tсобака\tI saw a dog.\t1\t0\n",
+        encoding="utf-8", newline="\n"
+    )
+    
+    config_path = quiz_env / "config.ini"
+    config_path.write_text(
+        "[fields_mapping.word]\n"
+        "MyCustomWord = source_word\n"
+        "MyCustomSentence = source_sentence\n\n"
+        "[settings]\n"
+        "leitner_box_field = CustomBox\n"
+        "leitner_due_field = CustomDue\n",
+        encoding="utf-8", newline="\n"
+    )
+    
+    code, out, err = run_quiz(quiz_env, ["custom.tsv"], ["dog", "/q"])
+    assert code == 0
+    assert "Diff" in out
+    
+    # Read the TSV back and verify box and due fields were updated at CustomBox and CustomDue
+    with open(custom_tsv, "r", encoding="utf-8", newline="\n") as f:
+        lines = f.read().splitlines()
+    headers = lines[0].split("\t")
+    data = lines[1].split("\t")
+    row = dict(zip(headers, data))
+    
+    assert row["CustomBox"] == "2"
+    assert int(row["CustomDue"]) > 0
+
+
+def test_sentence_word_threshold(quiz_env):
+    """Test word count threshold logic selecting between word and sentence mapping profiles."""
+    custom_tsv = quiz_env / "threshold.tsv"
+    custom_tsv.write_text(
+        "WordCol\tSentenceCol1\tSentenceCol2\tLeitnerBox\tLeitnerDue\n"
+        "dog\tI saw a single dog.\tI saw a group of dogs.\t1\t0\n"
+        "two dogs\tMy dog is friendly.\tWe saw two dogs running.\t1\t0\n",
+        encoding="utf-8", newline="\n"
+    )
+    
+    config_path = quiz_env / "config.ini"
+    config_path.write_text(
+        "[fields_mapping.word]\n"
+        "WordCol = source_word\n"
+        "SentenceCol1 = source_sentence\n\n"
+        "[fields_mapping.sentence]\n"
+        "WordCol = source_word\n"
+        "SentenceCol2 = source_sentence\n\n"
+        "[settings]\n"
+        "sentence_word_threshold = 2\n",
+        encoding="utf-8", newline="\n"
+    )
+    
+    # For 'dog' (1 word < threshold 2), SentenceCol1 ("I saw a single dog.") should be presented.
+    # We focus 'dog' by scheduling 'two dogs' in the future.
+    focus_single_card(quiz_env, "threshold.tsv", "dog")
+    code, out, err = run_quiz(quiz_env, ["threshold.tsv"], ["dog", "/q"])
+    assert code == 0
+    clean_out = strip_ansi(out)
+    assert "single dog" in clean_out
+    assert "group of dogs" not in clean_out
+    
+    # For 'two dogs' (2 words >= threshold 2), SentenceCol2 ("We saw two dogs running.") should be presented.
+    focus_single_card(quiz_env, "threshold.tsv", "two dogs")
+    code, out, err = run_quiz(quiz_env, ["threshold.tsv"], ["two dogs", "/q"])
+    assert code == 0
+    clean_out = strip_ansi(out)
+    assert "two dogs running" in clean_out
+    assert "dog is friendly" not in clean_out
+
+
+def test_headerless_tsv_fields(quiz_env):
+    """Test headerless TSV fallback parsing with custom [fields] list and comment preservation."""
+    headerless_tsv = quiz_env / "headerless_custom.tsv"
+    headerless_tsv.write_text(
+        "#deck:MyDeck\n"
+        "dog\tсобака\tI saw a dog.\t1\t0\n",
+        encoding="utf-8", newline="\n"
+    )
+    
+    config_path = quiz_env / "config.ini"
+    config_path.write_text(
+        "[fields]\n"
+        "CustomWord\n"
+        "CustomTranslation\n"
+        "CustomSentence\n"
+        "CustomBox\n"
+        "CustomDue\n\n"
+        "[fields_mapping.word]\n"
+        "CustomWord = source_word\n"
+        "CustomSentence = source_sentence\n\n"
+        "[settings]\n"
+        "leitner_box_field = CustomBox\n"
+        "leitner_due_field = CustomDue\n",
+        encoding="utf-8", newline="\n"
+    )
+    
+    code, out, err = run_quiz(quiz_env, ["headerless_custom.tsv"], ["dog", "/q"])
+    assert code == 0
+    assert "Diff" in out
+    
+    # Verify the file was written back, has #deck:MyDeck at the top, followed by generated headers, and updated data
+    with open(headerless_tsv, "r", encoding="utf-8", newline="\n") as f:
+        lines = f.read().splitlines()
+        
+    assert lines[0] == "#deck:MyDeck"
+    assert lines[1] == "CustomWord\tCustomTranslation\tCustomSentence\tCustomBox\tCustomDue"
+    headers = lines[1].split("\t")
+    data = lines[2].split("\t")
+    row = dict(zip(headers, data))
+    assert row["CustomWord"] == "dog"
+    assert row["CustomBox"] == "2"
+

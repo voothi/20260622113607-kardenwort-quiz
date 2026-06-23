@@ -80,6 +80,43 @@ local function utf8_sub(str, start_char, end_char)
 	return str:sub(start_byte, end_byte)
 end
 
+local function count_words(text)
+	if not text or text == "" then
+		return 0
+	end
+	local count = 0
+	local in_word = false
+
+	-- Helper to check if code is word char (alphanumeric, Cyrillic, German umlauts, etc.)
+	local function is_code_word_char(code)
+		-- ASCII: A-Z (65-90), a-z (97-122), 0-9 (48-57), apostrophe (39)
+		if (code >= 65 and code <= 90) or (code >= 97 and code <= 122) or (code >= 48 and code <= 57) or code == 39 then
+			return true
+		end
+		-- Cyrillic: А-Я, а-я, Ё, ё (1024 to 1279)
+		if code >= 1024 and code <= 1279 then
+			return true
+		end
+		-- German umlauts/eszett: Ä (196), ä (228), Ö (214), ö (246), Ü (220), ü (252), ß (223)
+		if code == 196 or code == 228 or code == 214 or code == 246 or code == 220 or code == 252 or code == 223 then
+			return true
+		end
+		return false
+	end
+
+	for _, code in utf8.codes(text) do
+		if is_code_word_char(code) then
+			if not in_word then
+				count = count + 1
+				in_word = true
+			end
+		else
+			in_word = false
+		end
+	end
+	return count
+end
+
 -- -- Helper to pad columns to target length
 local function ensure_columns_len(columns, target_len)
 	for i = #columns + 1, target_len do
@@ -89,11 +126,37 @@ local function ensure_columns_len(columns, target_len)
 end
 
 -- Helper to check if a list of columns resembles a TSV header
-local function is_header_row(columns)
+local function is_header_row(columns, config)
 	for _, col in ipairs(columns) do
 		local c = col:gsub("%s+$", ""):gsub("^%s+", ""):lower()
 		if c == "wordsource" or c == "quotation" or c == "wordsourceinflectedform" or c == "sentencesource" then
 			return true
+		end
+	end
+	if config then
+		if config.fields then
+			for _, f in ipairs(config.fields) do
+				local clean_f = f:gsub("%s+$", ""):gsub("^%s+", ""):lower()
+				for _, col in ipairs(columns) do
+					local c = col:gsub("%s+$", ""):gsub("^%s+", ""):lower()
+					if c == clean_f and c ~= "" then
+						return true
+					end
+				end
+			end
+		end
+		for _, mapping in ipairs({ config.fields_mapping_word, config.fields_mapping_sentence }) do
+			if mapping then
+				for k, _ in pairs(mapping) do
+					local clean_k = k:gsub("%s+$", ""):gsub("^%s+", ""):lower()
+					for _, col in ipairs(columns) do
+						local c = col:gsub("%s+$", ""):gsub("^%s+", ""):lower()
+						if c == clean_k and c ~= "" then
+							return true
+						end
+					end
+				end
+			end
 		end
 	end
 	return false
@@ -197,6 +260,12 @@ local function load_config(filename)
 		exact_length_mask = false,
 		case_sensitive_diff = true,
 		ignore_punctuation = true,
+		fields = {},
+		fields_mapping_word = {},
+		fields_mapping_sentence = {},
+		ordered_fields_word = {},
+		ordered_fields_sentence = {},
+		settings = {},
 	}
 
 	local f = io.open(filename, "r")
@@ -212,52 +281,73 @@ local function load_config(filename)
 			local section = clean:match("^%[(.+)%]$")
 			if section then
 				current_section = section:lower()
-			elseif current_section == "leitner" then
-				local key, val = clean:match("^%s*([%w_]+)%s*=%s*(.-)%s*$")
-				if key and val then
-					if key == "intervals" then
-						local list = {}
-						for part in val:gmatch("[^,%s]+") do
-							local secs = parse_duration_to_seconds(part)
-							if secs > 0 then
-								table.insert(list, secs)
+			else
+				if current_section == "fields" then
+					table.insert(config.fields, clean)
+				else
+					local key, val = clean:match("^%s*([^=]+)%s*=%s*(.-)%s*$")
+					if key and val then
+						key = key:gsub("^%s+", ""):gsub("%s+$", "")
+						val = val:gsub("^%s+", ""):gsub("%s+$", "")
+						-- Strip quotes from val if any
+						if val:match('^".*"$') or val:match("^'.*'$") then
+							val = val:sub(2, -2)
+						end
+
+						if current_section == "leitner" then
+							if key == "intervals" then
+								local list = {}
+								for part in val:gmatch("[^,%s]+") do
+									local secs = parse_duration_to_seconds(part)
+									if secs > 0 then
+										table.insert(list, secs)
+									end
+								end
+								if #list > 0 then
+									config.intervals = list
+								end
+							elseif key == "new_cards_per_day" then
+								config.new_cards_per_day = tonumber(val) or config.new_cards_per_day
+							elseif key == "study_ahead" then
+								config.study_ahead = (val == "true" or val == "1")
+							elseif key == "incorrect_penalty" then
+								val = val:lower()
+								if val == "reset" or val == "decrease" then
+									config.incorrect_penalty = val
+								end
+							elseif key == "new_review_order" then
+								val = val:lower()
+								if val == "review_first" or val == "new_first" or val == "mix" then
+									config.new_review_order = val
+								end
+							elseif key == "review_sort_order" then
+								val = val:lower()
+								if val == "due_date" or val == "order_added" or val == "random" then
+									config.review_sort_order = val
+								end
+							elseif key == "new_sort_order" then
+								val = val:lower()
+								if val == "order_added" or val == "random" then
+									config.new_sort_order = val
+								end
+							elseif key == "single_card_mode" then
+								config.single_card_mode = (val == "true" or val == "1")
+							elseif key == "exact_length_mask" then
+								config.exact_length_mask = (val == "true" or val == "1")
+							elseif key == "case_sensitive_diff" then
+								config.case_sensitive_diff = (val == "true" or val == "1")
+							elseif key == "ignore_punctuation" then
+								config.ignore_punctuation = (val == "true" or val == "1")
 							end
+						elseif current_section == "fields_mapping.word" then
+							config.fields_mapping_word[key] = val
+							table.insert(config.ordered_fields_word, key)
+						elseif current_section == "fields_mapping.sentence" then
+							config.fields_mapping_sentence[key] = val
+							table.insert(config.ordered_fields_sentence, key)
+						elseif current_section == "settings" then
+							config.settings[key] = val
 						end
-						if #list > 0 then
-							config.intervals = list
-						end
-					elseif key == "new_cards_per_day" then
-						config.new_cards_per_day = tonumber(val) or config.new_cards_per_day
-					elseif key == "study_ahead" then
-						config.study_ahead = (val == "true" or val == "1")
-					elseif key == "incorrect_penalty" then
-						val = val:lower()
-						if val == "reset" or val == "decrease" then
-							config.incorrect_penalty = val
-						end
-					elseif key == "new_review_order" then
-						val = val:lower()
-						if val == "review_first" or val == "new_first" or val == "mix" then
-							config.new_review_order = val
-						end
-					elseif key == "review_sort_order" then
-						val = val:lower()
-						if val == "due_date" or val == "order_added" or val == "random" then
-							config.review_sort_order = val
-						end
-					elseif key == "new_sort_order" then
-						val = val:lower()
-						if val == "order_added" or val == "random" then
-							config.new_sort_order = val
-						end
-					elseif key == "single_card_mode" then
-						config.single_card_mode = (val == "true" or val == "1")
-					elseif key == "exact_length_mask" then
-						config.exact_length_mask = (val == "true" or val == "1")
-					elseif key == "case_sensitive_diff" then
-						config.case_sensitive_diff = (val == "true" or val == "1")
-					elseif key == "ignore_punctuation" then
-						config.ignore_punctuation = (val == "true" or val == "1")
 					end
 				end
 			end
@@ -327,7 +417,7 @@ local function format_time_diff(seconds)
 end
 
 -- 2. Function to load data from the TSV file using header mapping
-local function load_tsv(filename)
+local function load_tsv(filename, config)
 	local vocabulary = {}
 	local raw_rows = {}
 	local file, err = io.open(filename, "r")
@@ -336,11 +426,6 @@ local function load_tsv(filename)
 	end
 
 	local headers = nil
-	local word_source_idx = nil
-	local word_inflected_idx = nil
-	local quotation_idx = nil
-	local context_indices = {}
-
 	local total_lines = 0
 	local parsed_rows = 0
 
@@ -352,25 +437,32 @@ local function load_tsv(filename)
 		elseif not headers then
 			-- This is the first non-comment line. Check if it is a header row
 			local cols = split_line(line, "\t")
-			if is_header_row(cols) then
+			if is_header_row(cols, config) then
 				headers = cols
 				table.insert(raw_rows, { type = "header", columns = cols })
 			else
 				-- Headerless! Generate default headers
-				headers = {
-					"WordSource",
-					"WordSourceInflectedForm",
-					"WordSource2",
-					"Quotation",
-					"WordDestination",
-					"SentenceSource",
-					"Note",
-					"SourceURL",
-					"Source-en-GB",
-					"Source-en-US",
-					"SentenceSourceIndex",
-					"Deck",
-				}
+				if config and config.fields and #config.fields > 0 then
+					headers = {}
+					for i, v in ipairs(config.fields) do
+						headers[i] = v
+					end
+				else
+					headers = {
+						"WordSource",
+						"WordSourceInflectedForm",
+						"WordSource2",
+						"Quotation",
+						"WordDestination",
+						"SentenceSource",
+						"Note",
+						"SourceURL",
+						"Source-en-GB",
+						"Source-en-US",
+						"SentenceSourceIndex",
+						"Deck",
+					}
+				end
 				table.insert(raw_rows, { type = "header", columns = headers })
 
 				-- Process this first line as a data row
@@ -395,21 +487,24 @@ local function load_tsv(filename)
 	-- Make sure box and due headers are in headers
 	local box_idx = nil
 	local due_idx = nil
+	local box_field_name = (config and config.settings and config.settings.leitner_box_field) or "LeitnerBox"
+	local due_field_name = (config and config.settings and config.settings.leitner_due_field) or "LeitnerDue"
+
 	for idx, h in ipairs(headers) do
 		local clean_header = h:gsub("%s+$", ""):gsub("^%s+", "")
-		if clean_header == "LeitnerBox" then
+		if clean_header == box_field_name then
 			box_idx = idx
-		elseif clean_header == "LeitnerDue" then
+		elseif clean_header == due_field_name then
 			due_idx = idx
 		end
 	end
 
 	if not box_idx then
-		table.insert(headers, "LeitnerBox")
+		table.insert(headers, box_field_name)
 		box_idx = #headers
 	end
 	if not due_idx then
-		table.insert(headers, "LeitnerDue")
+		table.insert(headers, due_field_name)
 		due_idx = #headers
 	end
 
@@ -420,26 +515,77 @@ local function load_tsv(filename)
 		found_cols[clean_header] = idx
 	end
 
-	word_source_idx = found_cols["WordSource"]
-	word_inflected_idx = found_cols["WordSourceInflectedForm"]
-	quotation_idx = found_cols["Quotation"]
+	-- Compile candidate index mappings for word and sentence profiles
+	local word_word_indices = {}
+	local word_sentence_indices = {}
+	local sentence_word_indices = {}
+	local sentence_sentence_indices = {}
 
-	local context_indices = {}
-	local candidates = {
-		"SentenceSource",
-		"SentenceSourceContextLeft",
-		"WordSourceContext",
-		"SentenceSourceRewriteAISentenceSource",
-		"SentenceGerman",
-	}
-	for _, name in ipairs(candidates) do
-		if found_cols[name] then
-			table.insert(context_indices, found_cols[name])
+	if config and config.fields_mapping_word and next(config.fields_mapping_word) then
+		for _, key in ipairs(config.ordered_fields_word) do
+			local val = config.fields_mapping_word[key]
+			local idx = found_cols[key]
+			if idx then
+				if val == "source_word" then
+					table.insert(word_word_indices, idx)
+				elseif val == "source_sentence" then
+					table.insert(word_sentence_indices, idx)
+				end
+			end
 		end
 	end
-	if #context_indices == 0 then
-		table.insert(context_indices, 6)
+
+	if config and config.fields_mapping_sentence and next(config.fields_mapping_sentence) then
+		for _, key in ipairs(config.ordered_fields_sentence) do
+			local val = config.fields_mapping_sentence[key]
+			local idx = found_cols[key]
+			if idx then
+				if val == "source_word" then
+					table.insert(sentence_word_indices, idx)
+				elseif val == "source_sentence" then
+					table.insert(sentence_sentence_indices, idx)
+				end
+			end
+		end
 	end
+
+	-- Fallbacks
+	if #word_word_indices == 0 then
+		local word_candidates = { "WordSource", "WordSourceInflectedForm", "Quotation" }
+		for _, name in ipairs(word_candidates) do
+			if found_cols[name] then
+				table.insert(word_word_indices, found_cols[name])
+			end
+		end
+	end
+	if #word_sentence_indices == 0 then
+		local sentence_candidates = {
+			"SentenceSource",
+			"SentenceSourceContextLeft",
+			"WordSourceContext",
+			"SentenceSourceRewriteAISentenceSource",
+			"SentenceGerman",
+		}
+		for _, name in ipairs(sentence_candidates) do
+			if found_cols[name] then
+				table.insert(word_sentence_indices, found_cols[name])
+			end
+		end
+	end
+
+	if #sentence_word_indices == 0 then
+		for _, idx in ipairs(word_word_indices) do
+			table.insert(sentence_word_indices, idx)
+		end
+	end
+	if #sentence_sentence_indices == 0 then
+		for _, idx in ipairs(word_sentence_indices) do
+			table.insert(sentence_sentence_indices, idx)
+		end
+	end
+
+	local fallback_word_idx = word_word_indices[1] or 1
+	local fallback_sentence_idx = word_sentence_indices[1] or 6
 
 	-- Now parse vocabulary data from raw_rows
 	for _, row in ipairs(raw_rows) do
@@ -447,38 +593,64 @@ local function load_tsv(filename)
 			ensure_columns_len(row.columns, #headers)
 			local columns = row.columns
 
-			-- Determine target word based on dictionary (WordSource) vs phrase (WordSourceInflectedForm)
+			-- 1. Try to extract target word using the word mapping profile first (chicken-and-egg helper)
 			local target_word = nil
-			if word_source_idx and columns[word_source_idx] and columns[word_source_idx] ~= "" then
-				target_word = columns[word_source_idx]
-			elseif word_inflected_idx and columns[word_inflected_idx] and columns[word_inflected_idx] ~= "" then
-				target_word = columns[word_inflected_idx]
-			elseif quotation_idx and columns[quotation_idx] and columns[quotation_idx] ~= "" then
-				target_word = columns[quotation_idx]
-			end
-
-			if not target_word or target_word == "" then
-				target_word = columns[1]
-			end
-
-			-- Check candidates in priority order, picking the first non-empty value
-			local context_sentence = nil
-			for _, idx in ipairs(context_indices) do
+			for _, idx in ipairs(word_word_indices) do
 				local val = columns[idx]
 				if val and val ~= "" then
-					context_sentence = val
+					target_word = val
 					break
 				end
 			end
+			if not target_word or target_word == "" then
+				target_word = columns[fallback_word_idx]
+			end
 
-			if target_word and target_word ~= "" and context_sentence and context_sentence ~= "" then
+			-- 2. Count words to determine the profile
+			local threshold = 2
+			if config and config.settings and config.settings.sentence_word_threshold then
+				threshold = tonumber(config.settings.sentence_word_threshold) or 2
+			end
+
+			local is_sentence = (count_words(target_word) >= threshold)
+
+			-- 3. Extract the final target word and context sentence using the determined profile
+			local final_word = nil
+			local final_context = nil
+
+			local current_word_indices = is_sentence and sentence_word_indices or word_word_indices
+			local current_sentence_indices = is_sentence and sentence_sentence_indices or word_sentence_indices
+
+			for _, idx in ipairs(current_word_indices) do
+				local val = columns[idx]
+				if val and val ~= "" then
+					final_word = val
+					break
+				end
+			end
+			if not final_word or final_word == "" then
+				final_word = columns[fallback_word_idx]
+			end
+
+			for _, idx in ipairs(current_sentence_indices) do
+				local val = columns[idx]
+				if val and val ~= "" then
+					final_context = val
+					break
+				end
+			end
+			if not final_context or final_context == "" then
+				final_context = columns[fallback_sentence_idx]
+			end
+
+			if final_word and final_word ~= "" and final_context and final_context ~= "" then
 				-- Parse Leitner values
 				local box_val = tonumber(columns[box_idx]) or 1
 				local due_val = tonumber(columns[due_idx]) or 0
 
 				table.insert(vocabulary, {
-					word = target_word,
-					context = context_sentence,
+					word = final_word,
+					context = final_context,
 					box = box_val,
 					due = due_val,
 					raw_columns = columns,
@@ -1510,7 +1682,7 @@ local function main()
 	for _, file_path in ipairs(resolved_files) do
 		if file_exists(file_path) then
 			print("Loading: " .. file_path)
-			local file_vocab, raw_rows, box_idx, due_idx, err = load_tsv(file_path)
+			local file_vocab, raw_rows, box_idx, due_idx, err = load_tsv(file_path, config)
 			if file_vocab then
 				files_loaded = files_loaded + 1
 				for _, entry in ipairs(file_vocab) do
