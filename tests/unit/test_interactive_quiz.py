@@ -357,7 +357,7 @@ def test_single_card_mode(quiz_env):
     
     assert code == 0
     assert "\x1b[2J\x1b[H" in out
-    assert "Press Enter/Space to continue (? help)..." in out
+    assert "press 'Enter' or 'Space' to continue, type '?' for help..." in out
 
 def test_exact_length_masking(quiz_env):
     """Test exact length masking configuration."""
@@ -881,7 +881,7 @@ def test_anki_grading_good_override(quiz_env):
         ["wrong_answer", "3", ""]
     )
     assert code == 0
-    assert "Grade: [1] Again  [3] Good  (? help):" in strip_ansi(out)
+    assert "Grade: press '1' Again, '3' Good, '?' for help:" in strip_ansi(out)
     
     tsv_file = quiz_env / "20260604184114-microsoft-just-shocked-the.en.tsv"
     entry = read_tsv_entry(tsv_file, "properly")
