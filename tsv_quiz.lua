@@ -1180,13 +1180,16 @@ local function mask_context(
 
 		local total_error = 0
 
-		-- 1. Check consistency within each line
+		-- 1. Check consistency within each line and absolute anchoring
 		for idx = 1, n do
 			local c = coords[idx]
 			local w_val = w_indices[idx]
 			local est_start = line_starts[c.line]
 			local expected_w = est_start + c.word - 1
 			total_error = total_error + math.abs(w_val - expected_w)
+			
+			-- Absolute anchoring to break ties between identical relative matches
+			total_error = total_error + math.abs(w_val - c.word) * 0.1
 		end
 
 		-- 2. Check line ordering constraints
@@ -1217,7 +1220,7 @@ local function mask_context(
 			end
 		end
 
-		-- 3. If there is only one coordinate, compare absolute index
+		-- 3. If there is only one coordinate, compare absolute index directly with higher weight
 		if n == 1 then
 			local c = coords[1]
 			local w_val = w_indices[1]
@@ -1358,10 +1361,22 @@ local function mask_context(
 					if not start_pos then
 						break
 					end
+					
+					local w_idx_list = {}
+					local last_w_idx = 0
+					for i = start_pos, end_pos - 1 do
+						local w_idx = char_word_indices[i] or 0
+						if w_idx > 0 and w_idx ~= last_w_idx then
+							table.insert(w_idx_list, w_idx)
+							last_w_idx = w_idx
+						end
+					end
+
 					table.insert(occurrences, {
 						start_pos = start_pos,
 						end_pos = end_pos,
-						m = m
+						m = m,
+						w_idx_list = w_idx_list
 					})
 					last_pos = start_pos + 1
 				end
@@ -1375,14 +1390,21 @@ local function mask_context(
 			for _, o1 in ipairs(occ1) do
 				for _, o2 in ipairs(occ2) do
 					if o1.start_pos < o2.start_pos then
+						local combined_w_indices = {}
+						for _, w in ipairs(o1.w_idx_list) do
+							table.insert(combined_w_indices, w)
+						end
+						for _, w in ipairs(o2.w_idx_list) do
+							table.insert(combined_w_indices, w)
+						end
+
 						table.insert(matches, {
 							start_pos = o1.start_pos,
 							m1 = o1.m,
 							mid = context:sub(o1.end_pos, o2.start_pos - 1),
 							m2 = o2.m,
 							end_pos = o2.end_pos,
-							logical_idx_1 = char_word_indices[o1.start_pos] or 0,
-							logical_idx_2 = char_word_indices[o2.start_pos] or 0
+							w_indices = combined_w_indices
 						})
 					end
 				end
@@ -1396,7 +1418,7 @@ local function mask_context(
 			local best_match = nil
 			local min_error = math.huge
 			for _, match in ipairs(matches) do
-				local err_val = get_coords_error({ match.logical_idx_1, match.logical_idx_2 })
+				local err_val = get_coords_error(match.w_indices)
 				if err_val < min_error then
 					min_error = err_val
 					best_match = match
@@ -1505,11 +1527,22 @@ local function mask_context(
 					if not start_pos then
 						break
 					end
+					
+					local w_idx_list = {}
+					local last_w_idx = 0
+					for i = start_pos, end_pos - 1 do
+						local w_idx = char_word_indices[i] or 0
+						if w_idx > 0 and w_idx ~= last_w_idx then
+							table.insert(w_idx_list, w_idx)
+							last_w_idx = w_idx
+						end
+					end
+
 					table.insert(occurrences, {
 						start_pos = start_pos,
 						end_pos = end_pos,
 						m = m,
-						logical_idx = char_word_indices[start_pos] or 0
+						w_idx_list = w_idx_list
 					})
 					last_pos = start_pos + 1
 				end
@@ -1524,13 +1557,8 @@ local function mask_context(
 			-- Find the best match using coordinate error minimization
 			local best_match = nil
 			local min_error = math.huge
-			local num_coords = #coords
 			for _, match in ipairs(matches) do
-				local w_indices = {}
-				for k = 1, num_coords do
-					w_indices[k] = match.logical_idx + k - 1
-				end
-				local err_val = get_coords_error(w_indices)
+				local err_val = get_coords_error(match.w_idx_list)
 				if err_val < min_error then
 					min_error = err_val
 					best_match = match
