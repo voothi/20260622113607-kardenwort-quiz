@@ -765,10 +765,9 @@ def test_custom_field_mapping(quiz_env):
     config_path.write_text(
         "[fields_mapping.word]\n"
         "MyCustomWord = source_word\n"
-        "MyCustomSentence = source_sentence\n\n"
-        "[settings]\n"
-        "leitner_box_field = CustomBox\n"
-        "leitner_due_field = CustomDue\n",
+        "MyCustomSentence = source_sentence\n"
+        "CustomBox = leitner_box\n"
+        "CustomDue = leitner_due\n",
         encoding="utf-8", newline="\n"
     )
     
@@ -785,8 +784,8 @@ def test_custom_field_mapping(quiz_env):
     
     assert row["CustomBox"] == "2"
     assert int(row["CustomDue"]) > 0
-
-
+    
+    
 def test_headerless_tsv_fields(quiz_env):
     """Test headerless TSV fallback parsing with custom [fields] list and comment preservation."""
     headerless_tsv = quiz_env / "headerless_custom.tsv"
@@ -806,10 +805,9 @@ def test_headerless_tsv_fields(quiz_env):
         "CustomDue\n\n"
         "[fields_mapping.word]\n"
         "CustomWord = source_word\n"
-        "CustomSentence = source_sentence\n\n"
-        "[settings]\n"
-        "leitner_box_field = CustomBox\n"
-        "leitner_due_field = CustomDue\n",
+        "CustomSentence = source_sentence\n"
+        "CustomBox = leitner_box\n"
+        "CustomDue = leitner_due\n",
         encoding="utf-8", newline="\n"
     )
     

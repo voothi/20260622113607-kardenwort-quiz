@@ -450,8 +450,25 @@ local function load_tsv(filename, config)
 	-- Make sure box and due headers are in headers
 	local box_idx = nil
 	local due_idx = nil
-	local box_field_name = (config and config.settings and config.settings.leitner_box_field) or "LeitnerBox"
-	local due_field_name = (config and config.settings and config.settings.leitner_due_field) or "LeitnerDue"
+	local box_field_name = nil
+	local due_field_name = nil
+
+	if config then
+		for _, mapping in ipairs({ config.fields_mapping_word, config.fields_mapping_sentence }) do
+			if mapping then
+				for k, v in pairs(mapping) do
+					if v == "leitner_box" and not box_field_name then
+						box_field_name = k
+					elseif v == "leitner_due" and not due_field_name then
+						due_field_name = k
+					end
+				end
+			end
+		end
+	end
+
+	box_field_name = box_field_name or "LeitnerBox"
+	due_field_name = due_field_name or "LeitnerDue"
 
 	for idx, h in ipairs(headers) do
 		local clean_header = h:gsub("%s+$", ""):gsub("^%s+", "")
