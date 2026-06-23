@@ -1513,7 +1513,7 @@ local function run_quiz(study_queue, config)
 							local lkey = key and key:lower()
 							if lkey == "?" then
 								print(bold(cyan("\nBack Side Options:")))
-								print("  " .. bold("Enter/Space") .. "             Continue to the next card")
+								print("  " .. bold("Enter, Space") .. "            Continue to the next card")
 								print("  " .. bold("s") .. "                       Repeat card in this session")
 								print("  " .. bold("a") .. "                       Previous card practice (repeat previous)")
 								print("  " .. bold("d") .. "                       Skip card (do not save progress)")
@@ -1574,12 +1574,12 @@ local function run_quiz(study_queue, config)
 
 						if lkey == "?" then
 							print(bold(cyan("\nBack Side Options:")))
-							print("  " .. bold("1") .. "                       Grade as Again (incorrect / penalize card)")
-							print("  " .. bold("3") .. "                       Grade as Good (correct / advance card)")
+							print("  " .. bold("1") .. "                       Grade as Again (incorrect, penalize card)")
+							print("  " .. bold("3") .. "                       Grade as Good (correct, advance card)")
 							print(
 								"  "
-									.. bold("Enter/Space")
-									.. "             Default to auto-grade ("
+									.. bold("Enter, Space")
+									.. "            Default to auto-grade ("
 									.. (is_correct and "Good" or "Again")
 									.. ")"
 							)
