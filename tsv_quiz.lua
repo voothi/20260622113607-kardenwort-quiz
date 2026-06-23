@@ -1386,7 +1386,7 @@ local function mask_context(
 			end
 
 			if #matches == 0 then
-				return context, 0
+				return context, false
 			end
 
 			if not coords then
@@ -1418,7 +1418,7 @@ local function mask_context(
 						.. final_r2
 						.. replaced:sub(match.end_pos)
 				end
-				return replaced, 1
+				return replaced, true
 			else
 				local best_match = nil
 				local min_error = math.huge
@@ -1431,7 +1431,7 @@ local function mask_context(
 				end
 
 				if not best_match then
-					return context, 0
+					return context, false
 				end
 
 				local final_r1 = r1
@@ -1451,7 +1451,7 @@ local function mask_context(
 					.. best_match.mid
 					.. final_r2
 					.. context:sub(best_match.end_pos)
-				return replaced, 1
+				return replaced, true
 			end
 		end
 
