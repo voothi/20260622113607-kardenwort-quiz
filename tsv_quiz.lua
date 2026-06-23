@@ -2120,7 +2120,6 @@ local function run_quiz(study_queue, config)
 		clear_screen()
 	end
 	print(bold(green(string.format("Quiz finished! You scored %d out of %d.", score, total))))
-	press_any_key("\nPress 'Enter' or 'Space' to exit...\n", { "\r", "\n", " " })
 end
 
 -- Helper to check if file exists
