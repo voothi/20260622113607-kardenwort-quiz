@@ -3,6 +3,7 @@
 -- Demonstrates core Lua concepts: File I/O, tables, loops, string parsing, and interactive console input.
 
 local print_help
+local print_interactive_help
 
 -- 1. Helper function to split a string by a delimiter (tab), preserving empty columns
 local function split_line(line, delimiter)
@@ -1327,7 +1328,7 @@ local function run_quiz(study_queue, config)
 					print(magenta("\nExiting quiz early."))
 					return
 				elseif lower_cmd == "help" or lower_cmd == "?" then
-					print_help()
+					print_interactive_help()
 					print("\n")
 					if config.single_card_mode then
 						press_any_key("Press Enter or Space to return to quiz...", { "\r", "\n", " " })
@@ -1671,6 +1672,17 @@ print_help = function()
 	print("  " .. bold("/q") .. " / " .. bold("/quit") .. " / " .. bold("/exit") .. " Exit the quiz immediately\n")
 	print(bold("Supported TSV Format:"))
 	print("  Requires headers (e.g. Quotation/WordSource and SentenceSource/SentenceSourceContextLeft).")
+end
+
+print_interactive_help = function()
+	print(bold(cyan("=== Interactive Controls ===")))
+	print("  " .. bold("/h") .. " / " .. bold("/hint") .. "      Reveal first letter of the target word")
+	print("  " .. bold("/h N") .. "        Reveal N letters from the start")
+	print("  " .. bold("/h N M") .. "      Reveal N from the start and M from the end")
+	print("  " .. bold("/h N K M") .. "    Reveal N from start, K from middle, M from end")
+	print("  " .. bold("/a") .. "                Practice repeat the previous card")
+	print("  " .. bold("/d") .. "                Skip directly to the next card")
+	print("  " .. bold("/q") .. " / " .. bold("/quit") .. " / " .. bold("/exit") .. " Exit the quiz immediately")
 end
 
 -- Helper to resolve Windows .lnk shortcuts in pure Lua
