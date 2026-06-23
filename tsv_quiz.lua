@@ -50,6 +50,10 @@ local function magenta(text)
 	return c("35", text)
 end
 
+local function invert(text)
+	return c("7", text)
+end
+
 -- UTF-8 Safe string helpers
 local function utf8_len(str)
 	return utf8.len(str) or #str
@@ -229,6 +233,7 @@ local function load_config(filename)
 		exact_length_mask = false,
 		case_sensitive_diff = true,
 		ignore_punctuation = true,
+		diff_inverted_colors = false,
 		anki_grading = false,
 		fields = {},
 		fields_mapping_word = {},
@@ -311,6 +316,8 @@ local function load_config(filename)
 								config.case_sensitive_diff = (val == "true" or val == "1")
 							elseif key == "ignore_punctuation" then
 								config.ignore_punctuation = (val == "true" or val == "1")
+							elseif key == "diff_inverted_colors" then
+								config.diff_inverted_colors = (val == "true" or val == "1")
 							elseif key == "anki_grading" then
 								config.anki_grading = (val == "true" or val == "1")
 							end
@@ -828,7 +835,7 @@ local function print_framed_diff(u_line, t_line)
 end
 
 -- Helper to perform character-by-character diff (LCS-based) between user input and target word, returning two aligned lines
-local function get_two_line_diff(user_str, target_str, case_sensitive, ignore_punctuation)
+local function get_two_line_diff(user_str, target_str, case_sensitive, ignore_punctuation, inverted_colors)
 	local function clean_for_diff(str)
 		local cleaned = str
 		if ignore_punctuation then
@@ -927,20 +934,28 @@ local function get_two_line_diff(user_str, target_str, case_sensitive, ignore_pu
 	local user_parts = {}
 	local target_parts = {}
 
+	local function format_char(color_fn, char)
+		if inverted_colors then
+			return color_fn(invert(char))
+		else
+			return color_fn(char)
+		end
+	end
+
 	for k = #ops, 1, -1 do
 		local op = ops[k]
 		if op.type == "match" then
-			table.insert(user_parts, green(op.charA))
-			table.insert(target_parts, green(op.charB))
+			table.insert(user_parts, format_char(green, op.charA))
+			table.insert(target_parts, format_char(green, op.charB))
 		elseif op.type == "replace" then
-			table.insert(user_parts, red(op.charA))
-			table.insert(target_parts, dim(op.charB))
+			table.insert(user_parts, format_char(red, op.charA))
+			table.insert(target_parts, format_char(dim, op.charB))
 		elseif op.type == "missing" then
-			table.insert(user_parts, dim(op.charA))
-			table.insert(target_parts, dim(op.charB))
+			table.insert(user_parts, format_char(dim, op.charA))
+			table.insert(target_parts, format_char(dim, op.charB))
 		elseif op.type == "extra" then
-			table.insert(user_parts, red(op.charA))
-			table.insert(target_parts, dim(op.charB))
+			table.insert(user_parts, format_char(red, op.charA))
+			table.insert(target_parts, format_char(dim, op.charB))
 		end
 	end
 
@@ -1529,8 +1544,13 @@ local function run_quiz(study_queue, config)
 				print(revealed_context)
 
 				print()
-				local u_line, t_line =
-					get_two_line_diff(trimmed_input, target_word, config.case_sensitive_diff, config.ignore_punctuation)
+				local u_line, t_line = get_two_line_diff(
+					trimmed_input,
+					target_word,
+					config.case_sensitive_diff,
+					config.ignore_punctuation,
+					config.diff_inverted_colors
+				)
 				print_framed_diff(u_line, t_line)
 				print()
 
