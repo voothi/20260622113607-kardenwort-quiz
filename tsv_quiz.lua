@@ -1267,7 +1267,7 @@ local function read_line_with_esc()
 			f:close()
 			if res ~= "NOT_TTY" then
 				print() -- move to next line after input
-				return res  -- return even if empty (empty Enter = empty answer)
+				return res -- return even if empty (empty Enter = empty answer)
 			end
 		end
 	end
@@ -1421,11 +1421,7 @@ local function run_quiz(study_queue, config)
 						print(bold(yellow("\nSkipping card...")))
 						break
 					else
-						print(
-							bold(red("Unknown command: "))
-								.. trimmed_input
-								.. ". Type '/?' for help.\n"
-						)
+						print(bold(red("Unknown command: ")) .. trimmed_input .. ". Type '/?' for help.\n")
 						if config.single_card_mode then
 							press_any_key("Press Enter or Space to retry...", { "\r", "\n", " " })
 						end
@@ -1579,7 +1575,13 @@ local function run_quiz(study_queue, config)
 							print(bold(cyan("\nBack Side Options")))
 							print("  " .. bold("1") .. "           Grade as Again (incorrect / penalize card)")
 							print("  " .. bold("3") .. "           Grade as Good (correct / advance card)")
-							print("  " .. bold("Enter/Space") .. " Default to auto-grade (" .. (is_correct and "Good" or "Again") .. ")")
+							print(
+								"  "
+									.. bold("Enter/Space")
+									.. " Default to auto-grade ("
+									.. (is_correct and "Good" or "Again")
+									.. ")"
+							)
 							if config.single_card_mode then
 								print("  " .. bold("s") .. "           Save grade and repeat card in this session")
 								print("  " .. bold("a") .. "           Previous card practice (repeat previous)")
@@ -1818,7 +1820,12 @@ local function main()
 					table.insert(master_vocab, entry)
 				end
 			else
-				print(bold(red("Error loading: ")) .. file_path .. string.format(" (%d/%d): ", idx, total_files) .. (err or "unknown error"))
+				print(
+					bold(red("Error loading: "))
+						.. file_path
+						.. string.format(" (%d/%d): ", idx, total_files)
+						.. (err or "unknown error")
+				)
 			end
 		else
 			if #arg == 0 then
@@ -1831,7 +1838,12 @@ local function main()
 				)
 				return
 			else
-				print(bold(red("Error: ")) .. "File not found: " .. file_path .. string.format(" (%d/%d)", idx, total_files))
+				print(
+					bold(red("Error: "))
+						.. "File not found: "
+						.. file_path
+						.. string.format(" (%d/%d)", idx, total_files)
+				)
 			end
 		end
 	end
