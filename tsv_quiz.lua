@@ -264,7 +264,7 @@ local function load_config(filename)
 					local key, val = clean:match("^%s*([^=]+)%s*=%s*(.-)%s*$")
 					if key and val then
 						key = key:gsub("^%s+", ""):gsub("%s+$", "")
-						val = val:gsub("%s+", ""):gsub("%s+$", "")
+						val = val:gsub("^%s+", ""):gsub("%s+$", "")
 						-- Strip quotes from val if any
 						if val:match('^".*"$') or val:match("^'.*'$") then
 							val = val:sub(2, -2)
@@ -682,7 +682,7 @@ local function get_mask_placeholder(word, use_exact)
 		local s = ""
 		for _, code in utf8.codes(word) do
 			local c = utf8.char(code)
-			if c:match("%s") or c:match("[%p%s]") then
+			if c:match("[%p%s]") then
 				s = s .. c
 			else
 				s = s .. "_"
@@ -697,7 +697,7 @@ local function get_mask_placeholder(word, use_exact)
 		local s = ""
 		for i = 1, #word do
 			local c = word:sub(i, i)
-			if c:match("%s") or c:match("[%p%s]") then
+			if c:match("[%p%s]") then
 				s = s .. c
 			else
 				s = s .. "_"
@@ -726,7 +726,7 @@ local function get_hint_masked_word(word, n, k, m)
 		local idx = 1
 		for _, code in utf8.codes(word) do
 			local c = utf8.char(code)
-			if c:match("%s") or c:match("[%p%s]") then
+			if c:match("[%p%s]") then
 				s = s .. c
 			else
 				-- Check if this position is revealed
@@ -757,7 +757,7 @@ local function get_hint_masked_word(word, n, k, m)
 		local s = ""
 		for i = 1, #word do
 			local c = word:sub(i, i)
-			if c:match("%s") or c:match("[%p%s]") then
+			if c:match("[%p%s]") then
 				s = s .. c
 			else
 				local is_revealed = false
@@ -1315,8 +1315,8 @@ local function mask_context(
 						user_p1 = u_parts[1]
 					end
 				end
-				r1 = get_inline_colored_diff(user_p1, p1)
-				r2 = get_inline_colored_diff(user_p2, p2)
+				r1 = get_inline_colored_diff(user_p1, p1, case_sensitive_diff, ignore_punctuation)
+				r2 = get_inline_colored_diff(user_p2, p2, case_sensitive_diff, ignore_punctuation)
 			end
 		elseif has_hint and use_exact then
 			local hp1 = get_hint_masked_word(p1, hint_n, hint_k, hint_m)
