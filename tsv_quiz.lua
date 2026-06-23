@@ -1329,7 +1329,7 @@ local function run_quiz(study_queue, config)
 					return
 				elseif lower_cmd == "help" or lower_cmd == "?" then
 					print_interactive_help()
-					print("\n")
+					print()
 					if config.single_card_mode then
 						press_any_key("Press Enter or Space to return to quiz...", { "\r", "\n", " " })
 					end
@@ -1675,7 +1675,7 @@ print_help = function()
 end
 
 print_interactive_help = function()
-	print(bold(cyan("=== Interactive Controls ===")))
+	print(bold(cyan("Interactive Controls")))
 	print("  " .. bold("/h") .. " / " .. bold("/hint") .. "      Reveal first letter of the target word")
 	print("  " .. bold("/h N") .. "        Reveal N letters from the start")
 	print("  " .. bold("/h N M") .. "      Reveal N from the start and M from the end")

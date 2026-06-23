@@ -964,7 +964,7 @@ def test_front_help_command(quiz_env):
         ["/?", "/q"]
     )
     assert code == 0
-    assert "=== Interactive Controls ===" in strip_ansi(out)
+    assert "Interactive Controls" in strip_ansi(out)
     assert "/hint" in strip_ansi(out)
 
 
