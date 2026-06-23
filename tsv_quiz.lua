@@ -1334,8 +1334,11 @@ local function run_quiz(study_queue, config)
 			if entry.is_repeat then
 				print(bold(cyan("Practice Repeat:")) .. dim(string.format(" [File: %s | Box %d]", basename, entry.box)))
 			else
+				local cycle = math.ceil(question_num / total)
+				local disp_num = ((question_num - 1) % total) + 1
+				local cycle_str = cycle > 1 and string.format(" (Cycle %d)", cycle) or ""
 				print(
-					bold(cyan(string.format("Question %d/%d:", math.min(question_num, total), total)))
+					bold(cyan(string.format("Question %d/%d%s:", disp_num, total, cycle_str)))
 						.. dim(string.format(" [File: %s | Box %d]", basename, entry.box))
 				)
 			end
@@ -1500,8 +1503,11 @@ local function run_quiz(study_queue, config)
 								.. dim(string.format(" [File: %s | Box %d]", basename, entry.box))
 						)
 					else
+						local cycle = math.ceil(question_num / total)
+						local disp_num = ((question_num - 1) % total) + 1
+						local cycle_str = cycle > 1 and string.format(" (Cycle %d)", cycle) or ""
 						print(
-							bold(cyan(string.format("Question %d/%d:", math.min(question_num, total), total)))
+							bold(cyan(string.format("Question %d/%d%s:", disp_num, total, cycle_str)))
 								.. dim(string.format(" [File: %s | Box %d]", basename, entry.box))
 						)
 					end
