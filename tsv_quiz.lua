@@ -834,6 +834,71 @@ local function print_framed_diff(u_line, t_line)
 	print(dim(bot_bar))
 end
 
+-- Heuristic traceback to prefer contiguous matches in the LCS grid
+local function traceback_lcs(dp, A, B, case_sensitive)
+	local i = #A
+	local j = #B
+	local ops = {}
+	local last_op = nil
+
+	while i > 0 or j > 0 do
+		local match
+		if case_sensitive then
+			match = (i > 0 and j > 0 and A[i] == B[j])
+		else
+			match = (i > 0 and j > 0 and A[i]:lower() == B[j]:lower())
+		end
+
+		local cost = match and 0 or 1
+		local can_match = i > 0 and j > 0 and dp[i][j] == dp[i - 1][j - 1] + cost
+		local can_missing = j > 0 and dp[i][j] == dp[i][j - 1] + 1
+		local can_extra = i > 0 and dp[i][j] == dp[i - 1][j] + 1
+
+		local op_type
+		if can_match and cost == 0 then
+			if last_op == "match" or (not can_missing and not can_extra) then
+				op_type = "match"
+			elseif last_op == "missing" and can_missing then
+				op_type = "missing"
+			elseif last_op == "extra" and can_extra then
+				op_type = "extra"
+			elseif can_missing then
+				op_type = "missing"
+			else
+				op_type = "extra"
+			end
+		else
+			if can_missing and can_extra then
+				if last_op == "missing" then op_type = "missing"
+				elseif last_op == "extra" then op_type = "extra"
+				else op_type = "missing" end
+			elseif can_missing then
+				op_type = "missing"
+			elseif can_extra then
+				op_type = "extra"
+			else
+				op_type = "replace"
+			end
+		end
+
+		if op_type == "match" then
+			table.insert(ops, { type = "match", charA = A[i], charB = B[j] })
+			i, j = i - 1, j - 1
+		elseif op_type == "missing" then
+			table.insert(ops, { type = "missing", charA = "-", charB = B[j] })
+			j = j - 1
+		elseif op_type == "extra" then
+			table.insert(ops, { type = "extra", charA = A[i], charB = "-" })
+			i = i - 1
+		elseif op_type == "replace" then
+			table.insert(ops, { type = "replace", charA = A[i], charB = B[j] })
+			i, j = i - 1, j - 1
+		end
+		last_op = op_type
+	end
+	return ops
+end
+
 -- Helper to perform character-by-character diff (LCS-based) between user input and target word, returning two aligned lines
 local function get_two_line_diff(user_str, target_str, case_sensitive, ignore_punctuation, inverted_colors)
 	local function clean_for_diff(str)
@@ -903,33 +968,7 @@ local function get_two_line_diff(user_str, target_str, case_sensitive, ignore_pu
 		end
 	end
 
-	local i = n
-	local j = m
-	local ops = {}
-
-	while i > 0 or j > 0 do
-		local match
-		if case_sensitive then
-			match = (i > 0 and j > 0 and A[i] == B[j])
-		else
-			match = (i > 0 and j > 0 and A[i]:lower() == B[j]:lower())
-		end
-
-		if match then
-			table.insert(ops, { type = "match", charA = A[i], charB = B[j] })
-			i = i - 1
-			j = j - 1
-		elseif j > 0 and dp[i][j] == dp[i][j - 1] + 1 then
-			table.insert(ops, { type = "missing", charA = "-", charB = B[j] })
-			j = j - 1
-		elseif i > 0 and dp[i][j] == dp[i - 1][j] + 1 then
-			table.insert(ops, { type = "extra", charA = A[i], charB = "-" })
-			i = i - 1
-		elseif i > 0 and j > 0 and dp[i][j] == dp[i - 1][j - 1] + 1 then
-			table.insert(ops, { type = "replace", charA = A[i], charB = B[j] })
-			i, j = i - 1, j - 1
-		end
-	end
+	local ops = traceback_lcs(dp, A, B, case_sensitive)
 
 	local user_parts = {}
 	local target_parts = {}
@@ -1026,34 +1065,13 @@ local function get_inline_colored_diff(user_str, original_target, case_sensitive
 		end
 	end
 
-	local i, j = n, m
-	local ops = {}
-	while i > 0 or j > 0 do
-		local match
-		if case_sensitive then
-			match = (i > 0 and j > 0 and A[i] == B[j])
-		else
-			match = (i > 0 and j > 0 and A[i]:lower() == B[j]:lower())
-		end
-
-		if match then
-			table.insert(ops, { type = "match" })
-			i, j = i - 1, j - 1
-		elseif j > 0 and dp[i][j] == dp[i][j - 1] + 1 then
-			table.insert(ops, { type = "missing" })
-			j = j - 1
-		elseif i > 0 and dp[i][j] == dp[i - 1][j] + 1 then
-			-- deletion (extra in user, but inline diff only shows target characters)
-			i = i - 1
-		elseif i > 0 and j > 0 and dp[i][j] == dp[i - 1][j - 1] + 1 then
-			table.insert(ops, { type = "replace" })
-			i, j = i - 1, j - 1
-		end
-	end
+	local ops = traceback_lcs(dp, A, B, case_sensitive)
 
 	local tags = {}
 	for k = #ops, 1, -1 do
-		table.insert(tags, ops[k].type)
+		if ops[k].type ~= "extra" then
+			table.insert(tags, ops[k].type)
+		end
 	end
 
 	local res = {}
