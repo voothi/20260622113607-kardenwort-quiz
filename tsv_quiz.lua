@@ -80,43 +80,6 @@ local function utf8_sub(str, start_char, end_char)
 	return str:sub(start_byte, end_byte)
 end
 
-local function count_words(text)
-	if not text or text == "" then
-		return 0
-	end
-	local count = 0
-	local in_word = false
-
-	-- Helper to check if code is word char (alphanumeric, Cyrillic, German umlauts, etc.)
-	local function is_code_word_char(code)
-		-- ASCII: A-Z (65-90), a-z (97-122), 0-9 (48-57), apostrophe (39)
-		if (code >= 65 and code <= 90) or (code >= 97 and code <= 122) or (code >= 48 and code <= 57) or code == 39 then
-			return true
-		end
-		-- Cyrillic: А-Я, а-я, Ё, ё (1024 to 1279)
-		if code >= 1024 and code <= 1279 then
-			return true
-		end
-		-- German umlauts/eszett: Ä (196), ä (228), Ö (214), ö (246), Ü (220), ü (252), ß (223)
-		if code == 196 or code == 228 or code == 214 or code == 246 or code == 220 or code == 252 or code == 223 then
-			return true
-		end
-		return false
-	end
-
-	for _, code in utf8.codes(text) do
-		if is_code_word_char(code) then
-			if not in_word then
-				count = count + 1
-				in_word = true
-			end
-		else
-			in_word = false
-		end
-	end
-	return count
-end
-
 -- -- Helper to pad columns to target length
 local function ensure_columns_len(columns, target_len)
 	for i = #columns + 1, target_len do
@@ -516,10 +479,17 @@ local function load_tsv(filename, config)
 	end
 
 	-- Compile candidate index mappings for word and sentence profiles
-	local word_word_indices = {}
-	local word_sentence_indices = {}
-	local sentence_word_indices = {}
-	local sentence_sentence_indices = {}
+	local target_word_indices = {}
+	local context_sentence_indices = {}
+
+	local function add_index_if_unique(list, idx)
+		for _, existing in ipairs(list) do
+			if existing == idx then
+				return
+			end
+		end
+		table.insert(list, idx)
+	end
 
 	if config and config.fields_mapping_word and next(config.fields_mapping_word) then
 		for _, key in ipairs(config.ordered_fields_word) do
@@ -527,9 +497,9 @@ local function load_tsv(filename, config)
 			local idx = found_cols[key]
 			if idx then
 				if val == "source_word" then
-					table.insert(word_word_indices, idx)
+					add_index_if_unique(target_word_indices, idx)
 				elseif val == "source_sentence" then
-					table.insert(word_sentence_indices, idx)
+					add_index_if_unique(context_sentence_indices, idx)
 				end
 			end
 		end
@@ -541,24 +511,24 @@ local function load_tsv(filename, config)
 			local idx = found_cols[key]
 			if idx then
 				if val == "source_word" then
-					table.insert(sentence_word_indices, idx)
+					add_index_if_unique(target_word_indices, idx)
 				elseif val == "source_sentence" then
-					table.insert(sentence_sentence_indices, idx)
+					add_index_if_unique(context_sentence_indices, idx)
 				end
 			end
 		end
 	end
 
 	-- Fallbacks
-	if #word_word_indices == 0 then
+	if #target_word_indices == 0 then
 		local word_candidates = { "WordSource", "WordSourceInflectedForm", "Quotation" }
 		for _, name in ipairs(word_candidates) do
 			if found_cols[name] then
-				table.insert(word_word_indices, found_cols[name])
+				table.insert(target_word_indices, found_cols[name])
 			end
 		end
 	end
-	if #word_sentence_indices == 0 then
+	if #context_sentence_indices == 0 then
 		local sentence_candidates = {
 			"SentenceSource",
 			"SentenceSourceContextLeft",
@@ -568,24 +538,13 @@ local function load_tsv(filename, config)
 		}
 		for _, name in ipairs(sentence_candidates) do
 			if found_cols[name] then
-				table.insert(word_sentence_indices, found_cols[name])
+				table.insert(context_sentence_indices, found_cols[name])
 			end
 		end
 	end
 
-	if #sentence_word_indices == 0 then
-		for _, idx in ipairs(word_word_indices) do
-			table.insert(sentence_word_indices, idx)
-		end
-	end
-	if #sentence_sentence_indices == 0 then
-		for _, idx in ipairs(word_sentence_indices) do
-			table.insert(sentence_sentence_indices, idx)
-		end
-	end
-
-	local fallback_word_idx = word_word_indices[1] or 1
-	local fallback_sentence_idx = word_sentence_indices[1] or 6
+	local fallback_word_idx = target_word_indices[1] or 1
+	local fallback_sentence_idx = context_sentence_indices[1] or 6
 
 	-- Now parse vocabulary data from raw_rows
 	for _, row in ipairs(raw_rows) do
@@ -593,35 +552,10 @@ local function load_tsv(filename, config)
 			ensure_columns_len(row.columns, #headers)
 			local columns = row.columns
 
-			-- 1. Try to extract target word using the word mapping profile first (chicken-and-egg helper)
-			local target_word = nil
-			for _, idx in ipairs(word_word_indices) do
-				local val = columns[idx]
-				if val and val ~= "" then
-					target_word = val
-					break
-				end
-			end
-			if not target_word or target_word == "" then
-				target_word = columns[fallback_word_idx]
-			end
-
-			-- 2. Count words to determine the profile
-			local threshold = 2
-			if config and config.settings and config.settings.sentence_word_threshold then
-				threshold = tonumber(config.settings.sentence_word_threshold) or 2
-			end
-
-			local is_sentence = (count_words(target_word) >= threshold)
-
-			-- 3. Extract the final target word and context sentence using the determined profile
 			local final_word = nil
 			local final_context = nil
 
-			local current_word_indices = is_sentence and sentence_word_indices or word_word_indices
-			local current_sentence_indices = is_sentence and sentence_sentence_indices or word_sentence_indices
-
-			for _, idx in ipairs(current_word_indices) do
+			for _, idx in ipairs(target_word_indices) do
 				local val = columns[idx]
 				if val and val ~= "" then
 					final_word = val
@@ -632,7 +566,7 @@ local function load_tsv(filename, config)
 				final_word = columns[fallback_word_idx]
 			end
 
-			for _, idx in ipairs(current_sentence_indices) do
+			for _, idx in ipairs(context_sentence_indices) do
 				local val = columns[idx]
 				if val and val ~= "" then
 					final_context = val

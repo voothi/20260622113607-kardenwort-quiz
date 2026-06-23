@@ -787,47 +787,6 @@ def test_custom_field_mapping(quiz_env):
     assert int(row["CustomDue"]) > 0
 
 
-def test_sentence_word_threshold(quiz_env):
-    """Test word count threshold logic selecting between word and sentence mapping profiles."""
-    custom_tsv = quiz_env / "threshold.tsv"
-    custom_tsv.write_text(
-        "WordCol\tSentenceCol1\tSentenceCol2\tLeitnerBox\tLeitnerDue\n"
-        "dog\tI saw a single dog.\tI saw a group of dogs.\t1\t0\n"
-        "two dogs\tMy dog is friendly.\tWe saw two dogs running.\t1\t0\n",
-        encoding="utf-8", newline="\n"
-    )
-    
-    config_path = quiz_env / "config.ini"
-    config_path.write_text(
-        "[fields_mapping.word]\n"
-        "WordCol = source_word\n"
-        "SentenceCol1 = source_sentence\n\n"
-        "[fields_mapping.sentence]\n"
-        "WordCol = source_word\n"
-        "SentenceCol2 = source_sentence\n\n"
-        "[settings]\n"
-        "sentence_word_threshold = 2\n",
-        encoding="utf-8", newline="\n"
-    )
-    
-    # For 'dog' (1 word < threshold 2), SentenceCol1 ("I saw a single dog.") should be presented.
-    # We focus 'dog' by scheduling 'two dogs' in the future.
-    focus_single_card(quiz_env, "threshold.tsv", "dog")
-    code, out, err = run_quiz(quiz_env, ["threshold.tsv"], ["dog", "/q"])
-    assert code == 0
-    clean_out = strip_ansi(out)
-    assert "single dog" in clean_out
-    assert "group of dogs" not in clean_out
-    
-    # For 'two dogs' (2 words >= threshold 2), SentenceCol2 ("We saw two dogs running.") should be presented.
-    focus_single_card(quiz_env, "threshold.tsv", "two dogs")
-    code, out, err = run_quiz(quiz_env, ["threshold.tsv"], ["two dogs", "/q"])
-    assert code == 0
-    clean_out = strip_ansi(out)
-    assert "two dogs running" in clean_out
-    assert "dog is friendly" not in clean_out
-
-
 def test_headerless_tsv_fields(quiz_env):
     """Test headerless TSV fallback parsing with custom [fields] list and comment preservation."""
     headerless_tsv = quiz_env / "headerless_custom.tsv"
