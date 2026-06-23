@@ -1003,7 +1003,7 @@ def test_back_help_command_anki(quiz_env):
     )
     assert code == 0
     assert "Back Side Options" in strip_ansi(out)
-    assert "Grade as Again" in strip_ansi(out)
+    assert "Mark as incorrect." in strip_ansi(out)
 
 
 

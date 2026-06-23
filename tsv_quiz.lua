@@ -1514,10 +1514,10 @@ local function run_quiz(study_queue, config)
 							if lkey == "?" then
 								print(bold(cyan("\nBack Side Options:")))
 								print("  " .. bold("Enter, Space") .. "            Continue to the next card.")
-								print("  " .. bold("s") .. "                       Repeat the current card in this session.")
-								print("  " .. bold("a") .. "                       Repeat the previous card in this session.")
-								print("  " .. bold("d") .. "                       Skip this card without saving progress.")
-								print("  " .. bold("q") .. "                       Exit the quiz immediately.")
+								print("  " .. bold("s") .. "                       Repeat the current card.")
+								print("  " .. bold("a") .. "                       Repeat the previous card.")
+								print("  " .. bold("d") .. "                       Skip the current card.")
+								print("  " .. bold("q") .. "                       Exit the quiz.")
 								print()
 							elseif lkey == "q" then
 								print(magenta("\nExiting quiz early."))
@@ -1574,21 +1574,21 @@ local function run_quiz(study_queue, config)
 
 						if lkey == "?" then
 							print(bold(cyan("\nBack Side Options:")))
-							print("  " .. bold("1") .. "                       Grade as Again (incorrect, penalize card).")
-							print("  " .. bold("3") .. "                       Grade as Good (correct, advance card).")
+							print("  " .. bold("1") .. "                       Mark as incorrect.")
+							print("  " .. bold("3") .. "                       Mark as correct.")
 							print(
 								"  "
 									.. bold("Enter, Space")
-									.. "            Default to auto-grade ("
-									.. (is_correct and "Good" or "Again")
-									.. ")."
+									.. "            Accept auto-grade as "
+									.. (is_correct and "Correct" or "Incorrect")
+									.. "."
 							)
 							if config.single_card_mode then
-								print("  " .. bold("s") .. "                       Save grade and repeat the current card.")
-								print("  " .. bold("a") .. "                       Repeat the previous card in this session.")
-								print("  " .. bold("d") .. "                       Skip this card without saving progress.")
+								print("  " .. bold("s") .. "                       Save and repeat the current card.")
+								print("  " .. bold("a") .. "                       Repeat the previous card.")
+								print("  " .. bold("d") .. "                       Skip the current card.")
 							end
-							print("  " .. bold("q") .. "                       Exit the quiz immediately.")
+							print("  " .. bold("q") .. "                       Exit the quiz.")
 							print()
 						elseif lkey == "q" then
 							print(magenta("\nExiting quiz early."))
@@ -1690,9 +1690,9 @@ print_help = function()
 	print("  " .. bold("/h N") .. "                    Reveal N letters from the start of the word.")
 	print("  " .. bold("/h N M") .. "                  Reveal N letters from the start and M from the end.")
 	print("  " .. bold("/h N K M") .. "                Reveal N from the start, K from the middle, M from the end.")
-	print("  " .. bold("/a") .. "                      Repeat the previous card in the current session.")
-	print("  " .. bold("/d") .. ", " .. bold("Esc") .. "                 Skip directly to the next card without saving.")
-	print("  " .. bold("/q") .. ", " .. bold("/quit") .. ", " .. bold("/exit") .. "        Exit the quiz immediately.\n")
+	print("  " .. bold("/a") .. "                      Repeat the previous card.")
+	print("  " .. bold("/d") .. ", " .. bold("Esc") .. "                 Skip the current card.")
+	print("  " .. bold("/q") .. ", " .. bold("/quit") .. ", " .. bold("/exit") .. "        Exit the quiz.\n")
 	print(bold("Supported TSV Format:"))
 	print("  Requires headers (e.g. Quotation/WordSource and SentenceSource/SentenceSourceContextLeft).")
 end
@@ -1704,9 +1704,9 @@ print_interactive_help = function()
 	print("  " .. bold("/h N") .. "                    Reveal N letters from the start of the word.")
 	print("  " .. bold("/h N M") .. "                  Reveal N letters from the start and M from the end.")
 	print("  " .. bold("/h N K M") .. "                Reveal N from the start, K from the middle, M from the end.")
-	print("  " .. bold("/a") .. "                      Repeat the previous card in the current session.")
-	print("  " .. bold("/d") .. ", " .. bold("Esc") .. "                 Skip directly to the next card without saving.")
-	print("  " .. bold("/q") .. ", " .. bold("/quit") .. ", " .. bold("/exit") .. "        Exit the quiz immediately.")
+	print("  " .. bold("/a") .. "                      Repeat the previous card.")
+	print("  " .. bold("/d") .. ", " .. bold("Esc") .. "                 Skip the current card.")
+	print("  " .. bold("/q") .. ", " .. bold("/quit") .. ", " .. bold("/exit") .. "        Exit the quiz.")
 end
 
 -- Helper to resolve Windows .lnk shortcuts in pure Lua
