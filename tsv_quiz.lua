@@ -655,50 +655,6 @@ local function strip_ansi(str)
 	return str:gsub("\27%[%d+;?%d*;?%d*m", "")
 end
 
-local function utf8_len(str)
-	local len = 0
-	for _ in utf8.codes(str) do
-		len = len + 1
-	end
-	return len
-end
-
-local function print_framed_diff(u_line, t_line)
-	local raw_u = strip_ansi(u_line)
-	local raw_t = strip_ansi(t_line)
-	local prefix_u = "User:   "
-	local prefix_t = "Target: "
-	local len_u = utf8_len(raw_u) + utf8_len(prefix_u)
-	local len_t = utf8_len(raw_t) + utf8_len(prefix_t)
-	local max_len = math.max(len_u, len_t, 20)
-
-	local title = " Diff "
-	local top_bar = "╭─" .. title .. string.rep("─", max_len - 5) .. "╮"
-	local bot_bar = "╰" .. string.rep("─", max_len + 2) .. "╯"
-
-	print(dim(top_bar))
-
-	local pad_u = string.rep(" ", max_len - len_u)
-	print(dim("│ ") .. dim(prefix_u) .. u_line .. pad_u .. dim(" │"))
-
-	local pad_t = string.rep(" ", max_len - len_t)
-	print(dim("│ ") .. dim(prefix_t) .. t_line .. pad_t .. dim(" │"))
-
-	print(dim(bot_bar))
-end
-
-local function strip_ansi(str)
-	return str:gsub("\27%[%d+;?%d*;?%d*m", "")
-end
-
-local function utf8_len(str)
-	local len = 0
-	for _ in utf8.codes(str) do
-		len = len + 1
-	end
-	return len
-end
-
 local function print_framed_diff(u_line, t_line)
 	local raw_u = strip_ansi(u_line)
 	local raw_t = strip_ansi(t_line)
