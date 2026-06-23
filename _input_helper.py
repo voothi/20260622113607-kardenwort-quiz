@@ -21,6 +21,7 @@ def read_key():
 def read_line():
     """Read a full line, echoing to console. Esc -> /d, Ctrl+C -> /q."""
     if not sys.stdin.isatty():
+        print("NOT_TTY", end="")
         return
     import msvcrt
     chars = []

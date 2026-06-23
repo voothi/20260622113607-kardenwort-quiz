@@ -16,8 +16,9 @@ def quiz_env():
     with tempfile.TemporaryDirectory() as tmpdir_name:
         tmpdir = Path(tmpdir_name)
         
-        # Copy the lua script
+        # Copy the lua script and python helper
         shutil.copy2(lua_script, tmpdir / "tsv_quiz.lua")
+        shutil.copy2(repo_root / "_input_helper.py", tmpdir / "_input_helper.py")
         
         # Create a mock config.ini
         config_path = tmpdir / "config.ini"

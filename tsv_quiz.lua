@@ -1265,8 +1265,10 @@ local function read_line_with_esc()
 		if f then
 			local res = f:read("*a")
 			f:close()
-			print() -- move to next line after input
-			return res  -- return even if empty (empty Enter = empty answer)
+			if res ~= "NOT_TTY" then
+				print() -- move to next line after input
+				return res  -- return even if empty (empty Enter = empty answer)
+			end
 		end
 	end
 	return io.read()
@@ -1504,7 +1506,7 @@ local function run_quiz(study_queue, config)
 					if config.single_card_mode then
 						while true do
 							local key = press_any_key(
-								dim("Press Enter or Space to continue, type '?' for help..."),
+								dim("Press Enter/Space to continue (? help)..."),
 								{ "\r", "\n", " ", "s", "a", "d", "q", "?" }
 							)
 							if key == "" then
@@ -1557,7 +1559,7 @@ local function run_quiz(study_queue, config)
 				else
 					-- Anki manual grading mode
 					while true do
-						local prompt_str = bold(cyan("Grade: ")) .. dim("press '1' Again, '3' Good, '?' for help: ")
+						local prompt_str = bold(cyan("Grade: ")) .. dim("[1] Again  [3] Good  (? help): ")
 
 						local allowed = { "\r", "\n", " ", "1", "3", "q", "?" }
 						if config.single_card_mode then
@@ -1680,13 +1682,13 @@ print_help = function()
 	print(bold("Usage:"))
 	print("  lua tsv_quiz.lua [file.tsv]\n")
 	print(bold("Interactive Controls (during quiz):"))
-	print("  " .. bold("/h") .. " / " .. bold("hint") .. "               Reveal first letter of the target word")
+	print("  " .. bold("/h") .. " / " .. bold("/hint") .. "              Reveal first letter of the target word")
 	print("  " .. bold("/h N") .. "                    Reveal N letters from the start")
 	print("  " .. bold("/h N M") .. "                  Reveal N from the start and M from the end")
 	print("  " .. bold("/h N K M") .. "                Reveal N from start, K from middle, M from end")
 	print("  " .. bold("/a") .. "                      Practice repeat the previous card")
 	print("  " .. bold("/d") .. " / " .. bold("Esc") .. "                Skip directly to the next card")
-	print("  " .. bold("/q") .. " / " .. bold("quit") .. " / " .. bold("exit") .. "        Exit the quiz immediately\n")
+	print("  " .. bold("/q") .. " / " .. bold("/quit") .. " / " .. bold("/exit") .. "  Exit the quiz immediately\n")
 	print(bold("Supported TSV Format:"))
 	print("  Requires headers (e.g. Quotation/WordSource and SentenceSource/SentenceSourceContextLeft).")
 end
@@ -1694,13 +1696,13 @@ end
 print_interactive_help = function()
 	print()
 	print(bold(cyan("Interactive Controls")))
-	print("  " .. bold("/h") .. " / " .. bold("hint") .. "               Reveal first letter of the target word")
+	print("  " .. bold("/h") .. " / " .. bold("/hint") .. "              Reveal first letter of the target word")
 	print("  " .. bold("/h N") .. "                    Reveal N letters from the start")
 	print("  " .. bold("/h N M") .. "                  Reveal N from the start and M from the end")
 	print("  " .. bold("/h N K M") .. "                Reveal N from start, K from middle, M from end")
 	print("  " .. bold("/a") .. "                      Practice repeat the previous card")
 	print("  " .. bold("/d") .. " / " .. bold("Esc") .. "                Skip directly to the next card")
-	print("  " .. bold("/q") .. " / " .. bold("quit") .. " / " .. bold("exit") .. "        Exit the quiz immediately")
+	print("  " .. bold("/q") .. " / " .. bold("/quit") .. " / " .. bold("/exit") .. "  Exit the quiz immediately")
 end
 
 -- Helper to resolve Windows .lnk shortcuts in pure Lua
