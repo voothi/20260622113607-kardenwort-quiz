@@ -1122,3 +1122,66 @@ def test_config_separable_verb_inline_diff(quiz_env):
     
     assert "\x1b[31ms\x1b[0m" not in out
     assert "\x1b[32ms\x1b[0m" in out
+
+
+def test_fallback_individual_words_phrase_not_found(quiz_env):
+    """Test that when the full phrase is not found, the algorithm falls back to individual words."""
+    tsv = quiz_env / "fallback_phrase.tsv"
+    tsv.write_text(
+        "WordSource\tWordSourceInflectedForm\tWordSource2\tQuotation\tWordDestination\tSentenceSource\tNote\tSourceURL\tSource-en-GB\tSource-en-US\tSentenceSourceIndex\tDeck\tLeitnerBox\tLeitnerDue\n"
+        "auf dem Tisch\tauf dem Tisch\t\t\ton the table\tAuf einem Tisch liegt ein Buch.\t\t\t\t\t\tDeckA\t1\t0\n",
+        encoding="utf-8", newline="\n"
+    )
+    
+    # Target phrase is "auf dem Tisch", but text has "Auf einem Tisch".
+    # Should highlight "Auf" and "Tisch".
+    config_path = quiz_env / "config.ini"
+    config_path.write_text(
+        "[Leitner]\n"
+        "intervals = 5m, 1h, 1d\n"
+        "new_cards_per_day = 10\n"
+        "single_card_mode = false\n"
+        "exact_length_mask = false\n"
+        "new_review_order = review_first\n"
+        "review_sort_order = due_date\n",
+        encoding="utf-8", newline="\n"
+    )
+
+    code, out, err = run_quiz(quiz_env, ["fallback_phrase.tsv"], ["/q"])
+    assert code == 0
+    clean_out = strip_ansi(out)
+    
+    # "Auf" and "Tisch" should be masked with "___"
+    # Expected: "___ einem ___ liegt ein Buch."
+    assert "___ einem ___ liegt ein Buch." in clean_out
+
+
+def test_word_boundary_fallback(quiz_env):
+    """Test that fallback word highlighting respects word boundaries."""
+    tsv = quiz_env / "boundary_fallback.tsv"
+    tsv.write_text(
+        "WordSource\tWordSourceInflectedForm\tWordSource2\tQuotation\tWordDestination\tSentenceSource\tNote\tSourceURL\tSource-en-GB\tSource-en-US\tSentenceSourceIndex\tDeck\tLeitnerBox\tLeitnerDue\n"
+        "Tisch\tTisch\t\t\ttable\tDie Tischdecke auf dem Tisch.\t\t\t\t\t\tDeckA\t1\t0\n",
+        encoding="utf-8", newline="\n"
+    )
+    
+    config_path = quiz_env / "config.ini"
+    config_path.write_text(
+        "[Leitner]\n"
+        "intervals = 5m, 1h, 1d\n"
+        "new_cards_per_day = 10\n"
+        "single_card_mode = false\n"
+        "exact_length_mask = false\n"
+        "new_review_order = review_first\n"
+        "review_sort_order = due_date\n",
+        encoding="utf-8", newline="\n"
+    )
+
+    code, out, err = run_quiz(quiz_env, ["boundary_fallback.tsv"], ["/q"])
+    assert code == 0
+    clean_out = strip_ansi(out)
+    
+    # Only the standalone "Tisch" should be masked. "Tischdecke" should remain intact.
+    # Expected: "Die Tischdecke auf dem ___."
+    assert "Die Tischdecke auf dem ___." in clean_out
+
