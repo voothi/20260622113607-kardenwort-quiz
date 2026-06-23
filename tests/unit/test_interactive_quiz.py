@@ -881,7 +881,7 @@ def test_anki_grading_good_override(quiz_env):
         ["wrong_answer", "3", ""]
     )
     assert code == 0
-    assert "Grade: Press '1' Again, '3' Good, '?' for help:" in strip_ansi(out)
+    assert "Grade: Press '1' Again, '3' Good, '?' for help..." in strip_ansi(out)
     
     tsv_file = quiz_env / "20260604184114-microsoft-just-shocked-the.en.tsv"
     entry = read_tsv_entry(tsv_file, "properly")
