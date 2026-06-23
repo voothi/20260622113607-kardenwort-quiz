@@ -1266,9 +1266,7 @@ local function read_line_with_esc()
 			local res = f:read("*a")
 			f:close()
 			print() -- move to next line after input
-			if res ~= "" then
-				return res
-			end
+			return res  -- return even if empty (empty Enter = empty answer)
 		end
 	end
 	return io.read()
