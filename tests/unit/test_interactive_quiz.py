@@ -1076,6 +1076,24 @@ def test_source_index_shifted_duplicates(quiz_env):
     assert "Bitte hören Sie ___" not in clean_out
 
 
+def test_source_index_coordinate_map_separable(quiz_env):
+    """Test that coordinate-grounded multi-pivot mapping correctly masks the specific occurrence of a separable verb."""
+    focus_single_card(quiz_env, "20260303214721-text1.de.tsv", "fährt ... ab")
+    
+    code, out, err = run_quiz(quiz_env, ["20260303214721-text1.de.tsv"], ["/q"])
+    assert code == 0
+    clean_out = strip_ansi(out)
+    
+    # Correct masking should target "Morgen ___ ... donauabwärts ___."
+    # Unrelated "Er fährt morgen weg." should remain untouched.
+    # Unrelated "donauabwärts" should NOT have "ab" replaced (i.e. not "donau__wärts").
+    assert "Er fährt morgen weg." in clean_out
+    assert "donauabwärts" in clean_out
+    assert "Morgen ___ der neue" in clean_out
+    assert "donauabwärts ___." in clean_out
+
+
+
 
 
 

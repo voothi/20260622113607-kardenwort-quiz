@@ -628,7 +628,10 @@ local function load_tsv(filename, config)
 				local source_index_idx = found_cols["SentenceSourceIndex"]
 				local source_idx_val = nil
 				if source_index_idx then
-					source_idx_val = tonumber(columns[source_index_idx])
+					local raw_idx = columns[source_index_idx]
+					if raw_idx and raw_idx ~= "" then
+						source_idx_val = raw_idx
+					end
 				end
 
 				table.insert(vocabulary, {
@@ -1122,6 +1125,108 @@ local function mask_context(
 		return text:gsub("([^%w])", "%%%1")
 	end
 
+	local function parse_coordinates(coords_str)
+		if not coords_str or coords_str == "" then
+			return nil
+		end
+		local coords = {}
+		for part in tostring(coords_str):gmatch("[^,]+") do
+			local line, word, term_pos = part:match("^(%d+):(%d+):(%d+)$")
+			if line and word and term_pos then
+				table.insert(coords, {
+					line = tonumber(line),
+					word = tonumber(word),
+					term_pos = tonumber(term_pos)
+				})
+			else
+				-- Fallback to simple number
+				local num = tonumber(part)
+				if num then
+					table.insert(coords, {
+						line = 0,
+						word = num,
+						term_pos = #coords + 1
+					})
+				end
+			end
+		end
+		if #coords == 0 then
+			return nil
+		end
+		return coords
+	end
+
+	local coords = parse_coordinates(source_index)
+
+	local function get_coords_error(matches_logical_indices)
+		if not coords or #coords == 0 then
+			return 0
+		end
+		local n = #coords
+		local w_indices = {}
+		for idx = 1, n do
+			w_indices[idx] = matches_logical_indices[idx] or matches_logical_indices[#matches_logical_indices] or 0
+		end
+
+		-- Estimate line starts S(L)
+		local line_starts = {}
+		for idx = 1, n do
+			local c = coords[idx]
+			local w_val = w_indices[idx]
+			if not line_starts[c.line] then
+				line_starts[c.line] = w_val - c.word + 1
+			end
+		end
+
+		local total_error = 0
+
+		-- 1. Check consistency within each line
+		for idx = 1, n do
+			local c = coords[idx]
+			local w_val = w_indices[idx]
+			local est_start = line_starts[c.line]
+			local expected_w = est_start + c.word - 1
+			total_error = total_error + math.abs(w_val - expected_w)
+		end
+
+		-- 2. Check line ordering constraints
+		local unique_lines = {}
+		for l, _ in pairs(line_starts) do
+			table.insert(unique_lines, l)
+		end
+		table.sort(unique_lines)
+
+		for idx = 1, #unique_lines - 1 do
+			local l1 = unique_lines[idx]
+			local l2 = unique_lines[idx+1]
+			local s1 = line_starts[l1]
+			local s2 = line_starts[l2]
+			if s2 <= s1 then
+				total_error = total_error + (s1 - s2 + 1) * 10
+			end
+		end
+
+		-- Adjacency constraint across line boundaries:
+		for idx = 1, n - 1 do
+			local c1 = coords[idx]
+			local c2 = coords[idx+1]
+			if c2.line == c1.line + 1 and c2.term_pos == c1.term_pos + 1 then
+				local w1 = w_indices[idx]
+				local w2 = w_indices[idx+1]
+				total_error = total_error + math.abs(w2 - w1 - 1) * 5
+			end
+		end
+
+		-- 3. If there is only one coordinate, compare absolute index
+		if n == 1 then
+			local c = coords[1]
+			local w_val = w_indices[1]
+			total_error = total_error + math.abs(w_val - c.word)
+		end
+
+		return total_error
+	end
+
 	-- Helper to check if a word character is a word constituent (alphanumeric/letter or underscore)
 	-- Punctuation, symbols, space are ignored. ASS tags are handled specially.
 	-- We want to map characters of `context` to their 1-indexed logical word positions.
@@ -1221,79 +1326,101 @@ local function mask_context(
 		local function try_replace(p1_case, p2_case)
 			local ep1 = escape_pattern(p1_case)
 			local ep2 = escape_pattern(p2_case)
-			local pattern = "()(" .. ep1 .. ")(.-)(" .. ep2 .. ")()"
+			local pattern = "(" .. ep1 .. ")(.-)(" .. ep2 .. ")"
 
-			-- Phase 1: Collect all match positions
-			local matches = {}
-			local last_pos = 1
-			while true do
-				local start_pos, m1, mid, m2, end_pos = context:match(pattern, last_pos)
-				if not start_pos then
-					break
-				end
-				table.insert(matches, {
-					start_pos = start_pos,
-					end_pos = end_pos,
-					m1 = m1,
-					mid = mid,
-					m2 = m2,
-					logical_idx = char_word_indices[start_pos] or 0
-				})
-				last_pos = end_pos
-			end
-
-			if #matches == 0 then
-				return context, false
-			end
-
-			-- Phase 2: Identify which matches to replace
-			local replaced_indices = {}
-			if source_index then
-				-- Find the match closest to source_index
-				local best_match = nil
-				local min_diff = math.huge
-				for _, match in ipairs(matches) do
-					local diff = math.abs(match.logical_idx - source_index)
-					if diff < min_diff then
-						min_diff = diff
-						best_match = match
-					end
-				end
-				if best_match then
-					replaced_indices[best_match.start_pos] = true
-				end
-			else
-				-- Replace all matches
-				for _, match in ipairs(matches) do
-					replaced_indices[match.start_pos] = true
-				end
-			end
-
-			-- Phase 3: Build the result string
-			local last_pos_write = 1
-			local res_parts = {}
-			for _, match in ipairs(matches) do
-				table.insert(res_parts, context:sub(last_pos_write, match.start_pos - 1))
-				if replaced_indices[match.start_pos] then
+			if not coords then
+				-- Fallback to original gsub logic when no coordinates are present
+				local masked, count = context:gsub(pattern, function(m1, mid, m2)
 					local final_r1 = r1
 					local final_r2 = r2
 					if is_correct ~= nil then
 						if is_correct then
-							final_r1 = bold(green(match.m1))
-							final_r2 = bold(green(match.m2))
+							final_r1 = bold(green(m1))
+							final_r2 = bold(green(m2))
 						else
 							final_r1 = r1
 							final_r2 = r2
 						end
 					end
-					table.insert(res_parts, final_r1 .. match.mid .. final_r2)
-				else
-					table.insert(res_parts, match.m1 .. match.mid .. match.m2)
-				end
-				last_pos_write = match.end_pos
+					return final_r1 .. mid .. final_r2
+				end)
+				return masked, count
 			end
-			table.insert(res_parts, context:sub(last_pos_write))
-			return table.concat(res_parts, ""), next(replaced_indices) ~= nil
+
+			-- Find all occurrences of p1 and p2
+			local function find_all_occurrences(word_case)
+				local occurrences = {}
+				local e_word = escape_pattern(word_case)
+				local pat = "()(" .. e_word .. ")()"
+				local last_pos = 1
+				while true do
+					local start_pos, m, end_pos = context:match(pat, last_pos)
+					if not start_pos then
+						break
+					end
+					table.insert(occurrences, {
+						start_pos = start_pos,
+						end_pos = end_pos,
+						m = m
+					})
+					last_pos = start_pos + 1
+				end
+				return occurrences
+			end
+
+			local occ1 = find_all_occurrences(p1_case)
+			local occ2 = find_all_occurrences(p2_case)
+
+			local matches = {}
+			for _, o1 in ipairs(occ1) do
+				for _, o2 in ipairs(occ2) do
+					if o1.start_pos < o2.start_pos then
+						table.insert(matches, {
+							start_pos = o1.start_pos,
+							m1 = o1.m,
+							mid = context:sub(o1.end_pos, o2.start_pos - 1),
+							m2 = o2.m,
+							end_pos = o2.end_pos,
+							logical_idx_1 = char_word_indices[o1.start_pos] or 0,
+							logical_idx_2 = char_word_indices[o2.start_pos] or 0
+						})
+					end
+				end
+			end
+
+			if #matches == 0 then
+				return context, 0
+			end
+
+			-- Find the best match using coordinate error minimization
+			local best_match = nil
+			local min_error = math.huge
+			for _, match in ipairs(matches) do
+				local err_val = get_coords_error({ match.logical_idx_1, match.logical_idx_2 })
+				if err_val < min_error then
+					min_error = err_val
+					best_match = match
+				end
+			end
+
+			if not best_match then
+				return context, 0
+			end
+
+			local final_r1 = r1
+			local final_r2 = r2
+			if is_correct ~= nil then
+				if is_correct then
+					final_r1 = bold(green(best_match.m1))
+					final_r2 = bold(green(best_match.m2))
+				else
+					final_r1 = r1
+					final_r2 = r2
+				end
+			end
+
+			local replaced = context:sub(1, best_match.start_pos - 1) .. final_r1 .. best_match.mid .. final_r2 .. context:sub(best_match.end_pos)
+			return replaced, 1
 		end
 
 		-- Try exact casing
@@ -1342,84 +1469,99 @@ local function mask_context(
 
 		local function try_single_replace(word_case)
 			local e_word = escape_pattern(word_case)
-			local pattern = "()(" .. e_word .. ")()"
 
-			-- Phase 1: Collect all match positions
-			local matches = {}
-			local last_pos = 1
-			while true do
-				local start_pos, m, end_pos = context:match(pattern, last_pos)
-				if not start_pos then
-					break
-				end
-				table.insert(matches, {
-					start_pos = start_pos,
-					end_pos = end_pos,
-					m = m,
-					logical_idx = char_word_indices[start_pos] or 0
-				})
-				last_pos = end_pos
-			end
-
-			if #matches == 0 then
-				return context, false
-			end
-
-			-- Phase 2: Identify which matches to replace
-			local replaced_indices = {}
-			if source_index then
-				-- Find the match closest to source_index
-				local best_match = nil
-				local min_diff = math.huge
-				for _, match in ipairs(matches) do
-					local diff = math.abs(match.logical_idx - source_index)
-					if diff < min_diff then
-						min_diff = diff
-						best_match = match
-					end
-				end
-				if best_match then
-					replaced_indices[best_match.start_pos] = true
-				end
-			else
-				-- Replace all matches
-				for _, match in ipairs(matches) do
-					replaced_indices[match.start_pos] = true
-				end
-			end
-
-			-- Phase 3: Build the result string
-			local last_pos_write = 1
-			local res_parts = {}
-			for _, match in ipairs(matches) do
-				table.insert(res_parts, context:sub(last_pos_write, match.start_pos - 1))
-				if replaced_indices[match.start_pos] then
-					local rep
+			if not coords then
+				-- Fallback to original gsub logic when no coordinates are present
+				local masked, count = context:gsub(e_word, function(m)
 					if is_correct ~= nil then
 						if is_correct then
 							local m_parts = {}
-							for part in match.m:gmatch("[^%s]+") do
+							for part in m:gmatch("[^%s]+") do
 								table.insert(m_parts, part)
 							end
 							local m_rep_parts = {}
 							for _, part in ipairs(m_parts) do
 								table.insert(m_rep_parts, bold(green(part)))
 							end
-							rep = table.concat(m_rep_parts, " ")
+							return table.concat(m_rep_parts, " ")
 						else
-							rep = get_inline_colored_diff(user_input or "", match.m, case_sensitive_diff, ignore_punctuation)
+							return get_inline_colored_diff(user_input or "", m, case_sensitive_diff, ignore_punctuation)
 						end
 					else
-						rep = replacement
+						return replacement
 					end
-					table.insert(res_parts, rep)
-				else
-					table.insert(res_parts, match.m)
-				end
-				last_pos_write = match.end_pos
+				end)
+				return masked, count
 			end
-			table.insert(res_parts, context:sub(last_pos_write))
-			return table.concat(res_parts, ""), next(replaced_indices) ~= nil
+
+			-- Find all occurrences of word_case
+			local function find_all_occurrences(word_val)
+				local occurrences = {}
+				local e_word_pat = escape_pattern(word_val)
+				local pat = "()(" .. e_word_pat .. ")()"
+				local last_pos = 1
+				while true do
+					local start_pos, m, end_pos = context:match(pat, last_pos)
+					if not start_pos then
+						break
+					end
+					table.insert(occurrences, {
+						start_pos = start_pos,
+						end_pos = end_pos,
+						m = m,
+						logical_idx = char_word_indices[start_pos] or 0
+					})
+					last_pos = start_pos + 1
+				end
+				return occurrences
+			end
+
+			local matches = find_all_occurrences(word_case)
+			if #matches == 0 then
+				return context, 0
+			end
+
+			-- Find the best match using coordinate error minimization
+			local best_match = nil
+			local min_error = math.huge
+			local num_coords = #coords
+			for _, match in ipairs(matches) do
+				local w_indices = {}
+				for k = 1, num_coords do
+					w_indices[k] = match.logical_idx + k - 1
+				end
+				local err_val = get_coords_error(w_indices)
+				if err_val < min_error then
+					min_error = err_val
+					best_match = match
+				end
+			end
+
+			if not best_match then
+				return context, 0
+			end
+
+			local rep
+			if is_correct ~= nil then
+				if is_correct then
+					local m_parts = {}
+					for part in best_match.m:gmatch("[^%s]+") do
+						table.insert(m_parts, part)
+					end
+					local m_rep_parts = {}
+					for _, part in ipairs(m_parts) do
+						table.insert(m_rep_parts, bold(green(part)))
+					end
+					rep = table.concat(m_rep_parts, " ")
+				else
+					rep = get_inline_colored_diff(user_input or "", best_match.m, case_sensitive_diff, ignore_punctuation)
+				end
+			else
+				rep = replacement
+			end
+
+			local replaced = context:sub(1, best_match.start_pos - 1) .. rep .. context:sub(best_match.end_pos)
+			return replaced, 1
 		end
 
 		local masked, replaced = try_single_replace(target_word)
