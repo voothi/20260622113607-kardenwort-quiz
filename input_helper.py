@@ -51,17 +51,21 @@ def read_line(enable_arrows=False):
         if c in (b"\x00", b"\xe0"):  # extended keys (arrows, F-keys)
             ext = msvcrt.getch()
             if enable_arrows:
+                hint_cmd = None
                 if ext == b"K":  # Left
-                    print("/hint_left", end="")
-                    break
+                    hint_cmd = "/hint_left"
                 elif ext == b"M":  # Right
-                    print("/hint_right", end="")
-                    break
+                    hint_cmd = "/hint_right"
                 elif ext == b"P":  # Down
-                    print("/hint_down", end="")
-                    break
+                    hint_cmd = "/hint_down"
                 elif ext == b"H":  # Up
-                    print("/hint_up", end="")
+                    hint_cmd = "/hint_up"
+                
+                if hint_cmd:
+                    for _ in chars:
+                        con.write("\b \b")
+                    con.flush()
+                    print(hint_cmd, end="")
                     break
             continue
         if c == b"\x03":  # Ctrl+C

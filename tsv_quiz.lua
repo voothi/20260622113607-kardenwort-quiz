@@ -1583,7 +1583,6 @@ local function run_quiz(study_queue, config)
 								table.insert(study_queue, i + 1, repeat_entry)
 								break
 							elseif lkey == "d" or lkey == "\x1b" then
-								defer_current_card()
 								break
 							else
 								break
