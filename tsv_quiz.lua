@@ -5,6 +5,10 @@
 local print_help
 local print_interactive_help
 
+-- Resolve directory of the running script for helper lookups
+local _script_dir = (arg[0] or ""):match("(.*[/\\])") or ""
+local _input_helper = _script_dir .. "_input_helper.py"
+
 -- 1. Helper function to split a string by a delimiter (tab), preserving empty columns
 local function split_line(line, delimiter)
 	local result = {}
@@ -176,9 +180,7 @@ local function press_any_key(prompt, allowed_keys)
 	while true do
 		local key = ""
 		if package.config:sub(1, 1) == "\\" then
-			local f = io.popen(
-				"python -c \"import msvcrt, sys; ch = msvcrt.getch() if sys.stdin.isatty() else b''; print(ch.decode('utf-8', 'ignore') if isinstance(ch, bytes) else ch, end='')\" 2>nul"
-			)
+			local f = io.popen(string.format('python "%s" --key 2>nul', _input_helper))
 			if f then
 				key = f:read("*a")
 				f:close()
@@ -1255,6 +1257,23 @@ local function update_and_save_progress(entry, is_correct, config)
 	return save_tsv(entry.filename, entry.raw_rows)
 end
 
+-- Read a line of input, intercepting Esc (skip) and Ctrl+C (quit) on Windows
+local function read_line_with_esc()
+	io.flush()
+	if package.config:sub(1, 1) == "\\" then
+		local f = io.popen(string.format('python "%s" --line 2>nul', _input_helper))
+		if f then
+			local res = f:read("*a")
+			f:close()
+			print() -- move to next line after input
+			if res ~= "" then
+				return res
+			end
+		end
+	end
+	return io.read()
+end
+
 -- 3. Run the interactive CLI quiz
 local function run_quiz(study_queue, config)
 	if not study_queue or #study_queue == 0 then
@@ -1309,9 +1328,9 @@ local function run_quiz(study_queue, config)
 			if current_hint then
 				print(current_hint)
 			end
-			io.write(bold("Your answer ") .. dim("(type '/?' for help): "))
+			io.write(bold("Your answer ") .. dim("(Esc skip, '/?' help): "))
 
-			local user_input = io.read()
+			local user_input = read_line_with_esc()
 			if not user_input then
 				print(magenta("\nExiting quiz early."))
 				return
@@ -1668,7 +1687,7 @@ print_help = function()
 	print("  " .. bold("/h N M") .. "                  Reveal N from the start and M from the end")
 	print("  " .. bold("/h N K M") .. "                Reveal N from start, K from middle, M from end")
 	print("  " .. bold("/a") .. "                      Practice repeat the previous card")
-	print("  " .. bold("/d") .. "                      Skip directly to the next card")
+	print("  " .. bold("/d") .. " / " .. bold("Esc") .. "               Skip directly to the next card")
 	print("  " .. bold("/q") .. " / " .. bold("/quit") .. " / " .. bold("/exit") .. "  Exit the quiz immediately\n")
 	print(bold("Supported TSV Format:"))
 	print("  Requires headers (e.g. Quotation/WordSource and SentenceSource/SentenceSourceContextLeft).")
@@ -1682,7 +1701,7 @@ print_interactive_help = function()
 	print("  " .. bold("/h N M") .. "                  Reveal N from the start and M from the end")
 	print("  " .. bold("/h N K M") .. "                Reveal N from start, K from middle, M from end")
 	print("  " .. bold("/a") .. "                      Practice repeat the previous card")
-	print("  " .. bold("/d") .. "                      Skip directly to the next card")
+	print("  " .. bold("/d") .. " / " .. bold("Esc") .. "               Skip directly to the next card")
 	print("  " .. bold("/q") .. " / " .. bold("/quit") .. " / " .. bold("/exit") .. "  Exit the quiz immediately")
 end
 
