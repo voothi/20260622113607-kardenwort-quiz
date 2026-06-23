@@ -983,8 +983,8 @@ def test_back_help_command_normal(quiz_env):
         ["properly", "?", ""]
     )
     assert code == 0
-    assert "=== Back Side Options ===" in out
-    assert "Continue to the next card" in out
+    assert "Back Side Options" in strip_ansi(out)
+    assert "Continue to the next card" in strip_ansi(out)
 
 
 def test_back_help_command_anki(quiz_env):
@@ -1002,8 +1002,8 @@ def test_back_help_command_anki(quiz_env):
         ["properly", "?", "3", ""]
     )
     assert code == 0
-    assert "=== Back Side Options ===" in out
-    assert "Grade as Again" in out
+    assert "Back Side Options" in strip_ansi(out)
+    assert "Grade as Again" in strip_ansi(out)
 
 
 
