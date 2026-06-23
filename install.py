@@ -14,6 +14,7 @@ SHORTCUT_DISPLAY_NAME = "Kardenwort TSV Quiz"
 LEGACY_SHORTCUT_NAMES = ("B2 Deutsch Quiz", "kardenwort tsv quiz")
 SENDTO_DIRECTORY = r"%APPDATA%\Microsoft\Windows\SendTo"
 
+
 def main():
     print(f"=== {SHORTCUT_DISPLAY_NAME} Shortcut Installer ===")
 
@@ -62,7 +63,7 @@ def main():
         f"$Shortcut.TargetPath = '{lua_path}'; "
         f"$Shortcut.Arguments = '\"{script_path}\"'; "
         f"$Shortcut.Description = 'Runs vocabulary study quiz on the selected TSV file'; "
-        f"$Shortcut.WindowStyle = 1; "   # SW_SHOWNORMAL
+        f"$Shortcut.WindowStyle = 1; "  # SW_SHOWNORMAL
         f"$Shortcut.Save()"
     )
 
@@ -81,6 +82,7 @@ def main():
     except subprocess.CalledProcessError as exc:
         print(f"Error: Failed to create shortcut.\nPowerShell error:\n{exc.stderr}")
         sys.exit(1)
+
 
 if __name__ == "__main__":
     main()

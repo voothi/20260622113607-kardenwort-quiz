@@ -5,18 +5,22 @@ Modes:
   --line  Read a full line with Esc (prints /d) and Ctrl+C (prints /q)
           interception; echoes typed characters directly to the console.
 """
+
 import sys
+
 
 def read_key():
     """Read a single key, print it, exit."""
     if not sys.stdin.isatty():
         return
     import msvcrt
+
     ch = msvcrt.getch()
     if ch in (b"\x00", b"\xe0"):
         msvcrt.getch()  # consume extended key second byte
         return
     print(ch.decode("utf-8", "ignore"), end="")
+
 
 def read_line():
     """Read a full line, echoing to console. Esc -> /d, Ctrl+C -> /q."""
@@ -24,6 +28,7 @@ def read_line():
         print("NOT_TTY", end="")
         return
     import msvcrt
+
     chars = []
     con = open("CONOUT$", "w", encoding="utf-8")
     while True:
@@ -31,13 +36,13 @@ def read_line():
             c = msvcrt.getch()
         except Exception:
             break
-        if c == b"\x1b":          # Esc
+        if c == b"\x1b":  # Esc
             print("/d", end="")
             break
-        if c in (b"\r", b"\n"):   # Enter
+        if c in (b"\r", b"\n"):  # Enter
             print("".join(chars), end="")
             break
-        if c == b"\x08":          # Backspace
+        if c == b"\x08":  # Backspace
             if chars:
                 chars.pop()
                 con.write("\b \b")
@@ -46,7 +51,7 @@ def read_line():
         if c in (b"\x00", b"\xe0"):  # extended keys (arrows, F-keys)
             msvcrt.getch()
             continue
-        if c == b"\x03":          # Ctrl+C
+        if c == b"\x03":  # Ctrl+C
             print("/q", end="")
             break
         try:
@@ -57,6 +62,7 @@ def read_line():
         except Exception:
             pass
     con.close()
+
 
 if __name__ == "__main__":
     mode = sys.argv[1] if len(sys.argv) > 1 else "--key"
