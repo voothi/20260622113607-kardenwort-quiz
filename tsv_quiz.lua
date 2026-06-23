@@ -1305,9 +1305,8 @@ local function run_quiz(study_queue, config)
 				deferred_entry[k] = v
 			end
 			table.insert(study_queue, deferred_entry)
-			if not entry.is_repeat then
-				question_num = question_num - 1
-			end
+			-- We no longer decrement question_num here so that it visibly advances
+			-- even when skipping, up to a maximum of 'total'.
 		end
 
 		while true do
@@ -1336,7 +1335,7 @@ local function run_quiz(study_queue, config)
 				print(bold(cyan("Practice Repeat:")) .. dim(string.format(" [File: %s | Box %d]", basename, entry.box)))
 			else
 				print(
-					bold(cyan(string.format("Question %d/%d:", question_num, total)))
+					bold(cyan(string.format("Question %d/%d:", math.min(question_num, total), total)))
 						.. dim(string.format(" [File: %s | Box %d]", basename, entry.box))
 				)
 			end
@@ -1454,7 +1453,9 @@ local function run_quiz(study_queue, config)
 							end
 						end
 					elseif lower_cmd == "d" then
-						print(bold(yellow("\nSkipping card...")))
+						if not config.single_card_mode then
+							print(bold(yellow("\nSkipping card...")))
+						end
 						defer_current_card()
 						break
 					else
@@ -1500,7 +1501,7 @@ local function run_quiz(study_queue, config)
 						)
 					else
 						print(
-							bold(cyan(string.format("Question %d/%d:", question_num, total)))
+							bold(cyan(string.format("Question %d/%d:", math.min(question_num, total), total)))
 								.. dim(string.format(" [File: %s | Box %d]", basename, entry.box))
 						)
 					end
@@ -1642,10 +1643,10 @@ local function run_quiz(study_queue, config)
 								table.insert(study_queue, i + 1, repeat_entry)
 								break
 							else
+								print(bold(red("\nThere is no previous card to repeat.")))
 								if config.single_card_mode then
-									io.write("\27[1F\27[J")
+									press_any_key("Press 'Enter' or 'Space' to retry...", { "\r", "\n", " " })
 								end
-								print(bold(red("There is no previous card to repeat.")))
 							end
 						elseif lkey == "s" then
 							local graded_correct = is_correct
