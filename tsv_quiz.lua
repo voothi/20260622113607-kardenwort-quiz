@@ -1637,10 +1637,11 @@ local function main()
 	-- Load all vocabulary from resolved files
 	local master_vocab = {}
 	local files_loaded = 0
+	local total_files = #resolved_files
 
-	for _, file_path in ipairs(resolved_files) do
+	for idx, file_path in ipairs(resolved_files) do
 		if file_exists(file_path) then
-			print("Loading: " .. file_path)
+			print(string.format("Loading: %s (%d/%d)", file_path, idx, total_files))
 			local file_vocab, raw_rows, box_idx, due_idx, err = load_tsv(file_path, config)
 			if file_vocab then
 				files_loaded = files_loaded + 1
@@ -1652,7 +1653,7 @@ local function main()
 					table.insert(master_vocab, entry)
 				end
 			else
-				print(bold(red("Error loading ")) .. file_path .. ": " .. (err or "unknown error"))
+				print(bold(red("Error loading: ")) .. file_path .. string.format(" (%d/%d): ", idx, total_files) .. (err or "unknown error"))
 			end
 		else
 			if #arg == 0 then
@@ -1665,7 +1666,7 @@ local function main()
 				)
 				return
 			else
-				print(bold(red("Error: ")) .. "File not found: " .. file_path)
+				print(bold(red("Error: ")) .. "File not found: " .. file_path .. string.format(" (%d/%d)", idx, total_files))
 			end
 		end
 	end
@@ -1675,6 +1676,8 @@ local function main()
 			print(bold(red("\nError: ")) .. "No vocabulary files could be loaded.")
 		end
 		return
+	else
+		print(string.format("Successfully loaded %d/%d files.", files_loaded, total_files))
 	end
 
 	-- Leitner Scheduling
