@@ -879,9 +879,13 @@ local function traceback_lcs(dp, A, B, case_sensitive)
 			end
 		else
 			if can_missing and can_extra then
-				if last_op == "missing" then op_type = "missing"
-				elseif last_op == "extra" then op_type = "extra"
-				else op_type = "missing" end
+				if last_op == "missing" then
+					op_type = "missing"
+				elseif last_op == "extra" then
+					op_type = "extra"
+				else
+					op_type = "missing"
+				end
 			elseif can_missing then
 				op_type = "missing"
 			elseif can_extra then
@@ -1136,7 +1140,7 @@ local function mask_context(
 				table.insert(coords, {
 					line = tonumber(line),
 					word = tonumber(word),
-					term_pos = tonumber(term_pos)
+					term_pos = tonumber(term_pos),
 				})
 			else
 				-- Fallback to simple number
@@ -1145,7 +1149,7 @@ local function mask_context(
 					table.insert(coords, {
 						line = 0,
 						word = num,
-						term_pos = #coords + 1
+						term_pos = #coords + 1,
 					})
 				end
 			end
@@ -1187,7 +1191,7 @@ local function mask_context(
 			local est_start = line_starts[c.line]
 			local expected_w = est_start + c.word - 1
 			total_error = total_error + math.abs(w_val - expected_w)
-			
+
 			-- Absolute anchoring to break ties between identical relative matches
 			total_error = total_error + math.abs(w_val - c.word) * 0.1
 		end
@@ -1201,7 +1205,7 @@ local function mask_context(
 
 		for idx = 1, #unique_lines - 1 do
 			local l1 = unique_lines[idx]
-			local l2 = unique_lines[idx+1]
+			local l2 = unique_lines[idx + 1]
 			local s1 = line_starts[l1]
 			local s2 = line_starts[l2]
 			if s2 <= s1 then
@@ -1212,10 +1216,10 @@ local function mask_context(
 		-- Adjacency constraint across line boundaries:
 		for idx = 1, n - 1 do
 			local c1 = coords[idx]
-			local c2 = coords[idx+1]
+			local c2 = coords[idx + 1]
 			if c2.line == c1.line + 1 and c2.term_pos == c1.term_pos + 1 then
 				local w1 = w_indices[idx]
-				local w2 = w_indices[idx+1]
+				local w2 = w_indices[idx + 1]
 				total_error = total_error + math.abs(w2 - w1 - 1) * 5
 			end
 		end
@@ -1361,7 +1365,7 @@ local function mask_context(
 					if not start_pos then
 						break
 					end
-					
+
 					local w_idx_list = {}
 					local last_w_idx = 0
 					for i = start_pos, end_pos - 1 do
@@ -1376,7 +1380,7 @@ local function mask_context(
 						start_pos = start_pos,
 						end_pos = end_pos,
 						m = m,
-						w_idx_list = w_idx_list
+						w_idx_list = w_idx_list,
 					})
 					last_pos = start_pos + 1
 				end
@@ -1404,7 +1408,7 @@ local function mask_context(
 							mid = context:sub(o1.end_pos, o2.start_pos - 1),
 							m2 = o2.m,
 							end_pos = o2.end_pos,
-							w_indices = combined_w_indices
+							w_indices = combined_w_indices,
 						})
 					end
 				end
@@ -1441,7 +1445,11 @@ local function mask_context(
 				end
 			end
 
-			local replaced = context:sub(1, best_match.start_pos - 1) .. final_r1 .. best_match.mid .. final_r2 .. context:sub(best_match.end_pos)
+			local replaced = context:sub(1, best_match.start_pos - 1)
+				.. final_r1
+				.. best_match.mid
+				.. final_r2
+				.. context:sub(best_match.end_pos)
 			return replaced, 1
 		end
 
@@ -1527,7 +1535,7 @@ local function mask_context(
 					if not start_pos then
 						break
 					end
-					
+
 					local w_idx_list = {}
 					local last_w_idx = 0
 					for i = start_pos, end_pos - 1 do
@@ -1542,7 +1550,7 @@ local function mask_context(
 						start_pos = start_pos,
 						end_pos = end_pos,
 						m = m,
-						w_idx_list = w_idx_list
+						w_idx_list = w_idx_list,
 					})
 					last_pos = start_pos + 1
 				end
@@ -1582,7 +1590,8 @@ local function mask_context(
 					end
 					rep = table.concat(m_rep_parts, " ")
 				else
-					rep = get_inline_colored_diff(user_input or "", best_match.m, case_sensitive_diff, ignore_punctuation)
+					rep =
+						get_inline_colored_diff(user_input or "", best_match.m, case_sensitive_diff, ignore_punctuation)
 				end
 			else
 				rep = replacement
@@ -1948,7 +1957,13 @@ local function run_quiz(study_queue, config)
 								print("  " .. bold("Enter, Space") .. "            Continue to the next card.")
 								print("  " .. bold("s") .. "                       Repeat the current card.")
 								print("  " .. bold("a") .. "                       Repeat the previous card.")
-								print("  " .. bold("d") .. ", " .. bold("Esc") .. "                  Skip the current card.")
+								print(
+									"  "
+										.. bold("d")
+										.. ", "
+										.. bold("Esc")
+										.. "                  Skip the current card."
+								)
 								print("  " .. bold("q") .. "                       Exit the quiz.")
 								print()
 							elseif lkey == "q" then
@@ -1988,7 +2003,7 @@ local function run_quiz(study_queue, config)
 				else
 					-- Anki manual grading mode
 					while true do
-						local prompt_str = bold(cyan("Grade: ")) .. dim("Press '1' Again, '3' Good, '?' for help: ")
+						local prompt_str = bold(cyan("Grade: ")) .. dim("Press '1' Again, '3' Good, '?' for help...")
 
 						local allowed = { "\r", "\n", " ", "1", "3", "q", "?" }
 						if config.single_card_mode then
@@ -2019,7 +2034,13 @@ local function run_quiz(study_queue, config)
 							if config.single_card_mode then
 								print("  " .. bold("s") .. "                       Save and repeat the current card.")
 								print("  " .. bold("a") .. "                       Repeat the previous card.")
-								print("  " .. bold("d") .. ", " .. bold("Esc") .. "                  Skip the current card.")
+								print(
+									"  "
+										.. bold("d")
+										.. ", "
+										.. bold("Esc")
+										.. "                  Skip the current card."
+								)
 							end
 							print("  " .. bold("q") .. "                       Exit the quiz.")
 							print()
