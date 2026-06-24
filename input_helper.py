@@ -39,11 +39,49 @@ class INPUT_RECORD(ctypes.Structure):
 
 STD_INPUT_HANDLE = -10
 STD_OUTPUT_HANDLE = -11
-hIn = kernel32.GetStdHandle(STD_INPUT_HANDLE)
-hOut = kernel32.GetStdHandle(STD_OUTPUT_HANDLE)
 
 # Ctypes API signatures for Named Pipes and Console Writing
 if sys.platform == 'win32':
+    kernel32.GetStdHandle.argtypes = [wintypes.DWORD]
+    kernel32.GetStdHandle.restype = wintypes.HANDLE
+
+    kernel32.CreateFileW.argtypes = [
+        wintypes.LPCWSTR,
+        wintypes.DWORD,
+        wintypes.DWORD,
+        ctypes.c_void_p,
+        wintypes.DWORD,
+        wintypes.DWORD,
+        wintypes.HANDLE
+    ]
+    kernel32.CreateFileW.restype = wintypes.HANDLE
+
+    kernel32.CloseHandle.argtypes = [wintypes.HANDLE]
+    kernel32.CloseHandle.restype = wintypes.BOOL
+
+    kernel32.WriteFile.argtypes = [
+        wintypes.HANDLE,
+        ctypes.c_void_p,
+        wintypes.DWORD,
+        ctypes.POINTER(wintypes.DWORD),
+        ctypes.c_void_p
+    ]
+    kernel32.WriteFile.restype = wintypes.BOOL
+
+    kernel32.GetConsoleMode.argtypes = [wintypes.HANDLE, ctypes.POINTER(wintypes.DWORD)]
+    kernel32.GetConsoleMode.restype = wintypes.BOOL
+
+    kernel32.SetConsoleMode.argtypes = [wintypes.HANDLE, wintypes.DWORD]
+    kernel32.SetConsoleMode.restype = wintypes.BOOL
+
+    kernel32.ReadConsoleInputW.argtypes = [
+        wintypes.HANDLE,
+        ctypes.c_void_p,
+        wintypes.DWORD,
+        ctypes.POINTER(wintypes.DWORD)
+    ]
+    kernel32.ReadConsoleInputW.restype = wintypes.BOOL
+
     kernel32.WriteConsoleInputW.argtypes = [wintypes.HANDLE, ctypes.c_void_p, wintypes.DWORD, ctypes.POINTER(wintypes.DWORD)]
     kernel32.WriteConsoleInputW.restype = wintypes.BOOL
     
@@ -52,6 +90,12 @@ if sys.platform == 'win32':
     
     kernel32.ReadFile.argtypes = [wintypes.HANDLE, ctypes.c_void_p, wintypes.DWORD, ctypes.POINTER(wintypes.DWORD), ctypes.c_void_p]
     kernel32.ReadFile.restype = wintypes.BOOL
+
+    hIn = kernel32.GetStdHandle(STD_INPUT_HANDLE)
+    hOut = kernel32.GetStdHandle(STD_OUTPUT_HANDLE)
+else:
+    hIn = None
+    hOut = None
 
 # Queue and Helper Functions for Bidirectional IPC Broker
 sync_event_queue = queue.Queue()
@@ -157,7 +201,7 @@ def send_receive_ipc(pipe_path, command_dict, timeout=1.0):
         handle = kernel32.CreateFileW(
             pipe_path,
             GENERIC_READ | GENERIC_WRITE,
-            0,
+            1 | 2,
             None,
             OPEN_EXISTING,
             0,
