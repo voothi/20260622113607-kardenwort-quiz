@@ -112,14 +112,15 @@ local function sync_forward_to_mpv(entry, config)
 	local python_bin = config.python_cmd or "python"
 	
 	local extra_play_arg = config.mpv_play_on_sync and " --play" or ""
+	local mpv_cmd_arg = config.mpv_cmd and string.format(' --mpv-cmd "%s"', config.mpv_cmd) or ""
 	local cmd
 	if package.config:sub(1, 1) == "\\" then
 		if python_bin:find(" ") then
 			python_bin = '"' .. python_bin .. '"'
 		end
-		cmd = string.format('start "" /b %s "%s" --sync-mpv "%s" "%s" %s%s 2>nul', python_bin, input_helper, pipe_path, filename, timestamp, extra_play_arg)
+		cmd = string.format('start "" /b %s "%s" --sync-mpv "%s" "%s" %s%s%s 2>nul', python_bin, input_helper, pipe_path, filename, timestamp, extra_play_arg, mpv_cmd_arg)
 	else
-		cmd = string.format('"%s" "%s" --sync-mpv "%s" "%s" %s%s >/dev/null 2>&1 &', python_bin, input_helper, pipe_path, filename, timestamp, extra_play_arg)
+		cmd = string.format('"%s" "%s" --sync-mpv "%s" "%s" %s%s%s >/dev/null 2>&1 &', python_bin, input_helper, pipe_path, filename, timestamp, extra_play_arg, mpv_cmd_arg)
 	end
 	os.execute(cmd)
 end
@@ -327,6 +328,7 @@ local function load_config(filename)
 		repeat_counts_in_stats = false,
 		mpv_integration = false,
 		mpv_play_on_sync = true,
+		mpv_cmd = "mpv",
 		mpv_pipe_path = package.config:sub(1, 1) == "\\" and "\\\\.\\pipe\\mpv-socket" or "/tmp/mpv-socket",
 		quiz_pipe_path = package.config:sub(1, 1) == "\\" and "\\\\.\\pipe\\kardenwort-quiz" or "/tmp/kardenwort-quiz",
 		python_cmd = "python",
@@ -454,6 +456,8 @@ local function load_config(filename)
 								config.mpv_integration = (val == "true" or val == "1")
 							elseif key == "mpv_play_on_sync" then
 								config.mpv_play_on_sync = (val == "true" or val == "1")
+							elseif key == "mpv_cmd" then
+								config.mpv_cmd = val
 							elseif key == "mpv_pipe_path" then
 								config.mpv_pipe_path = val
 							elseif key == "quiz_pipe_path" then
@@ -2305,7 +2309,7 @@ local function run_quiz(study_queue, config)
 						while true do
 							local key = press_any_key(
 								dim("Press 'Enter' or 'Space' to continue, type '?' for help... "),
-								{ "\r", "\n", " ", "s", "a", "d", "p", "\x1b", "q", "?" }
+								{ "\r", "\n", " ", "s", "a", "d", "y", "\x1b", "q", "?" }
 							)
 							if key == "" then
 								local line = io.read()
@@ -2325,11 +2329,11 @@ local function run_quiz(study_queue, config)
 										.. "                  Skip the current card."
 								)
 								if config.mpv_integration then
-									print("  " .. bold("p") .. "                       Sync current card to MPV.")
+									print("  " .. bold("y") .. "                       Sync current card to MPV.")
 								end
 								print("  " .. bold("q") .. "                       Exit the quiz.")
 								print()
-							elseif lkey == "p" then
+							elseif lkey == "y" then
 								sync_forward_to_mpv(entry, config)
 							elseif lkey == "q" then
 								print(magenta("\nExiting quiz early."))
@@ -2377,7 +2381,7 @@ local function run_quiz(study_queue, config)
 							table.insert(allowed, "s")
 							table.insert(allowed, "a")
 							table.insert(allowed, "d")
-							table.insert(allowed, "p")
+							table.insert(allowed, "y")
 							table.insert(allowed, "\x1b")
 						end
 
@@ -2410,12 +2414,12 @@ local function run_quiz(study_queue, config)
 										.. "                  Skip the current card."
 								)
 								if config.mpv_integration then
-									print("  " .. bold("p") .. "                       Sync current card to MPV.")
+									print("  " .. bold("y") .. "                       Sync current card to MPV.")
 								end
 							end
 							print("  " .. bold("q") .. "                       Exit the quiz.")
 							print()
-						elseif lkey == "p" then
+						elseif lkey == "y" then
 							sync_forward_to_mpv(entry, config)
 						elseif lkey == "q" then
 							print(magenta("\nExiting quiz early."))

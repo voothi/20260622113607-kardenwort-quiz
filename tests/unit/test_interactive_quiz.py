@@ -1,5 +1,6 @@
 import subprocess
 import time
+import sys
 from pathlib import Path
 import struct
 import re
@@ -1672,6 +1673,32 @@ def test_input_helper_media_resolution(tmp_path):
     resolved2 = input_helper_test.find_media_file(str(tsv_file))
     assert resolved2 is None
 
+    # Test es vs es-extra suffix collision resolution
+    es_tsv = tmp_path / "20260622113607.es.tsv"
+    es_tsv.touch()
+    
+    es_extra_video = tmp_path / "20260622113607.es-extra.mp4"
+    es_extra_video.touch()
+    es_video = tmp_path / "20260622113607.es.mp4"
+    es_video.touch()
+    
+    resolved_es = input_helper_test.find_media_file(str(es_tsv))
+    assert resolved_es is not None
+    assert Path(resolved_es).name == "20260622113607.es.mp4"
+
+    # Test alphabetical deterministic ordering of candidates
+    multi_tsv = tmp_path / "20260622113608.en.tsv"
+    multi_tsv.touch()
+    
+    video_b = tmp_path / "20260622113608-videoB.en.mp4"
+    video_b.touch()
+    video_a = tmp_path / "20260622113608-videoA.en.mp4"
+    video_a.touch()
+    
+    resolved_multi = input_helper_test.find_media_file(str(multi_tsv))
+    assert resolved_multi is not None
+    assert Path(resolved_multi).name == "20260622113608-videoA.en.mp4"
+
 
 def test_input_helper_sync_mpv_flow(tmp_path, monkeypatch):
     """Test the full sync_mpv execution path inside input_helper.py."""
@@ -1922,6 +1949,170 @@ def test_sync_disabled_gating(quiz_env):
     assert code == 0
     clean_out = strip_ansi(out)
     assert clean_out.count("MPV Integration is disabled in config.ini") >= 3
+
+
+@pytest.mark.skipif(sys.platform != 'win32', reason="Windows named pipe test")
+def test_input_helper_win_pipe_busy_retry(tmp_path, monkeypatch):
+    """Test that send_win_pipe handles ERROR_PIPE_BUSY and retries using WaitNamedPipeW."""
+    import importlib.util
+    import shutil
+    import ctypes
+    from ctypes import wintypes
+    
+    shutil.copy2(Path(__file__).parent.parent.parent / "input_helper.py", tmp_path / "input_helper.py")
+    spec = importlib.util.spec_from_file_location("input_helper_test", str(tmp_path / "input_helper.py"))
+    input_helper_test = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(input_helper_test)
+    
+    calls = []
+    create_file_calls = 0
+    
+    def mock_create_file(lpFileName, dwDesiredAccess, dwShareMode, lpSecurityAttributes, dwCreationDisposition, dwFlagsAndAttributes, hTemplateFile):
+        nonlocal create_file_calls
+        create_file_calls += 1
+        calls.append(("CreateFileW", create_file_calls))
+        if create_file_calls < 3:
+            return input_helper_test.INVALID_HANDLE
+        return 42  # Dummy valid handle
+        
+    def mock_get_last_error():
+        calls.append("GetLastError")
+        return 231  # ERROR_PIPE_BUSY
+        
+    wait_calls = 0
+    def mock_wait_named_pipe(lpNamedPipeName, nTimeOut):
+        nonlocal wait_calls
+        wait_calls += 1
+        calls.append(("WaitNamedPipeW", nTimeOut))
+        return True
+        
+    def mock_write_file(hFile, lpBuffer, nNumberOfBytesToWrite, lpNumberOfBytesWritten, lpOverlapped):
+        calls.append("WriteFile")
+        if lpNumberOfBytesWritten:
+            lpNumberOfBytesWritten[0] = nNumberOfBytesToWrite
+        return True
+        
+    def mock_close_handle(hObject):
+        calls.append("CloseHandle")
+        return True
+        
+    write_proto = ctypes.WINFUNCTYPE(
+        wintypes.BOOL, wintypes.HANDLE, ctypes.c_void_p, wintypes.DWORD, ctypes.POINTER(wintypes.DWORD), ctypes.c_void_p
+    )
+    mock_write_c = write_proto(mock_write_file)
+        
+    monkeypatch.setattr(input_helper_test.kernel32, "CreateFileW", mock_create_file)
+    monkeypatch.setattr(ctypes, "GetLastError", mock_get_last_error)
+    monkeypatch.setattr(input_helper_test.kernel32, "WaitNamedPipeW", mock_wait_named_pipe)
+    monkeypatch.setattr(input_helper_test.kernel32, "WriteFile", mock_write_c)
+    monkeypatch.setattr(input_helper_test.kernel32, "CloseHandle", mock_close_handle)
+    
+    input_helper_test.send_win_pipe("dummy_pipe", b"test_data", timeout_ms=5000)
+    
+    assert create_file_calls == 3
+    assert wait_calls == 2
+    assert "WriteFile" in calls
+    assert "CloseHandle" in calls
+    # WaitNamedPipeW timeout should be 50ms (the refined granularity)
+    assert any(c[0] == "WaitNamedPipeW" and c[1] == 50 for c in calls if isinstance(c, tuple))
+
+
+@pytest.mark.skipif(sys.platform != 'win32', reason="Windows named pipe test")
+def test_input_helper_send_receive_ipc_busy_retry(tmp_path, monkeypatch):
+    """Test that send_receive_ipc handles ERROR_PIPE_BUSY and retries using WaitNamedPipeW."""
+    import importlib.util
+    import shutil
+    import ctypes
+    from ctypes import wintypes
+    
+    shutil.copy2(Path(__file__).parent.parent.parent / "input_helper.py", tmp_path / "input_helper.py")
+    spec = importlib.util.spec_from_file_location("input_helper_test", str(tmp_path / "input_helper.py"))
+    input_helper_test = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(input_helper_test)
+    
+    calls = []
+    create_file_calls = 0
+    
+    def mock_create_file(lpFileName, dwDesiredAccess, dwShareMode, lpSecurityAttributes, dwCreationDisposition, dwFlagsAndAttributes, hTemplateFile):
+        nonlocal create_file_calls
+        create_file_calls += 1
+        calls.append(("CreateFileW", create_file_calls))
+        if create_file_calls < 3:
+            return input_helper_test.INVALID_HANDLE
+        return 42  # Dummy valid handle
+        
+    def mock_get_last_error():
+        calls.append("GetLastError")
+        return 231  # ERROR_PIPE_BUSY
+        
+    wait_calls = 0
+    def mock_wait_named_pipe(lpNamedPipeName, nTimeOut):
+        nonlocal wait_calls
+        wait_calls += 1
+        calls.append(("WaitNamedPipeW", nTimeOut))
+        return True
+        
+    def mock_write_file(hFile, lpBuffer, nNumberOfBytesToWrite, lpNumberOfBytesWritten, lpOverlapped):
+        calls.append("WriteFile")
+        if lpNumberOfBytesWritten:
+            lpNumberOfBytesWritten[0] = nNumberOfBytesToWrite
+        return True
+        
+    peek_calls = 0
+    def mock_peek_named_pipe(hNamedPipe, lpBuffer, nBufferSize, lpBytesRead, lpTotalBytesAvail, lpBytesLeftThisMessage):
+        nonlocal peek_calls
+        peek_calls += 1
+        calls.append(("PeekNamedPipe", peek_calls))
+        if lpTotalBytesAvail:
+            if peek_calls == 1:
+                lpTotalBytesAvail[0] = 0
+            else:
+                lpTotalBytesAvail[0] = 12
+        return True
+        
+    def mock_read_file(hFile, lpBuffer, nNumberOfBytesToRead, lpNumberOfBytesRead, lpOverlapped):
+        calls.append("ReadFile")
+        if lpNumberOfBytesRead:
+            lpNumberOfBytesRead[0] = 12
+        ctypes.memmove(lpBuffer, b'{"res": "ok"}\n', 12)
+        return True
+        
+    def mock_close_handle(hObject):
+        calls.append("CloseHandle")
+        return True
+        
+    write_proto = ctypes.WINFUNCTYPE(
+        wintypes.BOOL, wintypes.HANDLE, ctypes.c_void_p, wintypes.DWORD, ctypes.POINTER(wintypes.DWORD), ctypes.c_void_p
+    )
+    mock_write_c = write_proto(mock_write_file)
+
+    peek_proto = ctypes.WINFUNCTYPE(
+        wintypes.BOOL, wintypes.HANDLE, ctypes.c_void_p, wintypes.DWORD, ctypes.POINTER(wintypes.DWORD), ctypes.POINTER(wintypes.DWORD), ctypes.POINTER(wintypes.DWORD)
+    )
+    mock_peek_c = peek_proto(mock_peek_named_pipe)
+
+    read_proto = ctypes.WINFUNCTYPE(
+        wintypes.BOOL, wintypes.HANDLE, ctypes.c_void_p, wintypes.DWORD, ctypes.POINTER(wintypes.DWORD), ctypes.c_void_p
+    )
+    mock_read_c = read_proto(mock_read_file)
+        
+    monkeypatch.setattr(input_helper_test.kernel32, "CreateFileW", mock_create_file)
+    monkeypatch.setattr(ctypes, "GetLastError", mock_get_last_error)
+    monkeypatch.setattr(input_helper_test.kernel32, "WaitNamedPipeW", mock_wait_named_pipe)
+    monkeypatch.setattr(input_helper_test.kernel32, "WriteFile", mock_write_c)
+    monkeypatch.setattr(input_helper_test.kernel32, "PeekNamedPipe", mock_peek_c)
+    monkeypatch.setattr(input_helper_test.kernel32, "ReadFile", mock_read_c)
+    monkeypatch.setattr(input_helper_test.kernel32, "CloseHandle", mock_close_handle)
+    
+    res = input_helper_test.send_receive_ipc("dummy_pipe", {"cmd": "test"}, timeout=1.0)
+    
+    assert res == {"res": "ok"}
+    assert create_file_calls == 3
+    assert wait_calls == 2
+    assert "WriteFile" in calls
+    assert "CloseHandle" in calls
+    # WaitNamedPipeW timeout should be 50ms (the refined granularity)
+    assert any(c[0] == "WaitNamedPipeW" and c[1] == 50 for c in calls if isinstance(c, tuple))
 
 
 

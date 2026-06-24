@@ -145,25 +145,14 @@ def send_win_pipe(pipe_path, data, timeout_ms=5000):
         if not _is_invalid_handle(handle):
             break
             
-        handle = kernel32.CreateFileW(
-            pipe_path,
-            GENERIC_WRITE,
-            FILE_SHARE_READ | FILE_SHARE_WRITE,
-            None,
-            OPEN_EXISTING,
-            0,
-            None
-        )
-        if not _is_invalid_handle(handle):
-            break
-            
         err = ctypes.GetLastError()
         # 231 = ERROR_PIPE_BUSY
-        if err != 231 or (time.time() - start_time) > timeout_ms / 1000.0:
+        remaining_ms = int(timeout_ms - (time.time() - start_time) * 1000)
+        if err != 231 or remaining_ms <= 0:
             raise Exception(f"Failed to open named pipe, error: {err}")
             
-        # Wait for the pipe to become available, max 500ms per wait call
-        kernel32.WaitNamedPipeW(pipe_path, 500)
+        # Wait for the pipe to become available, max 50ms per wait call to be responsive
+        kernel32.WaitNamedPipeW(pipe_path, min(50, remaining_ms))
             
     written = wintypes.DWORD(0)
     res = kernel32.WriteFile(
@@ -217,11 +206,12 @@ def send_receive_ipc(pipe_path, command_dict, timeout=1.0):
                 
             err = ctypes.GetLastError()
             # 231 = ERROR_PIPE_BUSY
-            if err != 231 or (time.time() - start_time) > timeout:
+            remaining_ms = int((timeout - (time.time() - start_time)) * 1000)
+            if err != 231 or remaining_ms <= 0:
                 return None
                 
-            # Wait for pipe to be available
-            kernel32.WaitNamedPipeW(pipe_path, int(timeout * 1000))
+            # Wait for pipe to be available, max 50ms per wait call to be responsive
+            kernel32.WaitNamedPipeW(pipe_path, min(50, remaining_ms))
             
         written = wintypes.DWORD(0)
         res = kernel32.WriteFile(
@@ -328,20 +318,25 @@ def find_media_file(tsv_path):
             pass
             
     scan_dir(tsv_dir)
-
-        
+    
     if not candidates:
         return None
         
+    # Sort candidates alphabetically by full path to guarantee deterministic selection order
+    candidates.sort(key=lambda x: x[0])
+        
     if lang:
         for full_path, name_no_ext in candidates:
-            if name_no_ext.endswith("." + lang) or name_no_ext.endswith("-" + lang) or name_no_ext.endswith("_" + lang):
-                return full_path
+            cand_parts = name_no_ext.split('.')
+            if len(cand_parts) >= 2:
+                cand_lang = cand_parts[-1]
+                if cand_lang.lower() == lang.lower():
+                    return full_path
                 
     return candidates[0][0]
 
-def spawn_mpv(pipe_path, video_path, start_time):
-    cmd = ["mpv", f"--input-ipc-server={pipe_path}"]
+def spawn_mpv(pipe_path, video_path, start_time, mpv_cmd="mpv"):
+    cmd = [mpv_cmd, f"--input-ipc-server={pipe_path}"]
     if video_path:
         cmd.append(video_path)
     if start_time is not None:
@@ -375,7 +370,7 @@ def spawn_mpv(pipe_path, video_path, start_time):
         delay = min(delay * 1.5, 0.5)
     return False
 
-def sync_mpv(pipe_path, tsv_path, timestamp, play_on_sync=False):
+def sync_mpv(pipe_path, tsv_path, timestamp, play_on_sync=False, mpv_cmd="mpv"):
     media_file = find_media_file(tsv_path)
     if not media_file:
         print(f"Error: Could not find media file for {tsv_path}", file=sys.stderr)
@@ -385,7 +380,10 @@ def sync_mpv(pipe_path, tsv_path, timestamp, play_on_sync=False):
     
     current_info = send_receive_ipc(pipe_path, {"command": ["get_property", "path"]})
     if current_info is None:
-        spawn_mpv(pipe_path, media_file_mpv, timestamp)
+        if mpv_cmd and mpv_cmd != "mpv":
+            spawn_mpv(pipe_path, media_file_mpv, timestamp, mpv_cmd)
+        else:
+            spawn_mpv(pipe_path, media_file_mpv, timestamp)
         if play_on_sync:
             try:
                 send_ipc_payload(pipe_path, {"command": ["set_property", "pause", False]})
@@ -405,7 +403,10 @@ def sync_mpv(pipe_path, tsv_path, timestamp, play_on_sync=False):
             send_ipc_payload(pipe_path, {"command": ["loadfile", media_file_mpv, "replace"]})
             send_ipc_payload(pipe_path, {"command": ["seek", timestamp, "absolute"]})
     except Exception:
-        spawn_mpv(pipe_path, media_file_mpv, timestamp)
+        if mpv_cmd and mpv_cmd != "mpv":
+            spawn_mpv(pipe_path, media_file_mpv, timestamp, mpv_cmd)
+        else:
+            spawn_mpv(pipe_path, media_file_mpv, timestamp)
 
     if play_on_sync:
         try:
@@ -661,6 +662,32 @@ def read_line(enable_arrows=False, initial_text="", save_esc=False, swap_arrows=
     con.close()
 
 if __name__ == "__main__":
+    args = sys.argv[1:]
+    
+    if "--help" in args or "-h" in args:
+        print("Console input helper for tsv_quiz.lua on Windows.")
+        print()
+        print("Usage:")
+        print("  python input_helper.py [options]")
+        print()
+        print("Modes:")
+        print("  --key                    Read a single key and print it (default).")
+        print("  --line                   Read a full line with Esc/Ctrl+C/arrow key interception.")
+        print("  --sync-mpv <pipe> <tsv> <time>  Sync media playback to MPV at timestamp.")
+        print()
+        print("Options:")
+        print("  --play                   When used with --sync-mpv, automatically plays/unpauses the video.")
+        print("                           Note: In direct CLI usage, this flag is required to auto-play.")
+        print("                           (The Lua launcher configures this via the mpv_play_on_sync setting).")
+        print("  --mpv-cmd <cmd>          Executable command or full path for the MPV binary (default: mpv).")
+        print("  --arrows                 Enable dynamic visual arrow key hints.")
+        print("  --swap-arrows            Enable and swap dynamic visual arrow key hints.")
+        print("  --save-esc               Save the input buffer on Esc key press instead of clearing.")
+        print("  --initial <text>         Pre-populate the line editor with initial text.")
+        print("  --mpv-integration        Start the reverse IPC server thread to listen for MPV events.")
+        print("  --quiz-pipe-path <path>  Override the named pipe or socket path for reverse IPC.")
+        sys.exit(0)
+
     mode = "--key"
     enable_arrows = False
     swap_arrows = False
@@ -669,20 +696,22 @@ if __name__ == "__main__":
     mpv_integration = False
     quiz_pipe_path = None
     
-    args = sys.argv[1:]
     play_on_sync = "--play" in args
+    mpv_cmd_path = "mpv"
+    
+    # First find --mpv-cmd to ensure it's loaded before we potentially execute --sync-mpv
+    for idx in range(len(args)):
+        if args[idx] == "--mpv-cmd" and idx + 1 < len(args):
+            mpv_cmd_path = args[idx + 1]
+            
+    # Main argument parsing loop
+    sync_args = None
     i = 0
     while i < len(args):
         if args[i] == "--sync-mpv" and i + 3 < len(args):
-            pipe_path = args[i + 1]
-            tsv_path = args[i + 2]
-            try:
-                timestamp = float(args[i + 3])
-            except ValueError:
-                timestamp = 0.0
-            
-            success = sync_mpv(pipe_path, tsv_path, timestamp, play_on_sync)
-            sys.exit(0 if success else 1)
+            sync_args = (args[i + 1], args[i + 2], args[i + 3])
+            i += 4
+            continue
         elif args[i] in ("--key", "--line"):
             mode = args[i]
         elif args[i] == "--arrows":
@@ -700,7 +729,23 @@ if __name__ == "__main__":
         elif args[i] == "--quiz-pipe-path" and i + 1 < len(args):
             quiz_pipe_path = args[i + 1]
             i += 1
+        elif args[i] == "--mpv-cmd" and i + 1 < len(args):
+            # Already handled in pre-scan, just skip
+            i += 1
+        elif args[i] == "--play":
+            # Already handled via play_on_sync, just skip
+            pass
         i += 1
+
+    if sync_args:
+        pipe_path, tsv_path, timestamp_str = sync_args
+        try:
+            timestamp = float(timestamp_str)
+        except ValueError:
+            timestamp = 0.0
+        
+        success = sync_mpv(pipe_path, tsv_path, timestamp, play_on_sync, mpv_cmd_path)
+        sys.exit(0 if success else 1)
 
     if mpv_integration:
         # Start reverse IPC listener thread (Windows Named Pipe or Unix Socket)
