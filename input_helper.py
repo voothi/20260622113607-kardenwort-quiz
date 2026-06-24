@@ -69,6 +69,11 @@ if sys.platform == 'win32':
     kernel32.ReadFile.argtypes = [wintypes.HANDLE, ctypes.c_void_p, wintypes.DWORD, ctypes.POINTER(wintypes.DWORD), ctypes.c_void_p]
     kernel32.ReadFile.restype = wintypes.BOOL
 
+INVALID_HANDLE = ctypes.c_void_p(-1).value  # 0xFFFFFFFF on 32-bit, 0xFFFFFFFFFFFFFFFF on 64-bit
+
+def _is_invalid_handle(h):
+    return h is None or h == 0 or h == INVALID_HANDLE or h == 0xFFFFFFFF or h == -1
+
 STD_INPUT_HANDLE = -10
 STD_OUTPUT_HANDLE = -11
 hIn = kernel32.GetStdHandle(STD_INPUT_HANDLE)
@@ -130,7 +135,7 @@ def send_win_pipe(pipe_path, data):
         0,
         None
     )
-    if handle == -1 or handle == 0 or handle == 0xFFFFFFFF:
+    if _is_invalid_handle(handle):
         handle = kernel32.CreateFileW(
             pipe_path,
             GENERIC_WRITE,
@@ -140,7 +145,7 @@ def send_win_pipe(pipe_path, data):
             0,
             None
         )
-        if handle == -1 or handle == 0 or handle == 0xFFFFFFFF:
+        if _is_invalid_handle(handle):
             raise Exception("Failed to open named pipe")
             
     written = wintypes.DWORD(0)
@@ -186,7 +191,7 @@ def send_receive_ipc(pipe_path, command_dict, timeout=1.0):
             0,
             None
         )
-        if handle == -1 or handle == 0 or handle == 0xFFFFFFFF:
+        if _is_invalid_handle(handle):
             return None
             
         written = wintypes.DWORD(0)
@@ -328,7 +333,7 @@ def spawn_mpv(pipe_path, video_path, start_time):
                 h = kernel32.CreateFileW(
                     pipe_path, 0x40000000, 1|2, None, 3, 0, None
                 )
-                if h != -1 and h != 0 and h != 0xFFFFFFFF:
+                if not _is_invalid_handle(h):
                     kernel32.CloseHandle(h)
                     return True
             else:
@@ -367,22 +372,18 @@ def sync_mpv(pipe_path, tsv_path, timestamp, play_on_sync=False):
     try:
         if is_same:
             send_ipc_payload(pipe_path, {"command": ["seek", timestamp, "absolute"]})
-            if play_on_sync:
-                send_ipc_payload(pipe_path, {"command": ["set_property", "pause", False]})
         else:
             send_ipc_payload(pipe_path, {"command": ["loadfile", media_file_mpv, "replace"]})
             send_ipc_payload(pipe_path, {"command": ["seek", timestamp, "absolute"]})
-            if play_on_sync:
-                send_ipc_payload(pipe_path, {"command": ["set_property", "pause", False]})
-        return True
     except Exception:
         spawn_mpv(pipe_path, media_file_mpv, timestamp)
-        if play_on_sync:
-            try:
-                send_ipc_payload(pipe_path, {"command": ["set_property", "pause", False]})
-            except Exception:
-                pass
-        return True
+
+    if play_on_sync:
+        try:
+            send_ipc_payload(pipe_path, {"command": ["set_property", "pause", False]})
+        except Exception:
+            pass
+    return True
 
 # Enable VT processing for CONOUT$
 mode = wintypes.DWORD()
