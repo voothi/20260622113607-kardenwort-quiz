@@ -1934,7 +1934,7 @@ local function run_quiz(study_queue, config)
 					print_interactive_help(config)
 					print()
 					if config.single_card_mode then
-						press_any_key("Press 'Enter' or 'Space' to return to quiz...", { "\r", "\n", " " })
+						press_any_key("Press 'Enter' or 'Space' to return to quiz... ", { "\r", "\n", " " })
 					end
 				else
 					local function generate_hint_string(target, n, k, m)
@@ -2019,7 +2019,7 @@ local function run_quiz(study_queue, config)
 						else
 							print(bold(red("There is no previous card to repeat.")))
 							if config.single_card_mode then
-								press_any_key("Press 'Enter' or 'Space' to retry...", { "\r", "\n", " " })
+								press_any_key("Press 'Enter' or 'Space' to retry... ", { "\r", "\n", " " })
 							end
 						end
 					elseif lower_cmd == "d" then
@@ -2031,7 +2031,7 @@ local function run_quiz(study_queue, config)
 					else
 						print(bold(red("Unknown command: ")) .. trimmed_input .. ". Type '/?' for help.\n")
 						if config.single_card_mode then
-							press_any_key("Press 'Enter' or 'Space' to retry...", { "\r", "\n", " " })
+							press_any_key("Press 'Enter' or 'Space' to retry... ", { "\r", "\n", " " })
 						end
 					end
 				end
@@ -2120,7 +2120,7 @@ local function run_quiz(study_queue, config)
 					if config.single_card_mode then
 						while true do
 							local key = press_any_key(
-								dim("Press 'Enter' or 'Space' to continue, type '?' for help..."),
+								dim("Press 'Enter' or 'Space' to continue, type '?' for help... "),
 								{ "\r", "\n", " ", "s", "a", "d", "\x1b", "q", "?" }
 							)
 							if key == "" then
@@ -2240,7 +2240,7 @@ local function run_quiz(study_queue, config)
 							else
 								print(bold(red("\nThere is no previous card to repeat.")))
 								if config.single_card_mode then
-									press_any_key("Press 'Enter' or 'Space' to retry...", { "\r", "\n", " " })
+									press_any_key("Press 'Enter' or 'Space' to retry... ", { "\r", "\n", " " })
 								end
 							end
 						elseif lkey == "s" then
@@ -2629,4 +2629,5 @@ if not ok then
 	print(err)
 end
 
-press_any_key("\nPress 'Enter' or 'Space' to exit...", { "\r", "\n", " " })
+press_any_key("\nPress 'Enter' or 'Space' to exit... ", { "\r", "\n", " " })
+
