@@ -1051,7 +1051,7 @@ local function wrap_text(text, max_width)
 					local space_len = utf8_len(strip_ansi(space))
 					
 					if current_len > 0 and current_len + word_len > max_width then
-						table.insert(lines, current_line:gsub("%s+$", ""))
+						table.insert(lines, (current_line:gsub("%s+$", "")))
 						current_line = word .. space
 						current_len = word_len + space_len
 					else
@@ -1061,7 +1061,7 @@ local function wrap_text(text, max_width)
 				end
 			end
 			if current_line ~= "" then
-				table.insert(lines, current_line:gsub("%s+$", ""))
+				table.insert(lines, (current_line:gsub("%s+$", "")))
 			end
 		end
 	end
