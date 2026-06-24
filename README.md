@@ -265,7 +265,7 @@ lua tsv_quiz.lua vocab1.tsv vocab2.tsv
 The TSV Quiz features bidirectional integration with the MPV media player for context synchronization.
 
 1. **Gating & Enabling**: Set `mpv_integration = true` in `config.ini` under the `[Leitner]` section.
-2. **Forward Sync (Quiz ➔ MPV)**: Press `p` in command mode (or type `/p` or `/sync_forward`) to launch `mpv` with the corresponding video file and seek to the card's exact timestamp.
+2. **Forward Sync (Quiz ➔ MPV)**: Press `y` in command mode (or type `/y` or `/sync_forward`) to launch `mpv` with the corresponding video file and seek to the card's exact timestamp.
 3. **Backward Sync (MPV ➔ Quiz)**: A backward trigger sends commands via named pipe to focus and jump to the card closest to the current video timestamp.
 
 #### Configuration Options in `config.ini`:

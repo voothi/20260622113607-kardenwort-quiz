@@ -380,10 +380,7 @@ def sync_mpv(pipe_path, tsv_path, timestamp, play_on_sync=False, mpv_cmd="mpv"):
     
     current_info = send_receive_ipc(pipe_path, {"command": ["get_property", "path"]})
     if current_info is None:
-        if mpv_cmd and mpv_cmd != "mpv":
-            spawn_mpv(pipe_path, media_file_mpv, timestamp, mpv_cmd)
-        else:
-            spawn_mpv(pipe_path, media_file_mpv, timestamp)
+        spawn_mpv(pipe_path, media_file_mpv, timestamp, mpv_cmd or "mpv")
         if play_on_sync:
             try:
                 send_ipc_payload(pipe_path, {"command": ["set_property", "pause", False]})
@@ -403,10 +400,7 @@ def sync_mpv(pipe_path, tsv_path, timestamp, play_on_sync=False, mpv_cmd="mpv"):
             send_ipc_payload(pipe_path, {"command": ["loadfile", media_file_mpv, "replace"]})
             send_ipc_payload(pipe_path, {"command": ["seek", timestamp, "absolute"]})
     except Exception:
-        if mpv_cmd and mpv_cmd != "mpv":
-            spawn_mpv(pipe_path, media_file_mpv, timestamp, mpv_cmd)
-        else:
-            spawn_mpv(pipe_path, media_file_mpv, timestamp)
+        spawn_mpv(pipe_path, media_file_mpv, timestamp, mpv_cmd or "mpv")
 
     if play_on_sync:
         try:
