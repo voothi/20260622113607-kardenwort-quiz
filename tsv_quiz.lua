@@ -178,13 +178,14 @@ local function clear_screen()
 end
 
 -- Helper to wait for a keypress (supporting Space and Enter)
-local function press_any_key(prompt, allowed_keys)
+local function press_any_key(prompt, allowed_keys, use_arrows)
 	io.write(prompt)
 	io.flush()
 	while true do
 		local key = ""
 		if package.config:sub(1, 1) == "\\" then
-			local f = io.popen(string.format('python "%s" --key 2>nul', input_helper))
+			local arrow_arg = use_arrows and " --arrows" or ""
+			local f = io.popen(string.format('python "%s" --key%s 2>nul', input_helper, arrow_arg))
 			if f then
 				key = f:read("*a")
 				f:close()
@@ -1660,10 +1661,10 @@ local function update_and_save_progress(entry, is_correct, config)
 end
 
 -- Read a line of input, intercepting Esc (skip) and Ctrl+C (quit) on Windows
-local function read_line_with_esc(config, initial_text, save_esc)
+local function read_line_with_esc(config, initial_text, save_esc, use_arrows)
 	io.flush()
 	if package.config:sub(1, 1) == "\\" then
-		local arrow_arg = config.arrow_hints and " --arrows" or ""
+		local arrow_arg = use_arrows and " --arrows" or ""
 		local save_esc_arg = save_esc and " --save-esc" or ""
 		local initial_arg = ""
 		if initial_text and initial_text ~= "" then
@@ -1760,8 +1761,8 @@ local function run_quiz(study_queue, config)
 
 			if config.command_mode and is_command_mode then
 				if config.command_mode_single_key then
-					local allowed = {"a", "d", "q", "?", "\r", "\n", "\x1b", "h", "/"}
-					local key = press_any_key(bold("Command mode ") .. dim("(? for help, Esc to skip, Enter to input) > "), allowed)
+					local allowed = {"a", "d", "q", "?", "\r", "\n", "\x1b", "h", "/", "/hint_left", "/hint_right", "/hint_up", "/hint_down"}
+					local key = press_any_key(bold("Command mode ") .. dim("(? for help, Esc to skip, Enter to input) > "), allowed, config.arrow_hints)
 					if key == "" then
 						local line = io.read()
 						key = line and line:sub(1, 1) or ""
@@ -1788,9 +1789,11 @@ local function run_quiz(study_queue, config)
 						trimmed_input = "/?"
 					elseif lkey == "h" then
 						trimmed_input = "/h"
+					elseif lkey == "/hint_left" or lkey == "/hint_right" or lkey == "/hint_up" or lkey == "/hint_down" then
+						trimmed_input = lkey
 					elseif lkey == "/" then
 						io.write("/")
-						local rest = read_line_with_esc(config)
+						local rest = read_line_with_esc(config, nil, false, false)
 						if not rest then
 							print(magenta("\nExiting quiz early."))
 							return
@@ -1801,7 +1804,7 @@ local function run_quiz(study_queue, config)
 					end
 				else
 					io.write(bold("Command mode ") .. dim("(? for help, Esc to skip, Enter to input): "))
-					user_input = read_line_with_esc(config)
+					user_input = read_line_with_esc(config, nil, false, config.arrow_hints)
 					if not user_input then
 						print(magenta("\nExiting quiz early."))
 						return
@@ -1825,7 +1828,7 @@ local function run_quiz(study_queue, config)
 			else
 				local help_msg = config.command_mode and "(Esc for command mode)" or "(type '/?' for help, Esc to skip)"
 				io.write(bold("Your answer ") .. dim(help_msg .. ": "))
-				user_input = read_line_with_esc(config, saved_input, config.command_mode_save_input)
+				user_input = read_line_with_esc(config, saved_input, config.command_mode_save_input, false)
 				if not user_input then
 					print(magenta("\nExiting quiz early."))
 					return

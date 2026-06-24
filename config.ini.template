@@ -57,7 +57,7 @@ command_mode_esc_toggles = true
 # Save input on mode switch (true/false)
 # - true: When switching from input to command mode with Esc, saves the typed text and restores it when returning.
 # - false: Typed text is discarded on mode switch (default).
-command_mode_save_input = true
+command_mode_save_input = false
 
 # Single-key command mode (true/false)
 # - true: In command mode, single keystrokes (a, d, ?, q, h) execute immediately without pressing Enter.
@@ -65,7 +65,7 @@ command_mode_save_input = true
 command_mode_single_key = false
 
 # Enable keyboard arrow hints (true/false)
-# - true: Up/Down/Left/Right arrow keys will dynamically reveal hints during the 'Your answer:' prompt.
+# - true: Up/Down/Left/Right arrow keys will dynamically reveal hints when in Command Mode.
 # - false: Arrow keys behave normally in the terminal (default).
 arrow_hints = false
 

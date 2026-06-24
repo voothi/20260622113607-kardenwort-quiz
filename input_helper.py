@@ -48,7 +48,7 @@ def get_key_event():
             if record.KeyEvent.bKeyDown:
                 return record.KeyEvent
 
-def read_key():
+def read_key(enable_arrows=False):
     """Read a single key, print it, exit."""
     if not sys.stdin.isatty():
         return
@@ -58,6 +58,15 @@ def read_key():
         if e.UnicodeChar != '\x00':
             print(e.UnicodeChar, end="")
             return
+        elif enable_arrows and e.wVirtualKeyCode in (0x25, 0x27, 0x26, 0x28):
+            hint_cmd = None
+            if e.wVirtualKeyCode == 0x25: hint_cmd = "/hint_left"
+            elif e.wVirtualKeyCode == 0x27: hint_cmd = "/hint_right"
+            elif e.wVirtualKeyCode == 0x28: hint_cmd = "/hint_down"
+            elif e.wVirtualKeyCode == 0x26: hint_cmd = "/hint_up"
+            if hint_cmd:
+                print(hint_cmd, end="")
+                return
         elif e.wVirtualKeyCode in (0x1B, 0x0D, 0x08): # Esc, Enter, Backspace
             return # Actually just return nothing for these in press_any_key, or handle appropriately?
             # Wait, press_any_key uses read_key which originally returned single char.
@@ -273,4 +282,4 @@ if __name__ == "__main__":
     if mode == "--line":
         read_line(enable_arrows, initial_text, save_esc)
     else:
-        read_key()
+        read_key(enable_arrows)
