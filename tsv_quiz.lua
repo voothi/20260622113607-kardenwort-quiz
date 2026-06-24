@@ -1778,7 +1778,7 @@ local function run_quiz(study_queue, config)
 				if config.options_mode_single_key then
 					local allowed = {"a", "d", "q", "?", "\r", "\n", "\x1b", "h", "/", "/hint_left", "/hint_right", "/hint_up", "/hint_down"}
 					local esc_opt = config.options_mode_esc_toggles and "'Esc' or 'Enter' to answer" or "'Esc' to skip, 'Enter' to answer"
-					local key = press_any_key(bold("Options ") .. dim("('?' for help, " .. esc_opt .. ")... "), allowed, config.arrow_hints)
+					local key = press_any_key(bold("Options ") .. dim("(press '?' for help, " .. esc_opt .. ")... "), allowed, config.arrow_hints)
 					if key == "" then
 						local line = io.read()
 						key = line and line:sub(1, 1) or ""
@@ -1819,8 +1819,8 @@ local function run_quiz(study_queue, config)
 						trimmed_input = ""
 					end
 				else
-					local esc_opt = config.options_mode_esc_toggles and "'Esc' or 'Enter' to answer" or "'Esc' to skip, 'Enter' to answer"
-					io.write(bold("Options ") .. dim("('?' for help, " .. esc_opt .. "): "))
+					local esc_opt = config.options_mode_esc_toggles and "press 'Esc' or 'Enter' to answer" or "press 'Esc' to skip, 'Enter' to answer"
+					io.write(bold("Options ") .. dim("(type '?' for help, " .. esc_opt .. "): "))
 					user_input = read_line_with_esc(config, nil, false, config.arrow_hints)
 					if not user_input then
 						print(magenta("\nExiting quiz early."))
@@ -1843,7 +1843,7 @@ local function run_quiz(study_queue, config)
 					end
 				end
 			else
-				local help_msg = config.options_mode and "(type '/?' for help, 'Esc' for options)" or "(type '/?' for help, 'Esc' to skip)"
+				local help_msg = config.options_mode and "(type '/?' for help, press 'Esc' for options)" or "(type '/?' for help, press 'Esc' to skip)"
 				io.write(bold("Your answer ") .. dim(help_msg .. ": "))
 				user_input = read_line_with_esc(config, saved_input, config.options_mode_save_input, false)
 				if not user_input then
