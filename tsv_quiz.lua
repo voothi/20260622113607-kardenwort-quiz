@@ -111,14 +111,15 @@ local function sync_forward_to_mpv(entry, config)
 	local pipe_path = config.mpv_pipe_path
 	local python_bin = config.python_cmd or "python"
 	
+	local extra_play_arg = config.mpv_play_on_sync and " --play" or ""
 	local cmd
 	if package.config:sub(1, 1) == "\\" then
 		if python_bin:find(" ") then
 			python_bin = '"' .. python_bin .. '"'
 		end
-		cmd = string.format('start "" /b %s "%s" --sync-mpv "%s" "%s" %s 2>nul', python_bin, input_helper, pipe_path, filename, timestamp)
+		cmd = string.format('start "" /b %s "%s" --sync-mpv "%s" "%s" %s%s 2>nul', python_bin, input_helper, pipe_path, filename, timestamp, extra_play_arg)
 	else
-		cmd = string.format('"%s" "%s" --sync-mpv "%s" "%s" %s >/dev/null 2>&1 &', python_bin, input_helper, pipe_path, filename, timestamp)
+		cmd = string.format('"%s" "%s" --sync-mpv "%s" "%s" %s%s >/dev/null 2>&1 &', python_bin, input_helper, pipe_path, filename, timestamp, extra_play_arg)
 	end
 	os.execute(cmd)
 end
@@ -325,6 +326,7 @@ local function load_config(filename)
 		anki_grading = false,
 		repeat_counts_in_stats = false,
 		mpv_integration = false,
+		mpv_play_on_sync = true,
 		mpv_pipe_path = package.config:sub(1, 1) == "\\" and "\\\\.\\pipe\\mpv-socket" or "/tmp/mpv-socket",
 		quiz_pipe_path = package.config:sub(1, 1) == "\\" and "\\\\.\\pipe\\kardenwort-quiz" or "/tmp/kardenwort-quiz",
 		python_cmd = "python",
@@ -450,6 +452,8 @@ local function load_config(filename)
 								config.repeat_counts_in_stats = (val == "true" or val == "1")
 							elseif key == "mpv_integration" then
 								config.mpv_integration = (val == "true" or val == "1")
+							elseif key == "mpv_play_on_sync" then
+								config.mpv_play_on_sync = (val == "true" or val == "1")
 							elseif key == "mpv_pipe_path" then
 								config.mpv_pipe_path = val
 							elseif key == "quiz_pipe_path" then

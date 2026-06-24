@@ -124,7 +124,12 @@ repeat_counts_in_stats = false
 # Enable MPV integration (true/false)
 # - true: Enable sync to and from the mpv player.
 # - false: Disable mpv integration features (default).
-mpv_integration = false
+mpv_integration = true
+
+# Auto-play/unpause the video in MPV when syncing/pressing 'y' (true/false)
+# - true: Automatically unpause and start playing the video when syncing (default).
+# - false: Only seek/load the video but do not change the pause state.
+mpv_play_on_sync = true
 
 # Path to the MPV IPC server named pipe/socket
 # - Windows Named Pipe (e.g. \\.\pipe\mpv-socket)

@@ -1703,16 +1703,25 @@ def test_input_helper_sync_mpv_flow(tmp_path, monkeypatch):
     pipe_path = "mock_pipe"
     timestamp = 12.34
 
-    success = input_helper_test.sync_mpv(pipe_path, str(tsv_file), timestamp)
+    # 1. Test with play_on_sync = False
+    success = input_helper_test.sync_mpv(pipe_path, str(tsv_file), timestamp, play_on_sync=False)
     assert success is True
 
     media_file_mpv = str(video_file).replace('\\', '/')
+    assert len(sent_commands) == 2
+    assert sent_commands[0] == {"command": ["loadfile", media_file_mpv, "replace"]}
+    assert sent_commands[1] == {"command": ["seek", timestamp, "absolute"]}
+
+    # 2. Test with play_on_sync = True
+    sent_commands.clear()
+    success = input_helper_test.sync_mpv(pipe_path, str(tsv_file), timestamp, play_on_sync=True)
+    assert success is True
     assert len(sent_commands) == 3
     assert sent_commands[0] == {"command": ["loadfile", media_file_mpv, "replace"]}
     assert sent_commands[1] == {"command": ["seek", timestamp, "absolute"]}
     assert sent_commands[2] == {"command": ["set_property", "pause", False]}
 
-    # Test same file path check
+    # Test same file path check with play_on_sync = False
     sent_commands.clear()
     received_queries.clear()
     
@@ -1721,9 +1730,16 @@ def test_input_helper_sync_mpv_flow(tmp_path, monkeypatch):
         return {"error": "success", "data": media_file_mpv}
     monkeypatch.setattr(input_helper_test, "send_receive_ipc", mock_send_receive_ipc_same)
 
-    success = input_helper_test.sync_mpv(pipe_path, str(tsv_file), timestamp)
+    success = input_helper_test.sync_mpv(pipe_path, str(tsv_file), timestamp, play_on_sync=False)
     assert success is True
 
+    assert len(sent_commands) == 1
+    assert sent_commands[0] == {"command": ["seek", timestamp, "absolute"]}
+
+    # Test same file path check with play_on_sync = True
+    sent_commands.clear()
+    success = input_helper_test.sync_mpv(pipe_path, str(tsv_file), timestamp, play_on_sync=True)
+    assert success is True
     assert len(sent_commands) == 2
     assert sent_commands[0] == {"command": ["seek", timestamp, "absolute"]}
     assert sent_commands[1] == {"command": ["set_property", "pause", False]}
@@ -1858,10 +1874,35 @@ def test_sync_forward_command_execution(quiz_env):
     
     found_sync = False
     for cmd in commands:
-        if "--sync-mpv" in cmd and "mpv-socket-test" in cmd and "330.961" in cmd:
+        if "--sync-mpv" in cmd and "mpv-socket-test" in cmd and "330.961" in cmd and "--play" in cmd:
             found_sync = True
             break
-    assert found_sync, f"Expected sync command not found in logged commands: {commands}"
+    assert found_sync, f"Expected sync command with --play not found in logged commands: {commands}"
+
+    # Also test with mpv_play_on_sync = false
+    log_file.unlink()
+    content = config_path.read_text(encoding="utf-8")
+    content = content.replace("mpv_play_on_sync = true", "mpv_play_on_sync = false")
+    if "mpv_play_on_sync = false" not in content:
+        content += "\nmpv_play_on_sync = false\n"
+    config_path.write_text(content, encoding="utf-8", newline="\n")
+
+    code, out, err = run_quiz(
+        quiz_env,
+        ["20260604184114-microsoft-just-shocked-the.en.tsv"],
+        ["y", "/q"],
+        env=test_env
+    )
+    assert code == 0
+    
+    assert log_file.exists()
+    commands = log_file.read_text(encoding="utf-8").strip().splitlines()
+    found_sync_no_play = False
+    for cmd in commands:
+        if "--sync-mpv" in cmd and "mpv-socket-test" in cmd and "330.961" in cmd and "--play" not in cmd:
+            found_sync_no_play = True
+            break
+    assert found_sync_no_play, f"Expected sync command without --play not found in logged commands: {commands}"
 
 
 def test_sync_disabled_gating(quiz_env):

@@ -318,7 +318,7 @@ def spawn_mpv(pipe_path, video_path, start_time):
         delay = min(delay * 1.5, 0.5)
     return False
 
-def sync_mpv(pipe_path, tsv_path, timestamp):
+def sync_mpv(pipe_path, tsv_path, timestamp, play_on_sync=False):
     media_file = find_media_file(tsv_path)
     if not media_file:
         print(f"Error: Could not find media file for {tsv_path}", file=sys.stderr)
@@ -329,10 +329,11 @@ def sync_mpv(pipe_path, tsv_path, timestamp):
     current_info = send_receive_ipc(pipe_path, {"command": ["get_property", "path"]})
     if current_info is None:
         spawn_mpv(pipe_path, media_file_mpv, timestamp)
-        try:
-            send_ipc_payload(pipe_path, {"command": ["set_property", "pause", False]})
-        except Exception:
-            pass
+        if play_on_sync:
+            try:
+                send_ipc_payload(pipe_path, {"command": ["set_property", "pause", False]})
+            except Exception:
+                pass
         return True
         
     is_same = False
@@ -343,18 +344,21 @@ def sync_mpv(pipe_path, tsv_path, timestamp):
     try:
         if is_same:
             send_ipc_payload(pipe_path, {"command": ["seek", timestamp, "absolute"]})
-            send_ipc_payload(pipe_path, {"command": ["set_property", "pause", False]})
+            if play_on_sync:
+                send_ipc_payload(pipe_path, {"command": ["set_property", "pause", False]})
         else:
             send_ipc_payload(pipe_path, {"command": ["loadfile", media_file_mpv, "replace"]})
             send_ipc_payload(pipe_path, {"command": ["seek", timestamp, "absolute"]})
-            send_ipc_payload(pipe_path, {"command": ["set_property", "pause", False]})
+            if play_on_sync:
+                send_ipc_payload(pipe_path, {"command": ["set_property", "pause", False]})
         return True
     except Exception:
         spawn_mpv(pipe_path, media_file_mpv, timestamp)
-        try:
-            send_ipc_payload(pipe_path, {"command": ["set_property", "pause", False]})
-        except Exception:
-            pass
+        if play_on_sync:
+            try:
+                send_ipc_payload(pipe_path, {"command": ["set_property", "pause", False]})
+            except Exception:
+                pass
         return True
 
 # Enable VT processing for CONOUT$
@@ -613,6 +617,7 @@ if __name__ == "__main__":
     quiz_pipe_path = None
     
     args = sys.argv[1:]
+    play_on_sync = "--play" in args
     i = 0
     while i < len(args):
         if args[i] == "--sync-mpv" and i + 3 < len(args):
@@ -623,7 +628,7 @@ if __name__ == "__main__":
             except ValueError:
                 timestamp = 0.0
             
-            success = sync_mpv(pipe_path, tsv_path, timestamp)
+            success = sync_mpv(pipe_path, tsv_path, timestamp, play_on_sync)
             sys.exit(0 if success else 1)
         elif args[i] in ("--key", "--line"):
             mode = args[i]
