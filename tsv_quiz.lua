@@ -239,6 +239,7 @@ local function load_config(filename)
 		start_in_options_mode = false,
 		options_mode_esc_toggles = true,
 		options_mode_save_input = false,
+		options_mode_save_options = false,
 		options_mode_single_key = false,
 		arrow_hints = false,
 		exact_length_mask = false,
@@ -327,6 +328,8 @@ local function load_config(filename)
 								config.options_mode_esc_toggles = (val == "true" or val == "1")
 							elseif key == "options_mode_save_input" then
 								config.options_mode_save_input = (val == "true" or val == "1")
+							elseif key == "options_mode_save_options" then
+								config.options_mode_save_options = (val == "true" or val == "1")
 							elseif key == "options_mode_single_key" then
 								config.options_mode_single_key = (val == "true" or val == "1")
 							elseif key == "arrow_hints" then
@@ -1721,6 +1724,7 @@ local function run_quiz(study_queue, config)
 
 		local is_options_mode = config.start_in_options_mode and config.options_mode
 		local saved_input = ""
+		local saved_options_input = ""
 
 		local function defer_current_card()
 			local deferred_entry = {}
@@ -1819,13 +1823,22 @@ local function run_quiz(study_queue, config)
 						trimmed_input = ""
 					end
 				else
+					local save_options = config.options_mode_save_options
 					local esc_opt = config.options_mode_esc_toggles and "press 'Esc' or 'Enter' to answer" or "press 'Esc' to skip, 'Enter' to answer"
 					io.write(bold("Options ") .. dim("(type '?' for help, " .. esc_opt .. "): "))
-					user_input = read_line_with_esc(config, nil, false, config.arrow_hints)
+					user_input = read_line_with_esc(config, saved_options_input, save_options, config.arrow_hints)
 					if not user_input then
 						print(magenta("\nExiting quiz early."))
 						return
 					end
+					
+					if save_options and user_input:sub(1, 1) == "\x1b" then
+						saved_options_input = user_input:sub(2)
+						user_input = "/d"
+					else
+						saved_options_input = ""
+					end
+
 					trimmed_input = user_input:gsub("^%s+", ""):gsub("%s+$", "")
 					
 					if trimmed_input == "" then
