@@ -1185,3 +1185,28 @@ def test_word_boundary_fallback(quiz_env):
     # Expected: "Die Tischdecke auf dem ___."
     assert "Die Tischdecke auf dem ___." in clean_out
 
+
+def test_options_mode_save_options(quiz_env):
+    """Test that options_mode_save_options preserves options text when switching back to answer mode."""
+    config_path = quiz_env / "config.ini"
+    content = config_path.read_text(encoding="utf-8")
+    content += "\noptions_mode = true\noptions_mode_save_input = true\noptions_mode_save_options = true\nstart_in_options_mode = true\nsingle_card_mode = true\noptions_mode_single_key = false\n"
+    config_path.write_text(content, encoding="utf-8", newline="\n")
+
+    focus_single_card(quiz_env, "20260604184114-microsoft-just-shocked-the.en.tsv", "properly")
+
+    # Start in options mode:
+    # 1. Type "h 2" and press Esc (represented as \x1bh 2) to switch to answer, saving "h 2".
+    # 2. In answer mode, press Esc (\x1b) to switch back to options.
+    # 3. Press Enter ("") to submit the restored "h 2" command.
+    # 4. Press Enter ("") again in options mode to switch back to answer mode.
+    # 5. Answer "properly" to finish.
+    code, out, err = run_quiz(
+        quiz_env,
+        ["20260604184114-microsoft-just-shocked-the.en.tsv"],
+        ["\x1bh 2", "\x1b", "", "", "properly", "/q"]
+    )
+    assert code == 0
+    clean_out = strip_ansi(out)
+    assert "💡 Hint: pr" in clean_out
+

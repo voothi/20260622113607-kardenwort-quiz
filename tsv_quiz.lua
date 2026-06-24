@@ -1699,7 +1699,11 @@ local function read_line_with_esc(config, initial_text, save_esc, use_arrows)
 			end
 		end
 	end
-	return io.read()
+	local val = io.read()
+	if val == "" and initial_text and initial_text ~= "" then
+		return initial_text
+	end
+	return val
 end
 
 -- 3. Run the interactive CLI quiz
