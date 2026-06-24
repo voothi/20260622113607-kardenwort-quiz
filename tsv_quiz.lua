@@ -5,16 +5,18 @@
 -- Shim for unit tests to intercept OS execution/commands
 if os.getenv("TEST_COMMAND_LOG") then
 	local old_execute = os.execute
-	os.execute = function(cmd)
+	rawset(os, "execute", function(cmd)
 		local log_file = os.getenv("TEST_COMMAND_LOG")
-		local f = io.open(log_file, "a")
-		if f then
-			f:write(cmd .. "\n")
-			f:close()
+		if log_file then
+			local f = io.open(log_file, "a")
+			if f then
+				f:write(cmd .. "\n")
+				f:close()
+			end
 		end
 		-- Do not actually run the command during tests to avoid launching processes
 		return true, "exit", 0
-	end
+	end)
 end
 
 local print_help
@@ -2635,6 +2637,36 @@ local function main()
 		resolved_file = resolve_lnk(resolved_file)
 		table.insert(resolved_files, resolved_file)
 	end
+
+	-- Pre-validate file extensions to avoid verbose error cascade
+	local invalid_exts = {
+		srt = "a subtitle",
+		vtt = "a subtitle",
+		mp4 = "a video",
+		mkv = "a video",
+		avi = "a video",
+		webm = "a video",
+		mov = "a video",
+		mp3 = "an audio",
+		wav = "an audio",
+		m4a = "an audio",
+		png = "an image",
+		jpg = "an image",
+		jpeg = "an image",
+		gif = "an image",
+	}
+	for _, file_path in ipairs(resolved_files) do
+		local ext = file_path:match("%.([^%.]+)$")
+		if ext then
+			local file_type = invalid_exts[ext:lower()]
+			if file_type then
+				print(bold(red("Error: ")) .. string.format("Selected file '%s' appears to be %s file (.%s). Please select a vocabulary TSV file instead.", file_path, file_type, ext:lower()))
+				return
+			end
+		end
+	end
+
+
 
 	-- Load config.ini
 	local config_path = dir .. "config.ini"

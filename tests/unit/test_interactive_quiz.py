@@ -392,11 +392,12 @@ def test_invalid_extension_error(quiz_env):
         f.write("1\n00:00:01,000 --> 00:00:04,000\nHello World\n")
     
     code, out, err = run_quiz(quiz_env, [str(srt_file)], [])
-    
-    assert "Error loading" in out
+    assert "Error: " in out
     assert "appears to be a subtitle file (.srt)" in out
     assert "Please select a vocabulary TSV file instead." in out
-    assert "No vocabulary files could be loaded." in out
+    assert "Error loading" not in out
+    assert "No vocabulary files could be loaded." not in out
+
 
 
 def test_headerless_tsv_fallback(quiz_env):
