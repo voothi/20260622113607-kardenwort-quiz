@@ -1033,14 +1033,16 @@ local function get_console_width()
 	end
 	return 119
 end
-
-local console_width = get_console_width()
+-- Default console width fallback (authoritative value is updated per-question in run_quiz)
+local console_width = 119
 
 local function tokenize_ansi_utf8(str)
 	local tokens = {}
 	local i = 1
 	local len = #str
 	while i <= len do
+		-- Note: In Lua, string.find(s, pattern, init) anchors '^' to the 'init' position i,
+		-- rather than the absolute beginning of the string, making this anchored match correct.
 		local ansi_start, ansi_end = str:find("^\27%[[%d;]*m", i)
 		if ansi_start then
 			table.insert(tokens, { type = "ansi", val = str:sub(ansi_start, ansi_end) })

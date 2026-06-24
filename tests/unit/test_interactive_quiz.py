@@ -2136,8 +2136,8 @@ def test_word_wrap_extreme_length(quiz_env):
     # 'A' * 119 on the first line, and 'A' * 11 on the second line.
     first_part = "A" * 119
     second_part = "A" * 11
-    assert first_part in clean_out
-    assert second_part in clean_out
+    # Verify the split happens at the right boundary on the same line sequence
+    assert f"{first_part}\n{second_part}" in clean_out
 
 
 
