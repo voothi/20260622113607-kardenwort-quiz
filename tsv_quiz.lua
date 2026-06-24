@@ -1777,7 +1777,7 @@ local function run_quiz(study_queue, config)
 			if config.command_mode and is_command_mode then
 				if config.command_mode_single_key then
 					local allowed = {"a", "d", "q", "?", "\r", "\n", "\x1b", "h", "/", "/hint_left", "/hint_right", "/hint_up", "/hint_down"}
-					local key = press_any_key(bold("Command mode ") .. dim("(? for help, Esc to skip, Enter to input) > "), allowed, config.arrow_hints)
+					local key = press_any_key(bold("Command mode ") .. dim("(? for help, Esc to skip, Enter to input)... "), allowed, config.arrow_hints)
 					if key == "" then
 						local line = io.read()
 						key = line and line:sub(1, 1) or ""
