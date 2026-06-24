@@ -1186,20 +1186,20 @@ def test_word_boundary_fallback(quiz_env):
     assert "Die Tischdecke auf dem ___." in clean_out
 
 
-def test_options_mode_save_options(quiz_env):
-    """Test that options_mode_save_options preserves options text when switching back to answer mode."""
+def test_command_mode_save_command(quiz_env):
+    """Test that command_mode_save_command preserves command text when switching back to answer mode."""
     config_path = quiz_env / "config.ini"
     content = config_path.read_text(encoding="utf-8")
-    content += "\noptions_mode = true\noptions_mode_save_input = true\noptions_mode_save_options = true\nstart_in_options_mode = true\nsingle_card_mode = true\noptions_mode_single_key = false\n"
+    content += "\ncommand_mode = true\ncommand_mode_save_input = true\ncommand_mode_save_command = true\nstart_in_command_mode = true\nsingle_card_mode = true\ncommand_mode_single_key = false\n"
     config_path.write_text(content, encoding="utf-8", newline="\n")
 
     focus_single_card(quiz_env, "20260604184114-microsoft-just-shocked-the.en.tsv", "properly")
 
-    # Start in options mode:
+    # Start in command mode:
     # 1. Type "h 2" and press Esc (represented as \x1bh 2) to switch to answer, saving "h 2".
-    # 2. In answer mode, press Esc (\x1b) to switch back to options.
+    # 2. In answer mode, press Esc (\x1b) to switch back to command.
     # 3. Press Enter ("") to submit the restored "h 2" command.
-    # 4. Press Enter ("") again in options mode to switch back to answer mode.
+    # 4. Press Enter ("") again in command mode to switch back to answer mode.
     # 5. Answer "properly" to finish.
     code, out, err = run_quiz(
         quiz_env,
@@ -1211,11 +1211,11 @@ def test_options_mode_save_options(quiz_env):
     assert "💡 Hint: pr" in clean_out
 
 
-def test_options_mode_esc_skip_no_toggle(quiz_env):
-    """Test that Esc in Command mode skips the card when options_mode_esc_toggles=false."""
+def test_command_mode_esc_skip_no_toggle(quiz_env):
+    """Test that Esc in Command mode skips the card when command_mode_esc_toggles=false."""
     config_path = quiz_env / "config.ini"
     content = config_path.read_text(encoding="utf-8")
-    content += "\noptions_mode = true\noptions_mode_esc_toggles = false\nstart_in_options_mode = true\noptions_mode_single_key = false\n"
+    content += "\ncommand_mode = true\ncommand_mode_esc_toggles = false\nstart_in_command_mode = true\ncommand_mode_single_key = false\n"
     config_path.write_text(content, encoding="utf-8", newline="\n")
 
     focus_single_card(quiz_env, "20260604184114-microsoft-just-shocked-the.en.tsv", "properly")
@@ -1233,27 +1233,27 @@ def test_options_mode_esc_skip_no_toggle(quiz_env):
     assert "Skipping card..." in clean_out
 
 
-def test_options_mode_esc_save_no_toggle_skips(quiz_env):
-    """Test that Esc in Command mode skips the card even when save_options=true and esc_toggles=false.
+def test_command_mode_esc_save_no_toggle_skips(quiz_env):
+    """Test that Esc in Command mode skips the card even when save_command=true and esc_toggles=false.
 
-    Regression test for: when save_options=true, Esc was converted to /d internally but the
+    Regression test for: when save_command=true, Esc was converted to /d internally but the
     esc_toggles=false guard caused it to be silently swallowed — card was never skipped.
     """
     config_path = quiz_env / "config.ini"
     content = config_path.read_text(encoding="utf-8")
     content += (
-        "\noptions_mode = true"
-        "\noptions_mode_esc_toggles = false"
-        "\noptions_mode_save_options = true"
-        "\nstart_in_options_mode = true"
-        "\noptions_mode_single_key = false\n"
+        "\ncommand_mode = true"
+        "\ncommand_mode_esc_toggles = false"
+        "\ncommand_mode_save_command = true"
+        "\nstart_in_command_mode = true"
+        "\ncommand_mode_single_key = false\n"
     )
     config_path.write_text(content, encoding="utf-8", newline="\n")
 
     focus_single_card(quiz_env, "20260604184114-microsoft-just-shocked-the.en.tsv", "properly")
     focus_single_card(quiz_env, "20260303214721-text1.de.tsv", "Absätze")
 
-    # In Command mode (start_in_options_mode=true):
+    # In Command mode (start_in_command_mode=true):
     # Send \x1b prefix to simulate Esc-with-save, which should skip the card.
     # If the bug is present, the quiz loops back to Command and times out.
     code, out, err = run_quiz(
@@ -1266,11 +1266,11 @@ def test_options_mode_esc_save_no_toggle_skips(quiz_env):
     assert "Skipping card..." in clean_out
 
 
-def test_start_in_options_mode(quiz_env):
-    """Test that start_in_options_mode=true begins the card in Command mode, not Answer mode."""
+def test_start_in_command_mode(quiz_env):
+    """Test that start_in_command_mode=true begins the card in Command mode, not Answer mode."""
     config_path = quiz_env / "config.ini"
     content = config_path.read_text(encoding="utf-8")
-    content += "\noptions_mode = true\nstart_in_options_mode = true\noptions_mode_single_key = false\n"
+    content += "\ncommand_mode = true\nstart_in_command_mode = true\ncommand_mode_single_key = false\n"
     config_path.write_text(content, encoding="utf-8", newline="\n")
 
     focus_single_card(quiz_env, "20260604184114-microsoft-just-shocked-the.en.tsv", "properly")
@@ -1293,11 +1293,11 @@ def test_start_in_options_mode(quiz_env):
     assert "Diff" in clean_out
 
 
-def test_options_mode_single_key(quiz_env):
-    """Test that options_mode_single_key=true dispatches commands on single keypresses."""
+def test_command_mode_single_key(quiz_env):
+    """Test that command_mode_single_key=true dispatches commands on single keypresses."""
     config_path = quiz_env / "config.ini"
     content = config_path.read_text(encoding="utf-8")
-    content += "\noptions_mode = true\nstart_in_options_mode = true\noptions_mode_single_key = true\n"
+    content += "\ncommand_mode = true\nstart_in_command_mode = true\ncommand_mode_single_key = true\n"
     config_path.write_text(content, encoding="utf-8", newline="\n")
 
     focus_single_card(quiz_env, "20260604184114-microsoft-just-shocked-the.en.tsv", "properly")
