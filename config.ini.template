@@ -121,6 +121,25 @@ anki_grading = true
 # - false: Repeated cards do not affect your score or progress (default).
 repeat_counts_in_stats = false
 
+# Enable MPV integration (true/false)
+# - true: Enable sync to and from the mpv player.
+# - false: Disable mpv integration features (default).
+mpv_integration = false
+
+# Path to the MPV IPC server named pipe/socket
+# - Windows Named Pipe (e.g. \\.\pipe\mpv-socket)
+# - Unix socket path (e.g. /tmp/mpv-socket)
+mpv_pipe_path = \\.\pipe\mpv-socket
+
+# Path to the reverse IPC named pipe/socket hosted by input_helper.py
+# - Windows Named Pipe (e.g. \\.\pipe\kardenwort-quiz)
+# - Unix socket path (e.g. /tmp/kardenwort-quiz)
+quiz_pipe_path = \\.\pipe\kardenwort-quiz
+
+# Python command or executable name/path (e.g., python, py, or full path to virtual env)
+# Used when spawning background subprocesses.
+python_cmd = python
+
 [fields]
 # Ordered list of headers for headerless files
 Quotation

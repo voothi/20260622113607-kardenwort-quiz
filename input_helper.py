@@ -178,31 +178,60 @@ def send_receive_ipc(pipe_path, command_dict, timeout=1.0):
             kernel32.CloseHandle(handle)
             return None
             
-        time.sleep(0.02)
-        avail = wintypes.DWORD(0)
-        kernel32.PeekNamedPipe(handle, None, 0, None, ctypes.byref(avail), None)
-        
-        response = b""
-        if avail.value > 0:
-            buf = ctypes.create_string_buffer(avail.value)
-            read = wintypes.DWORD(0)
-            kernel32.ReadFile(handle, buf, avail.value, ctypes.byref(read), None)
-            response = buf.raw[:read.value]
+        start_time = time.time()
+        response_bytes = b""
+        while True:
+            if time.time() - start_time > timeout:
+                break
+            avail = wintypes.DWORD(0)
+            if not kernel32.PeekNamedPipe(handle, None, 0, None, ctypes.byref(avail), None):
+                break
+            if avail.value > 0:
+                buf = ctypes.create_string_buffer(avail.value)
+                read = wintypes.DWORD(0)
+                if kernel32.ReadFile(handle, buf, avail.value, ctypes.byref(read), None):
+                    response_bytes += buf.raw[:read.value]
+                    if b"\n" in response_bytes:
+                        break
+            time.sleep(0.01)
             
         kernel32.CloseHandle(handle)
-        try:
-            return json.loads(response.decode('utf-8').strip())
-        except Exception:
+        if not response_bytes:
             return None
+        for line in response_bytes.decode('utf-8', errors='ignore').split('\n'):
+            line = line.strip()
+            if line:
+                try:
+                    return json.loads(line)
+                except Exception:
+                    pass
+        return None
     else:
         s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
         s.settimeout(timeout)
         try:
             s.connect(pipe_path)
             s.sendall(payload)
-            response = s.recv(4096)
+            response = b""
+            start_time = time.time()
+            while True:
+                if time.time() - start_time > timeout:
+                    break
+                chunk = s.recv(4096)
+                if not chunk:
+                    break
+                response += chunk
+                if b"\n" in response:
+                    break
             s.close()
-            return json.loads(response.decode('utf-8').strip())
+            for line in response.decode('utf-8', errors='ignore').split('\n'):
+                line = line.strip()
+                if line:
+                    try:
+                        return json.loads(line)
+                    except Exception:
+                        pass
+            return None
         except Exception:
             return None
 
@@ -295,6 +324,35 @@ def spawn_mpv(pipe_path, video_path, start_time):
             pass
         delay = min(delay * 1.5, 0.5)
     return False
+
+def sync_mpv(pipe_path, tsv_path, timestamp):
+    media_file = find_media_file(tsv_path)
+    if not media_file:
+        print(f"Error: Could not find media file for {tsv_path}", file=sys.stderr)
+        return False
+        
+    media_file_mpv = media_file.replace('\\', '/')
+    
+    current_info = send_receive_ipc(pipe_path, {"command": ["get_property", "path"]})
+    if current_info is None:
+        spawn_mpv(pipe_path, media_file_mpv, timestamp)
+        return True
+        
+    is_same = False
+    if isinstance(current_info, dict) and current_info.get("error") == "success":
+        current_path = current_info.get("data")
+        is_same = paths_are_equal(current_path, media_file_mpv)
+        
+    try:
+        if is_same:
+            send_ipc_payload(pipe_path, {"command": ["seek", timestamp, "absolute"]})
+        else:
+            send_ipc_payload(pipe_path, {"command": ["loadfile", media_file_mpv, "replace"]})
+            send_ipc_payload(pipe_path, {"command": ["seek", timestamp, "absolute"]})
+        return True
+    except Exception:
+        spawn_mpv(pipe_path, media_file_mpv, timestamp)
+        return True
 
 # Enable VT processing for CONOUT$
 mode = wintypes.DWORD()
@@ -548,20 +606,13 @@ if __name__ == "__main__":
     swap_arrows = False
     save_esc = False
     initial_text = ""
+    mpv_integration = False
+    quiz_pipe_path = None
     
     args = sys.argv[1:]
     i = 0
     while i < len(args):
-        if args[i] == "--send-mpv" and i + 2 < len(args):
-            pipe_path = args[i + 1]
-            payload_str = args[i + 2]
-            try:
-                payload = json.loads(payload_str)
-                send_ipc_payload(pipe_path, payload)
-            except Exception as e:
-                print(f"Error: {e}", file=sys.stderr)
-            sys.exit(0)
-        elif args[i] == "--sync-mpv" and i + 3 < len(args):
+        if args[i] == "--sync-mpv" and i + 3 < len(args):
             pipe_path = args[i + 1]
             tsv_path = args[i + 2]
             try:
@@ -569,27 +620,8 @@ if __name__ == "__main__":
             except ValueError:
                 timestamp = 0.0
             
-            media_file = find_media_file(tsv_path)
-            if not media_file:
-                print(f"Error: Could not find media file for {tsv_path}", file=sys.stderr)
-                sys.exit(1)
-                
-            media_file_mpv = media_file.replace('\\', '/')
-            try:
-                current_info = send_receive_ipc(pipe_path, {"command": ["get_property", "path"]})
-                is_same = False
-                if current_info and isinstance(current_info, dict) and current_info.get("error") == "success":
-                    current_path = current_info.get("data")
-                    is_same = paths_are_equal(current_path, media_file_mpv)
-                    
-                if is_same:
-                    send_ipc_payload(pipe_path, {"command": ["seek", timestamp, "absolute"]})
-                else:
-                    send_ipc_payload(pipe_path, {"command": ["loadfile", media_file_mpv, "replace"]})
-                    send_ipc_payload(pipe_path, {"command": ["seek", timestamp, "absolute"]})
-            except Exception:
-                spawn_mpv(pipe_path, media_file_mpv, timestamp)
-            sys.exit(0)
+            success = sync_mpv(pipe_path, tsv_path, timestamp)
+            sys.exit(0 if success else 1)
         elif args[i] in ("--key", "--line"):
             mode = args[i]
         elif args[i] == "--arrows":
@@ -602,19 +634,26 @@ if __name__ == "__main__":
         elif args[i] == "--initial" and i + 1 < len(args):
             initial_text = args[i + 1]
             i += 1
+        elif args[i] == "--mpv-integration":
+            mpv_integration = True
+        elif args[i] == "--quiz-pipe-path" and i + 1 < len(args):
+            quiz_pipe_path = args[i + 1]
+            i += 1
         i += 1
 
-    # Start reverse IPC listener thread (Windows Named Pipe or Unix Socket)
-    if sys.platform == 'win32':
-        pipe_addr = r'\\.\pipe\kardenwort-quiz'
-        family = 'AF_PIPE'
-    else:
-        pipe_addr = '/tmp/kardenwort-quiz'
-        family = 'AF_UNIX'
+    if mpv_integration:
+        # Start reverse IPC listener thread (Windows Named Pipe or Unix Socket)
+        if not quiz_pipe_path:
+            if sys.platform == 'win32':
+                quiz_pipe_path = r'\\.\pipe\kardenwort-quiz'
+            else:
+                quiz_pipe_path = '/tmp/kardenwort-quiz'
+                
+        family = 'AF_PIPE' if sys.platform == 'win32' and quiz_pipe_path.startswith('\\\\.\\pipe\\') else 'AF_UNIX'
         
-    t = threading.Thread(target=run_ipc_server_thread, args=(pipe_addr, family))
-    t.daemon = True
-    t.start()
+        t = threading.Thread(target=run_ipc_server_thread, args=(quiz_pipe_path, family))
+        t.daemon = True
+        t.start()
 
     if mode == "--line":
         read_line(enable_arrows, initial_text, save_esc, swap_arrows)

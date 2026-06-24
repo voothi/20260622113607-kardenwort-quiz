@@ -261,6 +261,19 @@ You can also pass multiple files at once to consolidate all vocabulary into a si
 lua tsv_quiz.lua vocab1.tsv vocab2.tsv
 ```
 
+### 4. MPV Integration
+The TSV Quiz features bidirectional integration with the MPV media player for context synchronization.
+
+1. **Gating & Enabling**: Set `mpv_integration = true` in `config.ini` under the `[Leitner]` section.
+2. **Forward Sync (Quiz ➔ MPV)**: Press `p` in command mode (or type `/p` or `/sync_forward`) to launch `mpv` with the corresponding video file and seek to the card's exact timestamp.
+3. **Backward Sync (MPV ➔ Quiz)**: A backward trigger sends commands via named pipe to focus and jump to the card closest to the current video timestamp.
+
+#### Configuration Options in `config.ini`:
+- `mpv_integration`: Enable/disable integration features (`true`/`false`).
+- `mpv_pipe_path`: The named pipe or socket path of the MPV IPC server (default: `\\.\pipe\mpv-socket`).
+- `quiz_pipe_path`: The reverse listener named pipe or socket path (default: `\\.\pipe\kardenwort-quiz`).
+- `python_cmd`: The python execution command or binary name/path (default: `python`).
+
 [Return to Top](#kardenwort-tsv-quiz)
 
 ## Kardenwort Ecosystem

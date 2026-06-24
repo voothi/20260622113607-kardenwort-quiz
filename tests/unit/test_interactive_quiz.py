@@ -92,7 +92,7 @@ def focus_single_card(quiz_env, tsv_name, target_word):
         
     tsv_path.write_text("\n".join(new_lines) + "\n", encoding="utf-8", newline="\n")
 
-def run_quiz(env_dir, args, inputs):
+def run_quiz(env_dir, args, inputs, env=None):
     cmd = ["lua", "tsv_quiz.lua"] + args
     
     # Run the process
@@ -103,7 +103,8 @@ def run_quiz(env_dir, args, inputs):
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
         text=True,
-        encoding="utf-8"
+        encoding="utf-8",
+        env=env
     )
     
     # Provide inputs and get output
@@ -1648,7 +1649,7 @@ def test_input_helper_media_resolution(tmp_path):
 
 
 def test_input_helper_sync_mpv_flow(tmp_path, monkeypatch):
-    """Test the full --sync-mpv execution path inside input_helper.py."""
+    """Test the full sync_mpv execution path inside input_helper.py."""
     import importlib.util
     import shutil
     shutil.copy2(Path(__file__).parent.parent.parent / "input_helper.py", tmp_path / "input_helper.py")
@@ -1663,7 +1664,6 @@ def test_input_helper_sync_mpv_flow(tmp_path, monkeypatch):
 
     sent_commands = []
     received_queries = []
-    spawned_mpv_args = []
 
     def mock_send_ipc_payload(pipe, cmd):
         sent_commands.append(cmd)
@@ -1672,33 +1672,16 @@ def test_input_helper_sync_mpv_flow(tmp_path, monkeypatch):
         received_queries.append(cmd)
         return {"error": "success", "data": "other.mp4"}
 
-    def mock_spawn_mpv(pipe, path, start_time):
-        spawned_mpv_args.append((pipe, path, start_time))
-        return True
-
     monkeypatch.setattr(input_helper_test, "send_ipc_payload", mock_send_ipc_payload)
     monkeypatch.setattr(input_helper_test, "send_receive_ipc", mock_send_receive_ipc)
-    monkeypatch.setattr(input_helper_test, "spawn_mpv", mock_spawn_mpv)
 
     pipe_path = "mock_pipe"
     timestamp = 12.34
 
-    media_file = input_helper_test.find_media_file(str(tsv_file))
-    assert media_file is not None
-    
-    media_file_mpv = media_file.replace('\\', '/')
-    current_info = input_helper_test.send_receive_ipc(pipe_path, {"command": ["get_property", "path"]})
-    is_same = False
-    if current_info and isinstance(current_info, dict) and current_info.get("error") == "success":
-        current_path = current_info.get("data")
-        is_same = input_helper_test.paths_are_equal(current_path, media_file_mpv)
-        
-    if is_same:
-        input_helper_test.send_ipc_payload(pipe_path, {"command": ["seek", timestamp, "absolute"]})
-    else:
-        input_helper_test.send_ipc_payload(pipe_path, {"command": ["loadfile", media_file_mpv, "replace"]})
-        input_helper_test.send_ipc_payload(pipe_path, {"command": ["seek", timestamp, "absolute"]})
+    success = input_helper_test.sync_mpv(pipe_path, str(tsv_file), timestamp)
+    assert success is True
 
+    media_file_mpv = str(video_file).replace('\\', '/')
     assert len(sent_commands) == 2
     assert sent_commands[0] == {"command": ["loadfile", media_file_mpv, "replace"]}
     assert sent_commands[1] == {"command": ["seek", timestamp, "absolute"]}
@@ -1712,24 +1695,15 @@ def test_input_helper_sync_mpv_flow(tmp_path, monkeypatch):
         return {"error": "success", "data": media_file_mpv}
     monkeypatch.setattr(input_helper_test, "send_receive_ipc", mock_send_receive_ipc_same)
 
-    current_info = input_helper_test.send_receive_ipc(pipe_path, {"command": ["get_property", "path"]})
-    is_same = False
-    if current_info and isinstance(current_info, dict) and current_info.get("error") == "success":
-        current_path = current_info.get("data")
-        is_same = input_helper_test.paths_are_equal(current_path, media_file_mpv)
-        
-    if is_same:
-        input_helper_test.send_ipc_payload(pipe_path, {"command": ["seek", timestamp, "absolute"]})
-    else:
-        input_helper_test.send_ipc_payload(pipe_path, {"command": ["loadfile", media_file_mpv, "replace"]})
-        input_helper_test.send_ipc_payload(pipe_path, {"command": ["seek", timestamp, "absolute"]})
+    success = input_helper_test.sync_mpv(pipe_path, str(tsv_file), timestamp)
+    assert success is True
 
     assert len(sent_commands) == 1
     assert sent_commands[0] == {"command": ["seek", timestamp, "absolute"]}
 
 
 def test_input_helper_sync_mpv_spawn_fallback(tmp_path, monkeypatch):
-    """Test that if connection fails, spawn_mpv is called."""
+    """Test that if connection fails (send_receive_ipc returns None), spawn_mpv is called."""
     import importlib.util
     import shutil
     shutil.copy2(Path(__file__).parent.parent.parent / "input_helper.py", tmp_path / "input_helper.py")
@@ -1744,28 +1718,126 @@ def test_input_helper_sync_mpv_spawn_fallback(tmp_path, monkeypatch):
 
     spawned_mpv_args = []
 
-    def mock_send_receive_ipc_fail(pipe, cmd):
-        raise Exception("Connection failed")
+    def mock_send_receive_ipc_none(pipe, cmd):
+        return None
 
     def mock_spawn_mpv(pipe, path, start_time):
         spawned_mpv_args.append((pipe, path, start_time))
         return True
 
-    monkeypatch.setattr(input_helper_test, "send_receive_ipc", mock_send_receive_ipc_fail)
+    monkeypatch.setattr(input_helper_test, "send_receive_ipc", mock_send_receive_ipc_none)
     monkeypatch.setattr(input_helper_test, "spawn_mpv", mock_spawn_mpv)
 
     pipe_path = "mock_pipe"
     timestamp = 12.34
-    media_file = input_helper_test.find_media_file(str(tsv_file))
-    media_file_mpv = media_file.replace('\\', '/')
+    media_file_mpv = str(video_file).replace('\\', '/')
 
-    try:
-        current_info = input_helper_test.send_receive_ipc(pipe_path, {"command": ["get_property", "path"]})
-    except Exception:
-        input_helper_test.spawn_mpv(pipe_path, media_file_mpv, timestamp)
+    success = input_helper_test.sync_mpv(pipe_path, str(tsv_file), timestamp)
+    assert success is True
 
     assert len(spawned_mpv_args) == 1
     assert spawned_mpv_args[0] == (pipe_path, media_file_mpv, timestamp)
+
+
+def test_input_helper_reverse_ipc_server(tmp_path):
+    """Test the reverse IPC listener thread in input_helper.py using multiprocessing.connection."""
+    import importlib.util
+    import shutil
+    from multiprocessing.connection import Client
+    import time
+    import sys
+    
+    shutil.copy2(Path(__file__).parent.parent.parent / "input_helper.py", tmp_path / "input_helper.py")
+    spec = importlib.util.spec_from_file_location("input_helper_test", str(tmp_path / "input_helper.py"))
+    input_helper_test = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(input_helper_test)
+
+    if sys.platform == 'win32':
+        address = r'\\.\pipe\kardenwort-quiz-test'
+        family = 'AF_PIPE'
+    else:
+        address = str(tmp_path / 'kardenwort-quiz-test')
+        family = 'AF_UNIX'
+
+    woken_up = []
+    def mock_wake_up():
+        woken_up.append(True)
+    input_helper_test.wake_up_main_thread = mock_wake_up
+
+    import threading
+    t = threading.Thread(target=input_helper_test.run_ipc_server_thread, args=(address, family))
+    t.daemon = True
+    t.start()
+    time.sleep(0.1)
+
+    test_msg = {"zid": "20260624170848", "time": "45.67"}
+    conn = Client(address, family=family)
+    conn.send(test_msg)
+    conn.close()
+
+    for _ in range(20):
+        if not input_helper_test.sync_event_queue.empty():
+            break
+        time.sleep(0.05)
+
+    assert not input_helper_test.sync_event_queue.empty()
+    received = input_helper_test.sync_event_queue.get()
+    assert received == test_msg
+    assert len(woken_up) == 1
+
+
+def test_sync_forward_command_execution(quiz_env):
+    """Test that pressing 'p' (forward sync) executes the correct Python background command when enabled."""
+    config_path = quiz_env / "config.ini"
+    content = config_path.read_text(encoding="utf-8")
+    content += "\nmpv_integration = true\nmpv_pipe_path = \\\\.\\pipe\\mpv-socket-test\ncommand_mode = true\nstart_in_command_mode = true\n"
+    config_path.write_text(content, encoding="utf-8", newline="\n")
+
+    log_file = quiz_env / "command_log.txt"
+    
+    import os
+    test_env = os.environ.copy()
+    test_env["TEST_COMMAND_LOG"] = str(log_file)
+
+    focus_single_card(quiz_env, "20260604184114-microsoft-just-shocked-the.en.tsv", "properly")
+
+    code, out, err = run_quiz(
+        quiz_env,
+        ["20260604184114-microsoft-just-shocked-the.en.tsv"],
+        ["p", "/q"],
+        env=test_env
+    )
+    assert code == 0
+    
+    assert log_file.exists()
+    commands = log_file.read_text(encoding="utf-8").strip().splitlines()
+    assert len(commands) > 0
+    
+    found_sync = False
+    for cmd in commands:
+        if "--sync-mpv" in cmd and "mpv-socket-test" in cmd and "330.961" in cmd:
+            found_sync = True
+            break
+    assert found_sync, f"Expected sync command not found in logged commands: {commands}"
+
+
+def test_sync_disabled_gating(quiz_env):
+    """Test that manual commands and hotkeys display a disabled warning when mpv_integration = false."""
+    config_path = quiz_env / "config.ini"
+    content = config_path.read_text(encoding="utf-8")
+    content += "\nmpv_integration = false\ncommand_mode = true\nstart_in_command_mode = true\n"
+    config_path.write_text(content, encoding="utf-8", newline="\n")
+
+    focus_single_card(quiz_env, "20260604184114-microsoft-just-shocked-the.en.tsv", "properly")
+
+    code, out, err = run_quiz(
+        quiz_env,
+        ["20260604184114-microsoft-just-shocked-the.en.tsv"],
+        ["/sync_forward", "/sync 20260604184114 12.3", "p", "/q"]
+    )
+    assert code == 0
+    clean_out = strip_ansi(out)
+    assert clean_out.count("MPV Integration is disabled in config.ini") >= 3
 
 
 

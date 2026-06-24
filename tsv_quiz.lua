@@ -2,9 +2,25 @@
 -- A command-line utility to parse vocabulary from a TSV file and run a study quiz.
 -- Demonstrates core Lua concepts: File I/O, tables, loops, string parsing, and interactive console input.
 
+-- Shim for unit tests to intercept OS execution/commands
+if os.getenv("TEST_COMMAND_LOG") then
+	local old_execute = os.execute
+	os.execute = function(cmd)
+		local log_file = os.getenv("TEST_COMMAND_LOG")
+		local f = io.open(log_file, "a")
+		if f then
+			f:write(cmd .. "\n")
+			f:close()
+		end
+		-- Do not actually run the command during tests to avoid launching processes
+		return true, "exit", 0
+	end
+end
+
 local print_help
 local print_interactive_help
 local master_vocab = {}
+local active_config = nil
 
 -- Resolve directory of the running script for helper lookups
 local _script_dir = (arg[0] or ""):match("(.*[/\\])") or ""
@@ -18,23 +34,6 @@ local function parse_zid_and_lang(filepath)
 		lang = lang:gsub("_", "-"):lower()
 	end
 	return zid, lang
-end
-
-local function sync_forward_to_mpv(entry)
-	local filename = entry.filename
-	local timestamp = entry.source_index or "0.0"
-	local pipe_path = "\\\\.\\pipe\\mpv-socket"
-	if package.config:sub(1, 1) ~= "\\" then
-		pipe_path = "/tmp/mpv-socket"
-	end
-	
-	local cmd
-	if package.config:sub(1, 1) == "\\" then
-		cmd = string.format('start "" /b python "%s" --sync-mpv "%s" "%s" %s 2>nul', input_helper, pipe_path, filename, timestamp)
-	else
-		cmd = string.format('python "%s" --sync-mpv "%s" "%s" %s >/dev/null 2>&1 &', input_helper, pipe_path, filename, timestamp)
-	end
-	os.execute(cmd)
 end
 
 -- 1. Helper function to split a string by a delimiter (tab), preserving empty columns
@@ -80,6 +79,46 @@ end
 
 local function invert(text)
 	return c("7", text)
+end
+
+local function get_helper_cmd_prefix(mode)
+	local python_bin = "python"
+	local extra_args = ""
+	if active_config then
+		python_bin = active_config.python_cmd or "python"
+		if active_config.mpv_integration then
+			extra_args = " --mpv-integration"
+			if active_config.quiz_pipe_path and active_config.quiz_pipe_path ~= "" then
+				extra_args = extra_args .. string.format(' --quiz-pipe-path "%s"', active_config.quiz_pipe_path)
+			end
+		end
+	end
+	if python_bin:find(" ") then
+		python_bin = '"' .. python_bin .. '"'
+	end
+	return string.format('%s "%s" %s%s', python_bin, input_helper, mode, extra_args)
+end
+
+local function sync_forward_to_mpv(entry, config)
+	if not config or not config.mpv_integration then
+		print(bold(red("MPV Integration is disabled in config.ini.")))
+		return
+	end
+	local filename = entry.filename
+	local timestamp = entry.timestamp or entry.source_index or "0.0"
+	local pipe_path = config.mpv_pipe_path
+	local python_bin = config.python_cmd or "python"
+	
+	local cmd
+	if package.config:sub(1, 1) == "\\" then
+		if python_bin:find(" ") then
+			python_bin = '"' .. python_bin .. '"'
+		end
+		cmd = string.format('start "" /b %s "%s" --sync-mpv "%s" "%s" %s 2>nul', python_bin, input_helper, pipe_path, filename, timestamp)
+	else
+		cmd = string.format('"%s" "%s" --sync-mpv "%s" "%s" %s >/dev/null 2>&1 &', python_bin, input_helper, pipe_path, filename, timestamp)
+	end
+	os.execute(cmd)
 end
 
 -- UTF-8 Safe string helpers
@@ -218,7 +257,12 @@ local function press_any_key(prompt, allowed_keys, use_arrows)
 			elseif use_arrows then
 				arrow_arg = " --arrows"
 			end
-			local f = io.popen(string.format('python "%s" --key%s 2>nul', input_helper, arrow_arg))
+			local prefix = get_helper_cmd_prefix("--key")
+			local cmd = string.format('%s%s 2>nul', prefix, arrow_arg)
+			if cmd:sub(1, 1) == '"' then
+				cmd = '"' .. cmd .. '"'
+			end
+			local f = io.popen(cmd)
 			if f then
 				key = f:read("*a")
 				f:close()
@@ -278,6 +322,10 @@ local function load_config(filename)
 		diff_inverted_colors = false,
 		anki_grading = false,
 		repeat_counts_in_stats = false,
+		mpv_integration = false,
+		mpv_pipe_path = package.config:sub(1, 1) == "\\" and "\\\\.\\pipe\\mpv-socket" or "/tmp/mpv-socket",
+		quiz_pipe_path = package.config:sub(1, 1) == "\\" and "\\\\.\\pipe\\kardenwort-quiz" or "/tmp/kardenwort-quiz",
+		python_cmd = "python",
 		fields = {},
 		fields_mapping_word = {},
 		fields_mapping_sentence = {},
@@ -398,6 +446,14 @@ local function load_config(filename)
 								config.anki_grading = (val == "true" or val == "1")
 							elseif key == "repeat_counts_in_stats" then
 								config.repeat_counts_in_stats = (val == "true" or val == "1")
+							elseif key == "mpv_integration" then
+								config.mpv_integration = (val == "true" or val == "1")
+							elseif key == "mpv_pipe_path" then
+								config.mpv_pipe_path = val
+							elseif key == "quiz_pipe_path" then
+								config.quiz_pipe_path = val
+							elseif key == "python_cmd" then
+								config.python_cmd = val
 							end
 						elseif current_section == "fields_mapping.word" then
 							config.fields_mapping_word[key] = val
@@ -724,12 +780,22 @@ local function load_tsv(filename, config)
 					end
 				end
 
+				local note_idx = found_cols["Note"]
+				local note_val = nil
+				if note_idx then
+					local raw_note = columns[note_idx]
+					if raw_note and raw_note ~= "" then
+						note_val = raw_note
+					end
+				end
+
 				table.insert(vocabulary, {
 					word = final_word,
 					context = final_context,
 					box = box_val,
 					due = due_val,
 					source_index = source_idx_val,
+					timestamp = note_val,
 					raw_columns = columns,
 				})
 			end
@@ -1750,7 +1816,12 @@ local function read_line_with_esc(config, initial_text, save_esc, use_arrows)
 			local escaped_initial = initial_text:gsub('"', '\\"')
 			initial_arg = string.format(' --initial "%s"', escaped_initial)
 		end
-		local f = io.popen(string.format('python "%s" --line%s%s%s 2>nul', input_helper, arrow_arg, save_esc_arg, initial_arg))
+		local prefix = get_helper_cmd_prefix("--line")
+		local cmd = string.format('%s%s%s%s 2>nul', prefix, arrow_arg, save_esc_arg, initial_arg)
+		if cmd:sub(1, 1) == '"' then
+			cmd = '"' .. cmd .. '"'
+		end
+		local f = io.popen(cmd)
 		if f then
 			local res = f:read("*a")
 			f:close()
@@ -2059,37 +2130,41 @@ local function run_quiz(study_queue, config)
 						defer_current_card()
 						break
 					elseif lower_cmd == "p" or lower_cmd == "sync_forward" then
-						sync_forward_to_mpv(entry)
+						sync_forward_to_mpv(entry, config)
 					elseif lower_cmd:match("^sync%s+") or lower_cmd == "sync" then
-						local zid, timestamp_str = cmd_body:match("^sync%s+(%d+)%s+([%d%.]+)")
-						if zid then
-							local timestamp = tonumber(timestamp_str) or 0.0
-							local best_entry = nil
-							local min_diff = math.huge
-							
-							for _, e in ipairs(master_vocab) do
-								local e_filename = e.filename:match("([^/\\]+)$") or e.filename
-								if e_filename:find(zid, 1, true) then
-									local e_time = tonumber(e.source_index) or 0.0
-									local diff = math.abs(e_time - timestamp)
-									if diff < min_diff then
-										min_diff = diff
-										best_entry = e
+						if not config.mpv_integration then
+							print(bold(red("MPV Integration is disabled in config.ini.")))
+						else
+							local zid, timestamp_str = cmd_body:match("^sync%s+(%d+)%s+([%d%.]+)")
+							if zid then
+								local timestamp = tonumber(timestamp_str) or 0.0
+								local best_entry = nil
+								local min_diff = math.huge
+								
+								for _, e in ipairs(master_vocab) do
+									local e_filename = e.filename:match("([^/\\]+)$") or e.filename
+									if e_filename:find(zid, 1, true) then
+										local e_time = tonumber(e.timestamp) or tonumber(e.source_index) or 0.0
+										local diff = math.abs(e_time - timestamp)
+										if diff < min_diff then
+											min_diff = diff
+											best_entry = e
+										end
 									end
 								end
-							end
-							
-							if best_entry then
-								local sync_entry = {}
-								for k, v in pairs(best_entry) do
-									sync_entry[k] = v
+								
+								if best_entry then
+									local sync_entry = {}
+									for k, v in pairs(best_entry) do
+										sync_entry[k] = v
+									end
+									table.insert(study_queue, i + 1, sync_entry)
+									if config.repeat_counts_in_stats then total = total + 1 end
+									defer_current_card()
+									break
+								else
+									print(bold(red("Could not find matching card for ZID: ")) .. zid)
 								end
-								table.insert(study_queue, i + 1, sync_entry)
-								if config.repeat_counts_in_stats then total = total + 1 end
-								defer_current_card()
-								break
-							else
-								print(bold(red("Could not find matching card for ZID: ")) .. zid)
 							end
 						end
 					else
@@ -2203,11 +2278,13 @@ local function run_quiz(study_queue, config)
 										.. bold("Esc")
 										.. "                  Skip the current card."
 								)
-								print("  " .. bold("p") .. "                       Sync current card to MPV.")
+								if config.mpv_integration then
+									print("  " .. bold("p") .. "                       Sync current card to MPV.")
+								end
 								print("  " .. bold("q") .. "                       Exit the quiz.")
 								print()
 							elseif lkey == "p" then
-								sync_forward_to_mpv(entry)
+								sync_forward_to_mpv(entry, config)
 							elseif lkey == "q" then
 								print(magenta("\nExiting quiz early."))
 								return
@@ -2286,12 +2363,14 @@ local function run_quiz(study_queue, config)
 										.. bold("Esc")
 										.. "                  Skip the current card."
 								)
-								print("  " .. bold("p") .. "                       Sync current card to MPV.")
+								if config.mpv_integration then
+									print("  " .. bold("p") .. "                       Sync current card to MPV.")
+								end
 							end
 							print("  " .. bold("q") .. "                       Exit the quiz.")
 							print()
 						elseif lkey == "p" then
-							sync_forward_to_mpv(entry)
+							sync_forward_to_mpv(entry, config)
 						elseif lkey == "q" then
 							print(magenta("\nExiting quiz early."))
 							return
@@ -2414,20 +2493,26 @@ print_interactive_help = function(config)
 	print("  " .. bold("/a") .. "                      Repeat the previous card.")
 	local esc_skip = (config and config.command_mode and config.command_mode_esc_toggles) and "     " or ", " .. bold("Esc")
 	print("  " .. bold("/d") .. esc_skip .. "                 Skip the current card.")
+	if config and config.mpv_integration then
+		print("  " .. bold("/p") .. ", " .. bold("/sync_forward") .. "         Sync active card timestamp to MPV.")
+		print("  " .. bold("/sync <zid> <time>") .. "      Jump to the card matching ZID and closest timestamp.")
+	end
 	print("  " .. bold("/q") .. ", " .. bold("/quit") .. ", " .. bold("/exit") .. "        Exit the quiz.")
 	if config and config.command_mode then
 		print("\n" .. bold(cyan("Command Mode enabled:")))
 		local esc_cmd_mode = config.command_mode_esc_toggles and "Switch to Answer (from command)." or "Skip the current card."
 		if config.command_mode_single_key then
+			local single_keys = config.mpv_integration and "a, d, p, q, ?, h" or "a, d, q, ?, h"
 			print("  " .. bold("Esc") .. "                     In Answer: Switch to Command.")
 			print("  " .. bold("Esc") .. "                     In Command: " .. esc_cmd_mode)
 			print("  " .. bold("Enter, Space") .. "            In Command: Switch to Answer.")
-			print("  " .. bold("a, d, q, ?, h") .. "           Execute commands instantly with single keystrokes.")
+			print("  " .. bold(single_keys) .. "           Execute commands instantly with single keystrokes.")
 		else
+			local multi_keys = config.mpv_integration and "a, d, p, q, ?" or "a, d, q, ?"
 			print("  " .. bold("Esc") .. "                     In Answer: Switch to Command.")
 			print("  " .. bold("Esc") .. "                     In Command: " .. esc_cmd_mode)
 			print("  " .. bold("Enter") .. "                   In Command: Switch to Answer.")
-			print("  " .. bold("a, d, q, ?") .. "              Execute commands without typing '/' (requires Enter).")
+			print("  " .. bold(multi_keys) .. "              Execute commands without typing '/' (requires Enter).")
 		end
 	end
 end
@@ -2525,6 +2610,7 @@ local function main()
 	-- Load config.ini
 	local config_path = dir .. "config.ini"
 	local config = load_config(config_path)
+	active_config = config
 
 	-- Load all vocabulary from resolved files
 	master_vocab = {}
