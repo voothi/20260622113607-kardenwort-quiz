@@ -184,7 +184,12 @@ local function press_any_key(prompt, allowed_keys, use_arrows)
 	while true do
 		local key = ""
 		if package.config:sub(1, 1) == "\\" then
-			local arrow_arg = use_arrows and " --arrows" or ""
+			local arrow_arg = ""
+			if use_arrows == "swap" then
+				arrow_arg = " --swap-arrows"
+			elseif use_arrows then
+				arrow_arg = " --arrows"
+			end
 			local f = io.popen(string.format('python "%s" --key%s 2>nul', input_helper, arrow_arg))
 			if f then
 				key = f:read("*a")
@@ -325,7 +330,12 @@ local function load_config(filename)
 							elseif key == "command_mode_single_key" then
 								config.command_mode_single_key = (val == "true" or val == "1")
 							elseif key == "arrow_hints" then
-								config.arrow_hints = (val == "true" or val == "1")
+								val = val:lower()
+								if val == "swap" or val == "reverse" then
+									config.arrow_hints = "swap"
+								else
+									config.arrow_hints = (val == "true" or val == "1")
+								end
 							elseif key == "exact_length_mask" then
 								config.exact_length_mask = (val == "true" or val == "1")
 							elseif key == "case_sensitive_diff" then
@@ -1664,7 +1674,12 @@ end
 local function read_line_with_esc(config, initial_text, save_esc, use_arrows)
 	io.flush()
 	if package.config:sub(1, 1) == "\\" then
-		local arrow_arg = use_arrows and " --arrows" or ""
+		local arrow_arg = ""
+		if use_arrows == "swap" then
+			arrow_arg = " --swap-arrows"
+		elseif use_arrows then
+			arrow_arg = " --arrows"
+		end
 		local save_esc_arg = save_esc and " --save-esc" or ""
 		local initial_arg = ""
 		if initial_text and initial_text ~= "" then

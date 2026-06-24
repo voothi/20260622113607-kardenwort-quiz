@@ -64,8 +64,9 @@ command_mode_save_input = false
 # - false: In command mode, you must type the command and press Enter (default).
 command_mode_single_key = false
 
-# Enable keyboard arrow hints (true/false)
+# Enable keyboard arrow hints (true/false/swap)
 # - true: Up/Down/Left/Right arrow keys will dynamically reveal hints when in Command Mode.
+# - swap: Same as true, but swaps Left and Right keys (Left reveals from end, Right from start).
 # - false: Arrow keys behave normally in the terminal (default).
 arrow_hints = false
 

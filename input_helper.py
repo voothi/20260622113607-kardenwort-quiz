@@ -48,7 +48,7 @@ def get_key_event():
             if record.KeyEvent.bKeyDown:
                 return record.KeyEvent
 
-def read_key(enable_arrows=False):
+def read_key(enable_arrows=False, swap_arrows=False):
     """Read a single key, print it, exit."""
     if not sys.stdin.isatty():
         return
@@ -60,8 +60,8 @@ def read_key(enable_arrows=False):
             return
         elif enable_arrows and e.wVirtualKeyCode in (0x25, 0x27, 0x26, 0x28):
             hint_cmd = None
-            if e.wVirtualKeyCode == 0x25: hint_cmd = "/hint_left"
-            elif e.wVirtualKeyCode == 0x27: hint_cmd = "/hint_right"
+            if e.wVirtualKeyCode == 0x25: hint_cmd = "/hint_right" if swap_arrows else "/hint_left"
+            elif e.wVirtualKeyCode == 0x27: hint_cmd = "/hint_left" if swap_arrows else "/hint_right"
             elif e.wVirtualKeyCode == 0x28: hint_cmd = "/hint_down"
             elif e.wVirtualKeyCode == 0x26: hint_cmd = "/hint_up"
             if hint_cmd:
@@ -85,7 +85,7 @@ def get_word_boundary(chars, pos, direction):
             p += 1
     return p
 
-def read_line(enable_arrows=False, initial_text="", save_esc=False):
+def read_line(enable_arrows=False, initial_text="", save_esc=False, swap_arrows=False):
     if not sys.stdin.isatty():
         print("NOT_TTY", end="")
         return
@@ -192,8 +192,8 @@ def read_line(enable_arrows=False, initial_text="", save_esc=False):
             if enable_arrows and not is_shift and not is_ctrl:
                 # Use as hints
                 hint_cmd = None
-                if vk == 0x25: hint_cmd = "/hint_left"
-                elif vk == 0x27: hint_cmd = "/hint_right"
+                if vk == 0x25: hint_cmd = "/hint_right" if swap_arrows else "/hint_left"
+                elif vk == 0x27: hint_cmd = "/hint_left" if swap_arrows else "/hint_right"
                 elif vk == 0x28: hint_cmd = "/hint_down"
                 elif vk == 0x26: hint_cmd = "/hint_up"
                 
@@ -262,6 +262,7 @@ def read_line(enable_arrows=False, initial_text="", save_esc=False):
 if __name__ == "__main__":
     mode = "--key"
     enable_arrows = False
+    swap_arrows = False
     save_esc = False
     initial_text = ""
     
@@ -272,6 +273,9 @@ if __name__ == "__main__":
             mode = args[i]
         elif args[i] == "--arrows":
             enable_arrows = True
+        elif args[i] == "--swap-arrows":
+            enable_arrows = True
+            swap_arrows = True
         elif args[i] == "--save-esc":
             save_esc = True
         elif args[i] == "--initial" and i + 1 < len(args):
@@ -280,6 +284,6 @@ if __name__ == "__main__":
         i += 1
 
     if mode == "--line":
-        read_line(enable_arrows, initial_text, save_esc)
+        read_line(enable_arrows, initial_text, save_esc, swap_arrows)
     else:
-        read_key(enable_arrows)
+        read_key(enable_arrows, swap_arrows)
