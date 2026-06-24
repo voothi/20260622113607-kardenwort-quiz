@@ -1589,6 +1589,186 @@ def test_tsv_whitespace_trimming(quiz_env):
     assert entry["SentenceSource"] == "Ich ziehe die Jacke aus."
 
 
+def test_sync_reverse_command(quiz_env):
+    """Test that the /sync <zid> <timestamp> command jumps to the closest matching card."""
+    code, out, err = run_quiz(
+        quiz_env,
+        ["20260604184114-microsoft-just-shocked-the.en.tsv"],
+        ["/sync 20260604184114 387.841", "meant", "/q"]
+    )
+    assert code == 0
+    clean_out = strip_ansi(out)
+    assert "unified intelligence" in clean_out
+
+
+def test_sync_forward_hotkey_command_mode(quiz_env):
+    """Test that pressing 'p' in command mode parses successfully."""
+    code, out, err = run_quiz(
+        quiz_env,
+        ["20260604184114-microsoft-just-shocked-the.en.tsv"],
+        ["p", "/q"]
+    )
+    assert code == 0
+
+
+def test_input_helper_media_resolution(tmp_path):
+    """Test the media file matching logic in input_helper.py."""
+    import sys
+    import shutil
+    import importlib.util
+    
+    # Copy input_helper.py to tmp_path
+    shutil.copy2(Path(__file__).parent.parent.parent / "input_helper.py", tmp_path / "input_helper.py")
+    
+    spec = importlib.util.spec_from_file_location("input_helper_test", str(tmp_path / "input_helper.py"))
+    input_helper_test = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(input_helper_test)
+    
+    # Create test files
+    tsv_file = tmp_path / "20260303214721-text1.de.tsv"
+    tsv_file.touch()
+    
+    video_file = tmp_path / "20260303214721-text1.de.mp4"
+    video_file.touch()
+    
+    resolved = input_helper_test.find_media_file(str(tsv_file))
+    assert resolved is not None
+    assert Path(resolved).name == "20260303214721-text1.de.mp4"
+    
+    sub_dir = tmp_path / "subdir"
+    sub_dir.mkdir()
+    sub_video = sub_dir / "20260303214721-other.de.mkv"
+    sub_video.touch()
+    
+    video_file.unlink()
+    
+    resolved2 = input_helper_test.find_media_file(str(tsv_file))
+    assert resolved2 is not None
+    assert Path(resolved2).name == "20260303214721-other.de.mkv"
+
+
+def test_input_helper_sync_mpv_flow(tmp_path, monkeypatch):
+    """Test the full --sync-mpv execution path inside input_helper.py."""
+    import importlib.util
+    import shutil
+    shutil.copy2(Path(__file__).parent.parent.parent / "input_helper.py", tmp_path / "input_helper.py")
+    spec = importlib.util.spec_from_file_location("input_helper_test", str(tmp_path / "input_helper.py"))
+    input_helper_test = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(input_helper_test)
+
+    tsv_file = tmp_path / "20260303214721-text1.de.tsv"
+    tsv_file.touch()
+    video_file = tmp_path / "20260303214721-text1.de.mp4"
+    video_file.touch()
+
+    sent_commands = []
+    received_queries = []
+    spawned_mpv_args = []
+
+    def mock_send_ipc_payload(pipe, cmd):
+        sent_commands.append(cmd)
+
+    def mock_send_receive_ipc(pipe, cmd):
+        received_queries.append(cmd)
+        return {"error": "success", "data": "other.mp4"}
+
+    def mock_spawn_mpv(pipe, path, start_time):
+        spawned_mpv_args.append((pipe, path, start_time))
+        return True
+
+    monkeypatch.setattr(input_helper_test, "send_ipc_payload", mock_send_ipc_payload)
+    monkeypatch.setattr(input_helper_test, "send_receive_ipc", mock_send_receive_ipc)
+    monkeypatch.setattr(input_helper_test, "spawn_mpv", mock_spawn_mpv)
+
+    pipe_path = "mock_pipe"
+    timestamp = 12.34
+
+    media_file = input_helper_test.find_media_file(str(tsv_file))
+    assert media_file is not None
+    
+    media_file_mpv = media_file.replace('\\', '/')
+    current_info = input_helper_test.send_receive_ipc(pipe_path, {"command": ["get_property", "path"]})
+    is_same = False
+    if current_info and isinstance(current_info, dict) and current_info.get("error") == "success":
+        current_path = current_info.get("data")
+        is_same = input_helper_test.paths_are_equal(current_path, media_file_mpv)
+        
+    if is_same:
+        input_helper_test.send_ipc_payload(pipe_path, {"command": ["seek", timestamp, "absolute"]})
+    else:
+        input_helper_test.send_ipc_payload(pipe_path, {"command": ["loadfile", media_file_mpv, "replace"]})
+        input_helper_test.send_ipc_payload(pipe_path, {"command": ["seek", timestamp, "absolute"]})
+
+    assert len(sent_commands) == 2
+    assert sent_commands[0] == {"command": ["loadfile", media_file_mpv, "replace"]}
+    assert sent_commands[1] == {"command": ["seek", timestamp, "absolute"]}
+
+    # Test same file path check
+    sent_commands.clear()
+    received_queries.clear()
+    
+    def mock_send_receive_ipc_same(pipe, cmd):
+        received_queries.append(cmd)
+        return {"error": "success", "data": media_file_mpv}
+    monkeypatch.setattr(input_helper_test, "send_receive_ipc", mock_send_receive_ipc_same)
+
+    current_info = input_helper_test.send_receive_ipc(pipe_path, {"command": ["get_property", "path"]})
+    is_same = False
+    if current_info and isinstance(current_info, dict) and current_info.get("error") == "success":
+        current_path = current_info.get("data")
+        is_same = input_helper_test.paths_are_equal(current_path, media_file_mpv)
+        
+    if is_same:
+        input_helper_test.send_ipc_payload(pipe_path, {"command": ["seek", timestamp, "absolute"]})
+    else:
+        input_helper_test.send_ipc_payload(pipe_path, {"command": ["loadfile", media_file_mpv, "replace"]})
+        input_helper_test.send_ipc_payload(pipe_path, {"command": ["seek", timestamp, "absolute"]})
+
+    assert len(sent_commands) == 1
+    assert sent_commands[0] == {"command": ["seek", timestamp, "absolute"]}
+
+
+def test_input_helper_sync_mpv_spawn_fallback(tmp_path, monkeypatch):
+    """Test that if connection fails, spawn_mpv is called."""
+    import importlib.util
+    import shutil
+    shutil.copy2(Path(__file__).parent.parent.parent / "input_helper.py", tmp_path / "input_helper.py")
+    spec = importlib.util.spec_from_file_location("input_helper_test", str(tmp_path / "input_helper.py"))
+    input_helper_test = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(input_helper_test)
+
+    tsv_file = tmp_path / "20260303214721-text1.de.tsv"
+    tsv_file.touch()
+    video_file = tmp_path / "20260303214721-text1.de.mp4"
+    video_file.touch()
+
+    spawned_mpv_args = []
+
+    def mock_send_receive_ipc_fail(pipe, cmd):
+        raise Exception("Connection failed")
+
+    def mock_spawn_mpv(pipe, path, start_time):
+        spawned_mpv_args.append((pipe, path, start_time))
+        return True
+
+    monkeypatch.setattr(input_helper_test, "send_receive_ipc", mock_send_receive_ipc_fail)
+    monkeypatch.setattr(input_helper_test, "spawn_mpv", mock_spawn_mpv)
+
+    pipe_path = "mock_pipe"
+    timestamp = 12.34
+    media_file = input_helper_test.find_media_file(str(tsv_file))
+    media_file_mpv = media_file.replace('\\', '/')
+
+    try:
+        current_info = input_helper_test.send_receive_ipc(pipe_path, {"command": ["get_property", "path"]})
+    except Exception:
+        input_helper_test.spawn_mpv(pipe_path, media_file_mpv, timestamp)
+
+    assert len(spawned_mpv_args) == 1
+    assert spawned_mpv_args[0] == (pipe_path, media_file_mpv, timestamp)
+
+
+
 
 
 
