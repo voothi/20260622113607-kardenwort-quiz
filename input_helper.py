@@ -271,14 +271,7 @@ def find_media_file(tsv_path):
             pass
             
     scan_dir(tsv_dir)
-    
-    try:
-        for entry in os.listdir(tsv_dir):
-            sub_dir = os.path.join(tsv_dir, entry)
-            if os.path.isdir(sub_dir):
-                scan_dir(sub_dir)
-    except Exception:
-        pass
+
         
     if not candidates:
         return None

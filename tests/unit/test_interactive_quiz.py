@@ -1644,8 +1644,7 @@ def test_input_helper_media_resolution(tmp_path):
     video_file.unlink()
     
     resolved2 = input_helper_test.find_media_file(str(tsv_file))
-    assert resolved2 is not None
-    assert Path(resolved2).name == "20260303214721-other.de.mkv"
+    assert resolved2 is None
 
 
 def test_input_helper_sync_mpv_flow(tmp_path, monkeypatch):
