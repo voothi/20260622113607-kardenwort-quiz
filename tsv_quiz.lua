@@ -482,6 +482,9 @@ local function load_tsv(filename, config)
 		elseif not headers then
 			-- This is the first non-comment line. Check if it is a header row
 			local cols = split_line(line, "\t")
+			for idx, val in ipairs(cols) do
+				cols[idx] = val:gsub("^%s+", ""):gsub("%s+$", "")
+			end
 			if is_header_row(cols, config) then
 				headers = cols
 				table.insert(raw_rows, { type = "header", columns = cols })
@@ -517,6 +520,9 @@ local function load_tsv(filename, config)
 		else
 			-- Already have headers, parse as data row
 			local cols = split_line(line, "\t")
+			for idx, val in ipairs(cols) do
+				cols[idx] = val:gsub("^%s+", ""):gsub("%s+$", "")
+			end
 			parsed_rows = parsed_rows + 1
 			table.insert(raw_rows, { type = "data", columns = cols })
 		end

@@ -1565,3 +1565,29 @@ def test_repeat_counts_in_stats_progress_saved(quiz_env):
     assert entry["LeitnerBox"] == "3", f"Expected Box 3 (two correct answers), got {entry['LeitnerBox']}"
 
 
+def test_tsv_whitespace_trimming(quiz_env):
+    """Test that leading/trailing whitespaces in TSV cells are trimmed during loading."""
+    issue_tsv_content = (
+        "#deck column:85\n"
+        "Quotation                                 \t WordSource                                \t SentenceSource                                                                                                                    \t LeitnerBox\t LeitnerDue\n"
+        "  die Jacke                               \t   die Jacke                              \t   Ich ziehe die Jacke aus.                                                                                                        \t 1         \t 0         \n"
+    )
+    test_tsv = quiz_env / "issue.tsv"
+    test_tsv.write_text(issue_tsv_content, encoding="utf-8", newline="\n")
+
+    code, out, err = run_quiz(quiz_env, ["issue.tsv"], ["die Jacke", "/q"])
+    print("STDOUT:", out)
+    print("STDERR:", err)
+    assert code == 0, f"run_quiz failed with code {code}, err: {err}, out: {out}"
+    
+    # Verify the TSV is cleaned up when written back
+    entry = read_tsv_entry(test_tsv, "die Jacke")
+    assert entry is not None, f"Could not find entry for 'die Jacke' in TSV. Content: {test_tsv.read_text(encoding='utf-8')}"
+    assert entry["Quotation"] == "die Jacke"
+    assert entry["WordSource"] == "die Jacke"
+    assert entry["SentenceSource"] == "Ich ziehe die Jacke aus."
+
+
+
+
+
