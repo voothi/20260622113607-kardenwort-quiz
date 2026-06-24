@@ -2140,8 +2140,8 @@ local function run_quiz(study_queue, config)
 
 						if lkey == "?" then
 							print(bold(cyan("\nBack Side Options:")))
-							print("  " .. bold("1") .. "                       Mark as incorrect.")
-							print("  " .. bold("3") .. "                       Mark as correct.")
+							print("  " .. bold("1") .. "                       Override as Again.")
+							print("  " .. bold("3") .. "                       Override as Good.")
 							print(
 								"  "
 									.. bold("Enter, Space")
