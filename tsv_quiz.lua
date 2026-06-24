@@ -229,6 +229,9 @@ local function load_config(filename)
 		review_sort_order = "due_date",
 		new_sort_order = "order_added",
 		single_card_mode = false,
+		command_mode = false,
+		start_in_command_mode = false,
+		command_mode_single_key = false,
 		arrow_hints = false,
 		exact_length_mask = false,
 		case_sensitive_diff = true,
@@ -308,6 +311,12 @@ local function load_config(filename)
 								end
 							elseif key == "single_card_mode" then
 								config.single_card_mode = (val == "true" or val == "1")
+							elseif key == "command_mode" then
+								config.command_mode = (val == "true" or val == "1")
+							elseif key == "start_in_command_mode" then
+								config.start_in_command_mode = (val == "true" or val == "1")
+							elseif key == "command_mode_single_key" then
+								config.command_mode_single_key = (val == "true" or val == "1")
 							elseif key == "arrow_hints" then
 								config.arrow_hints = (val == "true" or val == "1")
 							elseif key == "exact_length_mask" then
@@ -1682,6 +1691,8 @@ local function run_quiz(study_queue, config)
 		local hint_n, hint_k, hint_m = 0, 0, 0
 		local has_hint = false
 
+		local is_command_mode = config.start_in_command_mode and config.command_mode
+
 		local function defer_current_card()
 			local deferred_entry = {}
 			for k, v in pairs(entry) do
@@ -1730,26 +1741,90 @@ local function run_quiz(study_queue, config)
 			if current_hint then
 				print(current_hint)
 			end
-			io.write(bold("Your answer ") .. dim("(type '/?' for help, Esc to skip): "))
+			local user_input = ""
+			local trimmed_input = ""
+			local switch_mode = false
 
-			local user_input = read_line_with_esc(config)
-			if not user_input then
-				print(magenta("\nExiting quiz early."))
-				return
+			if config.command_mode and is_command_mode then
+				if config.command_mode_single_key then
+					local allowed = {"a", "d", "q", "?", "\r", "\n", "\x1b", "h", "/"}
+					local key = press_any_key(bold("Command mode ") .. dim("(? for help, Esc to skip, Enter to input) > "), allowed)
+					if key == "" then
+						local line = io.read()
+						key = line and line:sub(1, 1) or ""
+						if key == "" then key = "\r" end
+					end
+					local lkey = key:lower()
+					if lkey == "\r" or lkey == "\n" then
+						switch_mode = true
+						is_command_mode = false
+					elseif lkey == "\x1b" or lkey == "d" then
+						trimmed_input = "/d"
+					elseif lkey == "a" then
+						trimmed_input = "/a"
+					elseif lkey == "q" then
+						trimmed_input = "/q"
+					elseif lkey == "?" then
+						trimmed_input = "/?"
+					elseif lkey == "h" then
+						trimmed_input = "/h"
+					elseif lkey == "/" then
+						io.write("/")
+						local rest = read_line_with_esc(config)
+						if not rest then
+							print(magenta("\nExiting quiz early."))
+							return
+						end
+						trimmed_input = "/" .. rest:gsub("^%s+", ""):gsub("%s+$", "")
+					else
+						trimmed_input = ""
+					end
+				else
+					io.write(bold("Command mode ") .. dim("(? for help, Esc to skip, Enter to input): "))
+					user_input = read_line_with_esc(config)
+					if not user_input then
+						print(magenta("\nExiting quiz early."))
+						return
+					end
+					trimmed_input = user_input:gsub("^%s+", ""):gsub("%s+$", "")
+					
+					if trimmed_input == "" then
+						is_command_mode = false
+						switch_mode = true
+					elseif trimmed_input == "/d" then
+						-- Esc or explicit /d
+					else
+						if trimmed_input:sub(1, 1) ~= "/" and trimmed_input ~= "" then
+							trimmed_input = "/" .. trimmed_input
+						end
+					end
+				end
+			else
+				local help_msg = config.command_mode and "(Esc for command mode)" or "(type '/?' for help, Esc to skip)"
+				io.write(bold("Your answer ") .. dim(help_msg .. ": "))
+				user_input = read_line_with_esc(config)
+				if not user_input then
+					print(magenta("\nExiting quiz early."))
+					return
+				end
+				trimmed_input = user_input:gsub("^%s+", ""):gsub("%s+$", "")
+				
+				if config.command_mode and trimmed_input == "/d" then
+					is_command_mode = true
+					switch_mode = true
+				end
 			end
 
-			-- Normalise input: trim leading/trailing whitespace
-			local trimmed_input = user_input:gsub("^%s+", ""):gsub("%s+$", "")
-
-			if trimmed_input:sub(1, 1) == "/" then
-				local cmd_body = trimmed_input:sub(2):gsub("^%s+", ""):gsub("%s+$", "")
-				local lower_cmd = cmd_body:lower()
+			if not switch_mode then
+				if trimmed_input:sub(1, 1) == "/" then
+					local cmd_body = trimmed_input:sub(2):gsub("^%s+", ""):gsub("%s+$", "")
+					local lower_cmd = cmd_body:lower()
 
 				if lower_cmd == "q" or lower_cmd == "quit" or lower_cmd == "exit" then
 					print(magenta("\nExiting quiz early."))
 					return
 				elseif lower_cmd == "help" or lower_cmd == "?" then
-					print_interactive_help()
+					print_interactive_help(config)
 					print()
 					if config.single_card_mode then
 						press_any_key("Press 'Enter' or 'Space' to return to quiz...", { "\r", "\n", " " })
@@ -2105,6 +2180,7 @@ local function run_quiz(study_queue, config)
 
 				break -- Go to the next question
 			end
+			end
 		end
 	end
 
@@ -2144,7 +2220,7 @@ print_help = function()
 	print("  Requires headers (e.g. Quotation/WordSource and SentenceSource/SentenceSourceContextLeft).")
 end
 
-print_interactive_help = function()
+print_interactive_help = function(config)
 	print()
 	print(bold(cyan("Interactive Controls:")))
 	print("  " .. bold("/h") .. ", " .. bold("/hint") .. "               Reveal the first letter of the target word.")
@@ -2155,6 +2231,18 @@ print_interactive_help = function()
 	print("  " .. bold("/d") .. ", " .. bold("Esc") .. "                 Skip the current card.")
 	print("  " .. bold("Arrows") .. "                  Dynamic visual hints (if arrow_hints is enabled).")
 	print("  " .. bold("/q") .. ", " .. bold("/quit") .. ", " .. bold("/exit") .. "        Exit the quiz.")
+	if config and config.command_mode then
+		print("\n" .. bold(cyan("Command Mode enabled:")))
+		if config.command_mode_single_key then
+			print("  " .. bold("Esc") .. "                     Switch to Command Mode (from input mode).")
+			print("  " .. bold("Enter") .. "                   Switch to Input Mode (from command mode).")
+			print("  " .. bold("a, d, q, ?, h") .. "           Execute commands instantly with single keystrokes.")
+		else
+			print("  " .. bold("Esc") .. "                     Switch to Command Mode (from input mode).")
+			print("  " .. bold("Enter") .. "                   Switch to Input Mode (from command mode).")
+			print("  " .. bold("a, d, q, ?") .. "              Execute commands without typing '/' (requires Enter).")
+		end
+	end
 end
 
 -- Helper to resolve Windows .lnk shortcuts in pure Lua
