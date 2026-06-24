@@ -1294,24 +1294,27 @@ def test_start_in_command_mode(quiz_env):
 
 
 def test_command_mode_single_key(quiz_env):
-    """Test that command_mode_single_key=true dispatches commands on single keypresses."""
+    """Test that command_mode_single_key=true dispatches commands on single keypresses and supports Space to answer."""
     config_path = quiz_env / "config.ini"
     content = config_path.read_text(encoding="utf-8")
     content += "\ncommand_mode = true\nstart_in_command_mode = true\ncommand_mode_single_key = true\n"
     config_path.write_text(content, encoding="utf-8", newline="\n")
 
     focus_single_card(quiz_env, "20260604184114-microsoft-just-shocked-the.en.tsv", "properly")
-    focus_single_card(quiz_env, "20260303214721-text1.de.tsv", "Absätze")
+    focus_single_card(quiz_env, "20260303214721-text1.de.tsv", "stehe ... auf")
 
-    # In single_key mode the Command prompt reads a single key.
-    # Sending "d" should skip the card immediately (no Enter needed).
-    # Then quit from the next card.
+    # In single_key mode, start in Command mode.
+    # 1. Send " " (Space) to switch to Answer mode.
+    # 2. In Answer mode, type "properly" to answer correctly.
+    # 3. For the next card (starts in Command mode), send "d" to skip it.
+    # 4. Quit using "/q".
     code, out, err = run_quiz(
         quiz_env,
         ["20260604184114-microsoft-just-shocked-the.en.tsv", "20260303214721-text1.de.tsv"],
-        ["d", "/q"]
+        [" ", "properly", "d", "/q"]
     )
     assert code == 0
     clean_out = strip_ansi(out)
     assert "Skipping card..." in clean_out
+    assert "Diff" in clean_out
 

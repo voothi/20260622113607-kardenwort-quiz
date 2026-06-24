@@ -1784,8 +1784,8 @@ local function run_quiz(study_queue, config)
 
 			if config.command_mode and is_command_mode then
 				if config.command_mode_single_key then
-					local allowed = {"a", "d", "q", "?", "\r", "\n", "\x1b", "h", "/", "/hint_left", "/hint_right", "/hint_up", "/hint_down"}
-					local esc_opt = config.command_mode_esc_toggles and "'Esc' or 'Enter' to answer" or "'Esc' to skip, 'Enter' to answer"
+					local allowed = {"a", "d", "q", "?", "\r", "\n", "\x1b", "h", "/", " ", "/hint_left", "/hint_right", "/hint_up", "/hint_down"}
+					local esc_opt = config.command_mode_esc_toggles and "'Esc', 'Space' or 'Enter' to answer" or "'Esc' to skip, 'Space' or 'Enter' to answer"
 					local key = press_any_key(bold("Command ") .. dim("(press '?' for help, " .. esc_opt .. ")... "), allowed, config.arrow_hints)
 					if key == "" then
 						local line = io.read()
@@ -1793,7 +1793,7 @@ local function run_quiz(study_queue, config)
 						if key == "" then key = "\r" end
 					end
 					local lkey = key:lower()
-					if lkey == "\r" or lkey == "\n" then
+					if lkey == "\r" or lkey == "\n" or lkey == " " then
 						switch_mode = true
 						is_command_mode = false
 					elseif lkey == "\x1b" then
@@ -2311,7 +2311,7 @@ print_interactive_help = function(config)
 		if config.command_mode_single_key then
 			print("  " .. bold("Esc") .. "                     In Answer: Switch to Command.")
 			print("  " .. bold("Esc") .. "                     In Command: " .. esc_cmd_mode)
-			print("  " .. bold("Enter") .. "                   In Command: Switch to Answer.")
+			print("  " .. bold("Enter, Space") .. "            In Command: Switch to Answer.")
 			print("  " .. bold("a, d, q, ?, h") .. "           Execute commands instantly with single keystrokes.")
 		else
 			print("  " .. bold("Esc") .. "                     In Answer: Switch to Command.")
