@@ -881,7 +881,7 @@ def test_anki_grading_good_override(quiz_env):
         ["wrong_answer", "3", ""]
     )
     assert code == 0
-    assert "Grade (press '?' for help, '1' for Again, '3' for Good)..." in strip_ansi(out)
+    assert "Grade (press '?' for help, override with '1' as incorrect, '3' as correct)..." in strip_ansi(out)
     
     tsv_file = quiz_env / "20260604184114-microsoft-just-shocked-the.en.tsv"
     entry = read_tsv_entry(tsv_file, "properly")
@@ -1003,7 +1003,7 @@ def test_back_help_command_anki(quiz_env):
     )
     assert code == 0
     assert "Back Side Options" in strip_ansi(out)
-    assert "Override as Again." in strip_ansi(out)
+    assert "Override as incorrect." in strip_ansi(out)
 
 
 def test_source_index_duplicate_words(quiz_env):

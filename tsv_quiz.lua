@@ -2121,7 +2121,7 @@ local function run_quiz(study_queue, config)
 				else
 					-- Anki manual grading mode
 					while true do
-						local prompt_str = bold("Grade ") .. dim("(press '?' for help, '1' for Again, '3' for Good)... ")
+						local prompt_str = bold("Grade ") .. dim("(press '?' for help, override with '1' as incorrect, '3' as correct)... ")
 
 						local allowed = { "\r", "\n", " ", "1", "3", "q", "?" }
 						if config.single_card_mode then
@@ -2140,8 +2140,8 @@ local function run_quiz(study_queue, config)
 
 						if lkey == "?" then
 							print(bold(cyan("\nBack Side Options:")))
-							print("  " .. bold("1") .. "                       Override as Again.")
-							print("  " .. bold("3") .. "                       Override as Good.")
+							print("  " .. bold("1") .. "                       Override as incorrect.")
+							print("  " .. bold("3") .. "                       Override as correct.")
 							print(
 								"  "
 									.. bold("Enter, Space")
