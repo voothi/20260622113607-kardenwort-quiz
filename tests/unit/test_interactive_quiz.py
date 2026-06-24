@@ -1318,3 +1318,27 @@ def test_command_mode_single_key(quiz_env):
     assert "Skipping card..." in clean_out
     assert "Diff" in clean_out
 
+
+def test_arrow_hints_config_parameters(quiz_env):
+    """Test that arrow hints configurations are successfully parsed and quiz runs with them."""
+    config_path = quiz_env / "config.ini"
+    content = config_path.read_text(encoding="utf-8")
+    content += (
+        "\ncommand_mode = false"
+        "\ncommand_mode_arrow_hints = true"
+        "\nanswer_mode_arrow_hints = swap\n"
+    )
+    config_path.write_text(content, encoding="utf-8", newline="\n")
+
+    focus_single_card(quiz_env, "20260604184114-microsoft-just-shocked-the.en.tsv", "properly")
+
+    # Verify that the quiz starts up and processes the exit command correctly under this config.
+    code, out, err = run_quiz(
+        quiz_env,
+        ["20260604184114-microsoft-just-shocked-the.en.tsv"],
+        ["/q"]
+    )
+    assert code == 0
+    clean_out = strip_ansi(out)
+    assert "Exiting quiz early" in clean_out
+

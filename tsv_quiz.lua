@@ -242,6 +242,8 @@ local function load_config(filename)
 		command_mode_save_command = false,
 		command_mode_single_key = false,
 		arrow_hints = false,
+		command_mode_arrow_hints = nil,
+		answer_mode_arrow_hints = nil,
 		exact_length_mask = false,
 		case_sensitive_diff = true,
 		ignore_punctuation = true,
@@ -334,10 +336,26 @@ local function load_config(filename)
 								config.command_mode_single_key = (val == "true" or val == "1")
 							elseif key == "arrow_hints" then
 								val = val:lower()
+								local parsed_hints
 								if val == "swap" or val == "reverse" then
-									config.arrow_hints = "swap"
+									parsed_hints = "swap"
 								else
-									config.arrow_hints = (val == "true" or val == "1")
+									parsed_hints = (val == "true" or val == "1")
+								end
+								config.arrow_hints = parsed_hints
+							elseif key == "command_mode_arrow_hints" then
+								val = val:lower()
+								if val == "swap" or val == "reverse" then
+									config.command_mode_arrow_hints = "swap"
+								else
+									config.command_mode_arrow_hints = (val == "true" or val == "1")
+								end
+							elseif key == "answer_mode_arrow_hints" then
+								val = val:lower()
+								if val == "swap" or val == "reverse" then
+									config.answer_mode_arrow_hints = "swap"
+								else
+									config.answer_mode_arrow_hints = (val == "true" or val == "1")
 								end
 							elseif key == "exact_length_mask" then
 								config.exact_length_mask = (val == "true" or val == "1")
@@ -369,6 +387,12 @@ local function load_config(filename)
 		end
 	end
 	f:close()
+	if config.command_mode_arrow_hints == nil then
+		config.command_mode_arrow_hints = config.arrow_hints
+	end
+	if config.answer_mode_arrow_hints == nil then
+		config.answer_mode_arrow_hints = config.arrow_hints
+	end
 	while #config.fields > 0 and config.fields[#config.fields] == "" do
 		table.remove(config.fields)
 	end
@@ -1786,7 +1810,7 @@ local function run_quiz(study_queue, config)
 				if config.command_mode_single_key then
 					local allowed = {"a", "d", "q", "?", "\r", "\n", "\x1b", "h", "/", " ", "/hint_left", "/hint_right", "/hint_up", "/hint_down"}
 					local esc_opt = config.command_mode_esc_toggles and "'Esc', 'Space' or 'Enter' to answer" or "'Esc' to skip, 'Space' or 'Enter' to answer"
-					local key = press_any_key(bold("Command ") .. dim("(press '?' for help, " .. esc_opt .. ")... "), allowed, config.arrow_hints)
+					local key = press_any_key(bold("Command ") .. dim("(press '?' for help, " .. esc_opt .. ")... "), allowed, config.command_mode_arrow_hints)
 					if key == "" then
 						local line = io.read()
 						key = line and line:sub(1, 1) or ""
@@ -1830,7 +1854,7 @@ local function run_quiz(study_queue, config)
 					local save_command = config.command_mode_save_command
 					local esc_opt = config.command_mode_esc_toggles and "press 'Esc' or 'Enter' to answer" or "press 'Esc' to skip, 'Enter' to answer"
 					io.write(bold("Command ") .. dim("(type '?' for help, " .. esc_opt .. "): "))
-					user_input = read_line_with_esc(config, saved_command_input, save_command, config.arrow_hints)
+					user_input = read_line_with_esc(config, saved_command_input, save_command, config.command_mode_arrow_hints)
 					if not user_input then
 						print(magenta("\nExiting quiz early."))
 						return
@@ -1867,7 +1891,7 @@ local function run_quiz(study_queue, config)
 			else
 				local help_msg = config.command_mode and "(type '/?' for help, press 'Esc' for Command)" or "(type '/?' for help, press 'Esc' to skip)"
 				io.write(bold("Answer ") .. dim(help_msg .. ": "))
-				user_input = read_line_with_esc(config, saved_input, config.command_mode_save_input, false)
+				user_input = read_line_with_esc(config, saved_input, config.command_mode_save_input, config.answer_mode_arrow_hints)
 				if not user_input then
 					print(magenta("\nExiting quiz early."))
 					return
@@ -2287,7 +2311,7 @@ print_help = function()
 	print("  " .. bold("/h N K M") .. "                Reveal N from the start, K from the middle, M from the end.")
 	print("  " .. bold("/a") .. "                      Repeat the previous card.")
 	print("  " .. bold("/d") .. ", " .. bold("Esc") .. "                 Skip the current card.")
-	print("  " .. bold("Arrows") .. "                  Dynamic visual hints (if arrow_hints is enabled).")
+	print("  " .. bold("Arrows") .. "                  Dynamic visual hints (if enabled).")
 	print("  " .. bold("/q") .. ", " .. bold("/quit") .. ", " .. bold("/exit") .. "        Exit the quiz.\n")
 	print(bold("Supported TSV Format:"))
 	print("  Requires headers (e.g. Quotation/WordSource and SentenceSource/SentenceSourceContextLeft).")
@@ -2300,7 +2324,7 @@ print_interactive_help = function(config)
 	print("  " .. bold("/h N") .. "                    Reveal N letters from the start of the word.")
 	print("  " .. bold("/h N M") .. "                  Reveal N letters from the start and M from the end.")
 	print("  " .. bold("/h N K M") .. "                Reveal N from the start, K from the middle, M from the end.")
-	print("  " .. bold("Arrows") .. "                  Dynamic visual hints (if arrow_hints is enabled).")
+	print("  " .. bold("Arrows") .. "                  Dynamic visual hints (if enabled).")
 	print("  " .. bold("/a") .. "                      Repeat the previous card.")
 	local esc_skip = (config and config.command_mode and config.command_mode_esc_toggles) and "     " or ", " .. bold("Esc")
 	print("  " .. bold("/d") .. esc_skip .. "                 Skip the current card.")
