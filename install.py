@@ -9,6 +9,7 @@ import os
 import subprocess
 import sys
 import shutil
+import base64
 
 SHORTCUT_DISPLAY_NAME = "Kardenwort TSV Quiz"
 LEGACY_SHORTCUT_NAMES = ("B2 Deutsch Quiz", "kardenwort tsv quiz")
@@ -56,21 +57,24 @@ def main():
     print(f"SendTo Directory:  {sendto_dir}")
     print(f"Shortcut Path:     {shortcut_path}")
 
-    # 3. Create shortcut using PowerShell WScript.Shell
-    ps_script = (
-        f"$WshShell = New-Object -ComObject WScript.Shell; "
-        f"$Shortcut = $WshShell.CreateShortcut('{shortcut_path}'); "
-        f"$Shortcut.TargetPath = '{lua_path}'; "
-        f"$Shortcut.Arguments = '\"{script_path}\"'; "
-        f"$Shortcut.Description = 'Runs vocabulary study quiz on the selected TSV file'; "
-        f"$Shortcut.WindowStyle = 1; "  # SW_SHOWNORMAL
-        f"$Shortcut.Save()"
-    )
+    # 3. Create shortcut using PowerShell WScript.Shell via EncodedCommand
+    # We use cmd.exe as the target so it handles console settings (like chcp 65001 and word wrapping)
+    # properly before launching lua.exe.
+    ps_script = f'''
+$WshShell = New-Object -ComObject WScript.Shell
+$Shortcut = $WshShell.CreateShortcut('{shortcut_path}')
+$Shortcut.TargetPath = 'cmd.exe'
+$Shortcut.Arguments = '/c chcp 65001>nul & "{lua_path}" "{script_path}"'
+$Shortcut.Description = 'Runs vocabulary study quiz on the selected TSV file'
+$Shortcut.WindowStyle = 1
+$Shortcut.Save()
+'''
+    encoded_ps = base64.b64encode(ps_script.encode('utf-16le')).decode('utf-8')
 
     try:
         print(f"\nCreating shortcut in Windows 'Send to' menu...")
         subprocess.run(
-            ["powershell", "-NoProfile", "-Command", ps_script],
+            ["powershell", "-NoProfile", "-EncodedCommand", encoded_ps],
             capture_output=True,
             text=True,
             check=True,
