@@ -47,7 +47,7 @@ command_mode = true
 # Start in command mode (true/false)
 # - true: New cards start in command mode by default.
 # - false: New cards start in answer prompt by default.
-start_in_command_mode = false
+start_in_command_mode = true
 
 # Esc toggles modes (true/false)
 # - true: Pressing Esc in command mode toggles back to answer prompt (default).
@@ -57,12 +57,12 @@ command_mode_esc_toggles = true
 # Save input on mode switch (true/false)
 # - true: When switching from answer to command prompt with Esc, saves the typed text and restores it when returning.
 # - false: Typed text is discarded on mode switch (default).
-command_mode_save_input = false
+command_mode_save_input = true
 
 # Save command input on mode switch (true/false)
 # - true: When switching from command prompt to answer with Esc or Enter, saves the typed command text and restores it when returning.
 # - false: Typed command text is discarded on mode switch (default).
-command_mode_save_command = false
+command_mode_save_command = true
 
 # Single-key commands (true/false)
 # - true: In command mode, single keystrokes (a, d, ?, q, h) execute immediately without pressing Enter.
@@ -78,7 +78,7 @@ command_mode_single_key = false
 #         Left arrow reveals from the start. Right arrow reveals from the end.
 #         Up arrow hides and resets the hints. Down arrow reveals from the middle.
 # - false: Arrow keys behave normally in the terminal. Hints are disabled (default).
-arrow_hints = false
+arrow_hints = true
 
 # Mask context with underscores matching the exact length of the target word/phrase (true/false)
 # - true: Display underscores matching the exact length of the target word (e.g. "_______" for "Absätze").
