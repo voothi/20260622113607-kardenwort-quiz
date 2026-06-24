@@ -2671,7 +2671,7 @@ print_interactive_help = function(config)
 	local esc_skip = (config and config.command_mode and config.command_mode_esc_toggles) and "     " or ", " .. bold("Esc")
 	print("  " .. bold("/d") .. esc_skip .. "                 Skip the current card.")
 	if config and config.mpv_integration then
-		print("  " .. bold("/y") .. ", " .. bold("/sync_forward") .. "         Sync active card timestamp to MPV.")
+		print("  " .. bold("/y") .. ", " .. bold("/sync_forward") .. "       Sync active card timestamp to MPV.")
 		print("  " .. bold("/sync <zid> <time>") .. "      Jump to the card matching ZID and closest timestamp.")
 	end
 	print("  " .. bold("/q") .. ", " .. bold("/quit") .. ", " .. bold("/exit") .. "        Exit the quiz.")
@@ -2683,13 +2683,15 @@ print_interactive_help = function(config)
 			print("  " .. bold("Esc") .. "                     In Answer: Switch to Command.")
 			print("  " .. bold("Esc") .. "                     In Command: " .. esc_cmd_mode)
 			print("  " .. bold("Enter, Space") .. "            In Command: Switch to Answer.")
-			print("  " .. bold(single_keys) .. "           Execute commands instantly with single keystrokes.")
+			local spaces = string.rep(" ", 26 - 2 - utf8_len(single_keys))
+			print("  " .. bold(single_keys) .. spaces .. "Execute commands instantly with single keystrokes.")
 		else
 			local multi_keys = config.mpv_integration and "a, d, y, q, ?" or "a, d, q, ?"
 			print("  " .. bold("Esc") .. "                     In Answer: Switch to Command.")
 			print("  " .. bold("Esc") .. "                     In Command: " .. esc_cmd_mode)
 			print("  " .. bold("Enter") .. "                   In Command: Switch to Answer.")
-			print("  " .. bold(multi_keys) .. "              Execute commands without typing '/' (requires Enter).")
+			local spaces = string.rep(" ", 26 - 2 - utf8_len(multi_keys))
+			print("  " .. bold(multi_keys) .. spaces .. "Execute commands without typing the slash prefix (requires Enter).")
 		end
 	end
 end
