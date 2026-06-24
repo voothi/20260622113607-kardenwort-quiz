@@ -1959,7 +1959,7 @@ local function run_quiz(study_queue, config)
 
 			if config.command_mode and is_command_mode then
 				if config.command_mode_single_key then
-					local allowed = {"a", "d", "p", "q", "?", "\r", "\n", "\x1b", "h", "/", " ", "/hint_left", "/hint_right", "/hint_up", "/hint_down"}
+					local allowed = {"a", "d", "y", "q", "?", "\r", "\n", "\x1b", "h", "/", " ", "/hint_left", "/hint_right", "/hint_up", "/hint_down"}
 					local esc_opt = config.command_mode_esc_toggles and "'Esc', 'Space' or 'Enter' to answer" or "'Esc' to skip, 'Space' or 'Enter' to answer"
 					local key = press_any_key(bold("Command ") .. dim("(press '?' for help, " .. esc_opt .. ")... "), allowed, config.command_mode_arrow_hints)
 					if key == "" then
@@ -1982,8 +1982,8 @@ local function run_quiz(study_queue, config)
 						trimmed_input = "/d"
 					elseif lkey == "a" then
 						trimmed_input = "/a"
-					elseif lkey == "p" then
-						trimmed_input = "/p"
+					elseif lkey == "y" then
+						trimmed_input = "/y"
 					elseif lkey == "q" then
 						trimmed_input = "/q"
 					elseif lkey == "?" then
@@ -2171,7 +2171,7 @@ local function run_quiz(study_queue, config)
 						end
 						defer_current_card()
 						break
-					elseif lower_cmd == "p" or lower_cmd == "sync_forward" then
+					elseif lower_cmd == "y" or lower_cmd == "sync_forward" then
 						sync_forward_to_mpv(entry, config)
 					elseif lower_cmd:match("^sync%s+") or lower_cmd == "sync" then
 						if not config.mpv_integration then
@@ -2536,7 +2536,7 @@ print_interactive_help = function(config)
 	local esc_skip = (config and config.command_mode and config.command_mode_esc_toggles) and "     " or ", " .. bold("Esc")
 	print("  " .. bold("/d") .. esc_skip .. "                 Skip the current card.")
 	if config and config.mpv_integration then
-		print("  " .. bold("/p") .. ", " .. bold("/sync_forward") .. "         Sync active card timestamp to MPV.")
+		print("  " .. bold("/y") .. ", " .. bold("/sync_forward") .. "         Sync active card timestamp to MPV.")
 		print("  " .. bold("/sync <zid> <time>") .. "      Jump to the card matching ZID and closest timestamp.")
 	end
 	print("  " .. bold("/q") .. ", " .. bold("/quit") .. ", " .. bold("/exit") .. "        Exit the quiz.")
@@ -2544,13 +2544,13 @@ print_interactive_help = function(config)
 		print("\n" .. bold(cyan("Command Mode enabled:")))
 		local esc_cmd_mode = config.command_mode_esc_toggles and "Switch to Answer (from command)." or "Skip the current card."
 		if config.command_mode_single_key then
-			local single_keys = config.mpv_integration and "a, d, p, q, ?, h" or "a, d, q, ?, h"
+			local single_keys = config.mpv_integration and "a, d, y, q, ?, h" or "a, d, q, ?, h"
 			print("  " .. bold("Esc") .. "                     In Answer: Switch to Command.")
 			print("  " .. bold("Esc") .. "                     In Command: " .. esc_cmd_mode)
 			print("  " .. bold("Enter, Space") .. "            In Command: Switch to Answer.")
 			print("  " .. bold(single_keys) .. "           Execute commands instantly with single keystrokes.")
 		else
-			local multi_keys = config.mpv_integration and "a, d, p, q, ?" or "a, d, q, ?"
+			local multi_keys = config.mpv_integration and "a, d, y, q, ?" or "a, d, q, ?"
 			print("  " .. bold("Esc") .. "                     In Answer: Switch to Command.")
 			print("  " .. bold("Esc") .. "                     In Command: " .. esc_cmd_mode)
 			print("  " .. bold("Enter") .. "                   In Command: Switch to Answer.")

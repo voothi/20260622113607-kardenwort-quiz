@@ -1629,11 +1629,11 @@ def test_sync_reverse_command(quiz_env):
 
 
 def test_sync_forward_hotkey_command_mode(quiz_env):
-    """Test that pressing 'p' in command mode parses successfully."""
+    """Test that pressing 'y' in command mode parses successfully."""
     code, out, err = run_quiz(
         quiz_env,
         ["20260604184114-microsoft-just-shocked-the.en.tsv"],
-        ["p", "/q"]
+        ["y", "/q"]
     )
     assert code == 0
 
@@ -1828,7 +1828,7 @@ def test_input_helper_reverse_ipc_server(tmp_path):
 
 
 def test_sync_forward_command_execution(quiz_env):
-    """Test that pressing 'p' (forward sync) executes the correct Python background command when enabled."""
+    """Test that pressing 'y' (forward sync) executes the correct Python background command when enabled."""
     config_path = quiz_env / "config.ini"
     content = config_path.read_text(encoding="utf-8")
     content += "\nmpv_integration = true\nmpv_pipe_path = \\\\.\\pipe\\mpv-socket-test\ncommand_mode = true\nstart_in_command_mode = true\n"
@@ -1845,7 +1845,7 @@ def test_sync_forward_command_execution(quiz_env):
     code, out, err = run_quiz(
         quiz_env,
         ["20260604184114-microsoft-just-shocked-the.en.tsv"],
-        ["p", "/q"],
+        ["y", "/q"],
         env=test_env
     )
     assert code == 0
@@ -1874,7 +1874,7 @@ def test_sync_disabled_gating(quiz_env):
     code, out, err = run_quiz(
         quiz_env,
         ["20260604184114-microsoft-just-shocked-the.en.tsv"],
-        ["/sync_forward", "/sync 20260604184114 12.3", "p", "/q"]
+        ["/sync_forward", "/sync 20260604184114 12.3", "y", "/q"]
     )
     assert code == 0
     clean_out = strip_ansi(out)
