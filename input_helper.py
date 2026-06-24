@@ -63,6 +63,9 @@ if sys.platform == 'win32':
     kernel32.WriteConsoleInputW.argtypes = [wintypes.HANDLE, ctypes.c_void_p, wintypes.DWORD, ctypes.POINTER(wintypes.DWORD)]
     kernel32.WriteConsoleInputW.restype = wintypes.BOOL
 
+    kernel32.WaitNamedPipeW.argtypes = [wintypes.LPCWSTR, wintypes.DWORD]
+    kernel32.WaitNamedPipeW.restype = wintypes.BOOL
+
     kernel32.PeekNamedPipe.argtypes = [wintypes.HANDLE, ctypes.c_void_p, wintypes.DWORD, ctypes.POINTER(wintypes.DWORD), ctypes.POINTER(wintypes.DWORD), ctypes.POINTER(wintypes.DWORD)]
     kernel32.PeekNamedPipe.restype = wintypes.BOOL
 
@@ -119,15 +122,17 @@ def run_ipc_server_thread(address, family):
     except Exception:
         pass
 
-def send_win_pipe(pipe_path, data):
+def send_win_pipe(pipe_path, data, timeout_ms=5000):
     GENERIC_READ = 0x80000000
     GENERIC_WRITE = 0x40000000
     OPEN_EXISTING = 3
     FILE_SHARE_READ = 1
     FILE_SHARE_WRITE = 2
     
+    start_time = time.time()
     handle = None
-    for attempt in range(5):
+    
+    while True:
         handle = kernel32.CreateFileW(
             pipe_path,
             GENERIC_READ | GENERIC_WRITE,
@@ -139,7 +144,7 @@ def send_win_pipe(pipe_path, data):
         )
         if not _is_invalid_handle(handle):
             break
-        # Fallback: write-only access
+            
         handle = kernel32.CreateFileW(
             pipe_path,
             GENERIC_WRITE,
@@ -151,10 +156,14 @@ def send_win_pipe(pipe_path, data):
         )
         if not _is_invalid_handle(handle):
             break
-        time.sleep(0.05)
-    
-    if _is_invalid_handle(handle):
-        raise Exception("Failed to open named pipe")
+            
+        err = ctypes.GetLastError()
+        # 231 = ERROR_PIPE_BUSY
+        if err != 231 or (time.time() - start_time) > timeout_ms / 1000.0:
+            raise Exception(f"Failed to open named pipe, error: {err}")
+            
+        # Wait for the pipe to become available, max 500ms per wait call
+        kernel32.WaitNamedPipeW(pipe_path, 500)
             
     written = wintypes.DWORD(0)
     res = kernel32.WriteFile(
@@ -190,17 +199,29 @@ def send_receive_ipc(pipe_path, command_dict, timeout=1.0):
         FILE_SHARE_READ = 1
         FILE_SHARE_WRITE = 2
         
-        handle = kernel32.CreateFileW(
-            pipe_path,
-            GENERIC_READ | GENERIC_WRITE,
-            FILE_SHARE_READ | FILE_SHARE_WRITE,
-            None,
-            OPEN_EXISTING,
-            0,
-            None
-        )
-        if _is_invalid_handle(handle):
-            return None
+        start_time = time.time()
+        handle = None
+        
+        while True:
+            handle = kernel32.CreateFileW(
+                pipe_path,
+                GENERIC_READ | GENERIC_WRITE,
+                FILE_SHARE_READ | FILE_SHARE_WRITE,
+                None,
+                OPEN_EXISTING,
+                0,
+                None
+            )
+            if not _is_invalid_handle(handle):
+                break
+                
+            err = ctypes.GetLastError()
+            # 231 = ERROR_PIPE_BUSY
+            if err != 231 or (time.time() - start_time) > timeout:
+                return None
+                
+            # Wait for pipe to be available
+            kernel32.WaitNamedPipeW(pipe_path, int(timeout * 1000))
             
         written = wintypes.DWORD(0)
         res = kernel32.WriteFile(
