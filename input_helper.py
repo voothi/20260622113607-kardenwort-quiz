@@ -62,8 +62,8 @@ def read_key(enable_arrows=False, swap_arrows=False):
             hint_cmd = None
             if e.wVirtualKeyCode == 0x25: hint_cmd = "/hint_right" if swap_arrows else "/hint_left"
             elif e.wVirtualKeyCode == 0x27: hint_cmd = "/hint_left" if swap_arrows else "/hint_right"
-            elif e.wVirtualKeyCode == 0x28: hint_cmd = "/hint_down"
-            elif e.wVirtualKeyCode == 0x26: hint_cmd = "/hint_up"
+            elif e.wVirtualKeyCode == 0x28: hint_cmd = "/hint_up" if swap_arrows else "/hint_down"
+            elif e.wVirtualKeyCode == 0x26: hint_cmd = "/hint_down" if swap_arrows else "/hint_up"
             if hint_cmd:
                 print(hint_cmd, end="")
                 return
@@ -194,8 +194,8 @@ def read_line(enable_arrows=False, initial_text="", save_esc=False, swap_arrows=
                 hint_cmd = None
                 if vk == 0x25: hint_cmd = "/hint_right" if swap_arrows else "/hint_left"
                 elif vk == 0x27: hint_cmd = "/hint_left" if swap_arrows else "/hint_right"
-                elif vk == 0x28: hint_cmd = "/hint_down"
-                elif vk == 0x26: hint_cmd = "/hint_up"
+                elif vk == 0x28: hint_cmd = "/hint_up" if swap_arrows else "/hint_down"
+                elif vk == 0x26: hint_cmd = "/hint_down" if swap_arrows else "/hint_up"
                 
                 if hint_cmd:
                     # Clear line visually
