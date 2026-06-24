@@ -249,6 +249,7 @@ local function load_config(filename)
 		ignore_punctuation = true,
 		diff_inverted_colors = false,
 		anki_grading = false,
+		repeat_counts_in_stats = false,
 		fields = {},
 		fields_mapping_word = {},
 		fields_mapping_sentence = {},
@@ -367,6 +368,8 @@ local function load_config(filename)
 								config.diff_inverted_colors = (val == "true" or val == "1")
 							elseif key == "anki_grading" then
 								config.anki_grading = (val == "true" or val == "1")
+							elseif key == "repeat_counts_in_stats" then
+								config.repeat_counts_in_stats = (val == "true" or val == "1")
 							end
 						elseif current_section == "fields_mapping.word" then
 							config.fields_mapping_word[key] = val
@@ -1742,7 +1745,7 @@ local function run_quiz(study_queue, config)
 	local question_num = 0
 
 	for i, entry in ipairs(study_queue) do
-		if not entry.is_repeat then
+		if not entry.is_repeat or config.repeat_counts_in_stats then
 			question_num = question_num + 1
 		end
 		local target_word = entry.word
@@ -1787,14 +1790,15 @@ local function run_quiz(study_queue, config)
 			print_header(config)
 
 			local basename = entry.filename:match("([^/\\]+)$") or entry.filename
-			if entry.is_repeat then
+			if entry.is_repeat and not config.repeat_counts_in_stats then
 				print(bold(cyan("Practice Repeat:")) .. dim(string.format(" [File: %s | Box %d]", basename, entry.box)))
 			else
 				local cycle = math.ceil(question_num / total)
 				local disp_num = ((question_num - 1) % total) + 1
 				local cycle_str = cycle > 1 and string.format(" (Cycle %d)", cycle) or ""
+				local repeat_str = entry.is_repeat and " (Repeat)" or ""
 				print(
-					bold(cyan(string.format("Question %d/%d%s:", disp_num, total, cycle_str)))
+					bold(cyan(string.format("Question %d/%d%s%s:", disp_num, total, cycle_str, repeat_str)))
 						.. dim(string.format(" [File: %s | Box %d]", basename, entry.box))
 				)
 			end
@@ -1997,10 +2001,11 @@ local function run_quiz(study_queue, config)
 							repeat_entry.repeat_target_idx = target_idx
 
 							table.insert(study_queue, i + 1, repeat_entry)
+							if config.repeat_counts_in_stats then total = total + 1 end
 							-- Re-insert current card so we can return to it after the repeat
 							table.insert(study_queue, i + 2, entry)
 
-							if not entry.is_repeat then
+							if not entry.is_repeat or config.repeat_counts_in_stats then
 								question_num = question_num - 1
 							end
 
@@ -2040,7 +2045,7 @@ local function run_quiz(study_queue, config)
 				local save_ok, save_err = true, nil
 
 				if not config.anki_grading then
-					if not entry.is_repeat then
+					if not entry.is_repeat or config.repeat_counts_in_stats then
 						if is_correct then
 							score = score + 1
 						end
@@ -2053,7 +2058,7 @@ local function run_quiz(study_queue, config)
 					clear_screen()
 					print_header(config)
 					local basename = entry.filename:match("([^/\\]+)$") or entry.filename
-					if entry.is_repeat then
+					if entry.is_repeat and not config.repeat_counts_in_stats then
 						print(
 							bold(cyan("Practice Repeat:"))
 								.. dim(string.format(" [File: %s | Box %d]", basename, entry.box))
@@ -2062,8 +2067,9 @@ local function run_quiz(study_queue, config)
 						local cycle = math.ceil(question_num / total)
 						local disp_num = ((question_num - 1) % total) + 1
 						local cycle_str = cycle > 1 and string.format(" (Cycle %d)", cycle) or ""
+						local repeat_str = entry.is_repeat and " (Repeat)" or ""
 						print(
-							bold(cyan(string.format("Question %d/%d%s:", disp_num, total, cycle_str)))
+							bold(cyan(string.format("Question %d/%d%s%s:", disp_num, total, cycle_str, repeat_str)))
 								.. dim(string.format(" [File: %s | Box %d]", basename, entry.box))
 						)
 					end
@@ -2096,7 +2102,7 @@ local function run_quiz(study_queue, config)
 				print_framed_diff(u_line, t_line)
 				print()
 
-				if entry.is_repeat then
+				if entry.is_repeat and not config.repeat_counts_in_stats then
 					print(magenta("ℹ ") .. dim("Practice Repeat — progress & score unaffected"))
 				end
 
@@ -2143,6 +2149,7 @@ local function run_quiz(study_queue, config)
 									repeat_entry.is_repeat = true
 									repeat_entry.repeat_target_idx = target_idx
 									table.insert(study_queue, i + 1, repeat_entry)
+									if config.repeat_counts_in_stats then total = total + 1 end
 									break
 								else
 									io.write("\27[1F\27[J")
@@ -2156,6 +2163,7 @@ local function run_quiz(study_queue, config)
 								repeat_entry.is_repeat = true
 								repeat_entry.repeat_target_idx = entry.repeat_target_idx or i
 								table.insert(study_queue, i + 1, repeat_entry)
+								if config.repeat_counts_in_stats then total = total + 1 end
 								break
 							elseif lkey == "d" or lkey == "\x1b" then
 								break
@@ -2221,6 +2229,7 @@ local function run_quiz(study_queue, config)
 								repeat_entry.is_repeat = true
 								repeat_entry.repeat_target_idx = target_idx
 								table.insert(study_queue, i + 1, repeat_entry)
+								if config.repeat_counts_in_stats then total = total + 1 end
 								break
 							else
 								print(bold(red("\nThere is no previous card to repeat.")))
@@ -2230,7 +2239,7 @@ local function run_quiz(study_queue, config)
 							end
 						elseif lkey == "s" then
 							local graded_correct = is_correct
-							if not entry.is_repeat then
+							if not entry.is_repeat or config.repeat_counts_in_stats then
 								if graded_correct then
 									score = score + 1
 								end
@@ -2247,6 +2256,7 @@ local function run_quiz(study_queue, config)
 							repeat_entry.is_repeat = true
 							repeat_entry.repeat_target_idx = entry.repeat_target_idx or i
 							table.insert(study_queue, i + 1, repeat_entry)
+							if config.repeat_counts_in_stats then total = total + 1 end
 							break
 						elseif lkey == "d" or lkey == "\x1b" then
 							defer_current_card()
@@ -2261,7 +2271,7 @@ local function run_quiz(study_queue, config)
 								graded_correct = is_correct
 							end
 
-							if not entry.is_repeat then
+							if not entry.is_repeat or config.repeat_counts_in_stats then
 								if graded_correct then
 									score = score + 1
 								end
