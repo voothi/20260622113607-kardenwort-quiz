@@ -2121,7 +2121,7 @@ local function run_quiz(study_queue, config)
 				else
 					-- Anki manual grading mode
 					while true do
-						local prompt_str = bold(cyan("Grade: ")) .. dim("Press '1' Again, '3' Good, '?' for help...")
+						local prompt_str = bold("Grade ") .. dim("(press '?' for help, '1' for Again, '3' for Good)... ")
 
 						local allowed = { "\r", "\n", " ", "1", "3", "q", "?" }
 						if config.single_card_mode then
