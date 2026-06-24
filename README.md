@@ -276,6 +276,13 @@ The TSV Quiz features bidirectional integration with the MPV media player for co
 - `quiz_pipe_path`: The reverse listener named pipe or socket path (default: `\\.\pipe\kardenwort-quiz`).
 - `python_cmd`: The python execution command or binary name/path (default: `python`).
 
+### 5. CLI Helper Modes (input_helper.py)
+The utility includes a Python-based console helper `input_helper.py` that provides advanced console features for the Lua quiz on Windows. It supports the following modes:
+- `--key`: Reads a single keypress.
+- `--line`: Reads a full line of input with support for advanced line-editing keyboard shortcuts, Esc (cancels), and Ctrl+C (quits).
+- `--width`: Queries the current terminal width in columns (falling back to 120/119 in case of failure or redirection) to support responsive wrapping of long lines and German compound words.
+- `--sync-mpv`: Syncs media playback to the MPV media player.
+
 [Return to Top](#kardenwort-tsv-quiz)
 
 ## Kardenwort Ecosystem

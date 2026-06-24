@@ -236,8 +236,9 @@ def test_review_sort_order(quiz_env):
     assert code == 0
     
     # 'properly' is Box 1, should be sorted first (contains 'clear way to use it')
-    assert "clear way to use it" in out
-    assert "unified intelligence" not in out
+    clean_out = strip_ansi(out).replace("\n", " ")
+    assert "clear way to use it" in clean_out
+    assert "unified intelligence" not in clean_out
 
 def test_incorrect_penalty_decrease(quiz_env):
     """Test answering a card incorrectly lowers its Leitner Box."""
@@ -497,8 +498,9 @@ def test_scheduling_new_review_orders(quiz_env):
     # With new_first, 'properly' (new card) should be presented first
     code, out, err = run_quiz(quiz_env, ["20260604184114-microsoft-just-shocked-the.en.tsv"], ["/q"])
     assert code == 0
-    assert "clear way to use it" in out
-    assert "unified intelligence" not in out
+    clean_out_new = strip_ansi(out).replace("\n", " ")
+    assert "clear way to use it" in clean_out_new
+    assert "unified intelligence" not in clean_out_new
     
     # Change config to review_first (default)
     config_path.write_text(
@@ -513,8 +515,9 @@ def test_scheduling_new_review_orders(quiz_env):
     )
     code, out, err = run_quiz(quiz_env, ["20260604184114-microsoft-just-shocked-the.en.tsv"], ["/q"])
     assert code == 0
-    assert "unified intelligence" in out
-    assert "clear way to use it" not in out
+    clean_out_rev = strip_ansi(out).replace("\n", " ")
+    assert "unified intelligence" in clean_out_rev
+    assert "clear way to use it" not in clean_out_rev
 
 def test_utf8_hint_offsets(quiz_env):
     """Test 3-parameter hints with multi-byte UTF-8 words to verify no byte-slicing issues."""
@@ -1807,8 +1810,8 @@ def test_input_helper_sync_mpv_spawn_fallback(tmp_path, monkeypatch):
     def mock_send_receive_ipc_none(pipe, cmd):
         return None
 
-    def mock_spawn_mpv(pipe, path, start_time):
-        spawned_mpv_args.append((pipe, path, start_time))
+    def mock_spawn_mpv(pipe, path, start_time, mpv_cmd="mpv"):
+        spawned_mpv_args.append((pipe, path, start_time, mpv_cmd))
         return True
 
     monkeypatch.setattr(input_helper_test, "send_receive_ipc", mock_send_receive_ipc_none)
@@ -1822,7 +1825,7 @@ def test_input_helper_sync_mpv_spawn_fallback(tmp_path, monkeypatch):
     assert success is True
 
     assert len(spawned_mpv_args) == 1
-    assert spawned_mpv_args[0] == (pipe_path, media_file_mpv, timestamp)
+    assert spawned_mpv_args[0] == (pipe_path, media_file_mpv, timestamp, "mpv")
 
 
 def test_input_helper_reverse_ipc_server(tmp_path):
@@ -2112,6 +2115,29 @@ def test_input_helper_send_receive_ipc_busy_retry(tmp_path, monkeypatch):
     assert "CloseHandle" in calls
     # WaitNamedPipeW timeout should be 50ms (the refined granularity)
     assert any(c[0] == "WaitNamedPipeW" and c[1] == 50 for c in calls if isinstance(c, tuple))
+
+
+def test_word_wrap_extreme_length(quiz_env):
+    """Test wrapping of an extremely long word (>120 chars) to ensure it is hard-wrapped and doesn't crash."""
+    wrap_tsv = quiz_env / "wrap_test.tsv"
+    long_word = "A" * 130
+    with open(wrap_tsv, "w", encoding="utf-8", newline="\n") as f:
+        f.write(
+            "WordSource\tWordSourceInflectedForm\tWordSource2\tQuotation\tWordDestination\tSentenceSource\tNote\tSourceURL\tSource-en-GB\tSource-en-US\tSentenceSourceIndex\tDeck\tLeitnerBox\tLeitnerDue\n"
+            f"test\ttest\t\t\ttest\tHere is a long word: {long_word}.\t\t\t\t\t\tDeckA\t1\t0\n"
+        )
+    
+    code, out, err = run_quiz(quiz_env, ["wrap_test.tsv"], ["/q"])
+    assert code == 0
+    clean_out = strip_ansi(out)
+    
+    # The default console width in test environment is 119.
+    # So the word 'A' * 130 should be hard-wrapped:
+    # 'A' * 119 on the first line, and 'A' * 11 on the second line.
+    first_part = "A" * 119
+    second_part = "A" * 11
+    assert first_part in clean_out
+    assert second_part in clean_out
 
 
 

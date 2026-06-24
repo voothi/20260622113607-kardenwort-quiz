@@ -1036,6 +1036,68 @@ end
 
 local console_width = get_console_width()
 
+local function tokenize_ansi_utf8(str)
+	local tokens = {}
+	local i = 1
+	local len = #str
+	while i <= len do
+		local ansi_start, ansi_end = str:find("^\27%[[%d;]*m", i)
+		if ansi_start then
+			table.insert(tokens, { type = "ansi", val = str:sub(ansi_start, ansi_end) })
+			i = ansi_end + 1
+		else
+			local next_char_idx = utf8.offset(str, 2, i)
+			local char_val
+			if next_char_idx then
+				char_val = str:sub(i, next_char_idx - 1)
+				i = next_char_idx
+			else
+				char_val = str:sub(i)
+				i = len + 1
+			end
+			table.insert(tokens, { type = "char", val = char_val })
+		end
+	end
+	return tokens
+end
+
+local function split_word_by_width(word, max_width)
+	local tokens = tokenize_ansi_utf8(word)
+	local parts = {}
+	local current_part = {}
+	local current_visible_len = 0
+	local active_ansi = {}
+	
+	for _, tok in ipairs(tokens) do
+		if tok.type == "ansi" then
+			table.insert(current_part, tok.val)
+			if tok.val == "\27[0m" then
+				active_ansi = {}
+			else
+				table.insert(active_ansi, tok.val)
+			end
+		else
+			if current_visible_len >= max_width then
+				if #active_ansi > 0 then
+					table.insert(current_part, "\27[0m")
+				end
+				table.insert(parts, table.concat(current_part))
+				current_part = {}
+				current_visible_len = 0
+				for _, ansi_val in ipairs(active_ansi) do
+					table.insert(current_part, ansi_val)
+				end
+			end
+			table.insert(current_part, tok.val)
+			current_visible_len = current_visible_len + 1
+		end
+	end
+	if #current_part > 0 then
+		table.insert(parts, table.concat(current_part))
+	end
+	return parts
+end
+
 local function wrap_text(text, max_width)
 	max_width = max_width or console_width
 	local lines = {}
@@ -1050,13 +1112,28 @@ local function wrap_text(text, max_width)
 					local word_len = utf8_len(strip_ansi(word))
 					local space_len = utf8_len(strip_ansi(space))
 					
-					if current_len > 0 and current_len + word_len > max_width then
-						table.insert(lines, (current_line:gsub("%s+$", "")))
-						current_line = word .. space
-						current_len = word_len + space_len
+					if word_len > max_width then
+						if current_len > 0 then
+							table.insert(lines, (current_line:gsub("%s+$", "")))
+							current_line = ""
+							current_len = 0
+						end
+						local word_parts = split_word_by_width(word, max_width)
+						for idx = 1, #word_parts - 1 do
+							table.insert(lines, word_parts[idx])
+						end
+						local last_part = word_parts[#word_parts]
+						current_line = last_part .. space
+						current_len = utf8_len(strip_ansi(last_part)) + space_len
 					else
-						current_line = current_line .. word .. space
-						current_len = current_len + word_len + space_len
+						if current_len > 0 and current_len + word_len > max_width then
+							table.insert(lines, (current_line:gsub("%s+$", "")))
+							current_line = word .. space
+							current_len = word_len + space_len
+						else
+							current_line = current_line .. word .. space
+							current_len = current_len + word_len + space_len
+						end
 					end
 				end
 			end
@@ -1950,6 +2027,7 @@ local function run_quiz(study_queue, config)
 	local question_num = 0
 
 	for i, entry in ipairs(study_queue) do
+		console_width = get_console_width()
 		if not entry.is_repeat or config.repeat_counts_in_stats then
 			question_num = question_num + 1
 		end

@@ -9,6 +9,7 @@ Modes:
 
 import sys
 import os
+import shutil
 import re
 import ctypes
 from ctypes import wintypes
@@ -708,7 +709,6 @@ if __name__ == "__main__":
             i += 4
             continue
         elif args[i] == "--width":
-            import shutil
             print(shutil.get_terminal_size((120, 30)).columns)
             sys.exit(0)
         elif args[i] in ("--key", "--line"):
