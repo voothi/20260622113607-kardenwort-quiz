@@ -329,6 +329,10 @@ def sync_mpv(pipe_path, tsv_path, timestamp):
     current_info = send_receive_ipc(pipe_path, {"command": ["get_property", "path"]})
     if current_info is None:
         spawn_mpv(pipe_path, media_file_mpv, timestamp)
+        try:
+            send_ipc_payload(pipe_path, {"command": ["set_property", "pause", False]})
+        except Exception:
+            pass
         return True
         
     is_same = False
@@ -339,12 +343,18 @@ def sync_mpv(pipe_path, tsv_path, timestamp):
     try:
         if is_same:
             send_ipc_payload(pipe_path, {"command": ["seek", timestamp, "absolute"]})
+            send_ipc_payload(pipe_path, {"command": ["set_property", "pause", False]})
         else:
             send_ipc_payload(pipe_path, {"command": ["loadfile", media_file_mpv, "replace"]})
             send_ipc_payload(pipe_path, {"command": ["seek", timestamp, "absolute"]})
+            send_ipc_payload(pipe_path, {"command": ["set_property", "pause", False]})
         return True
     except Exception:
         spawn_mpv(pipe_path, media_file_mpv, timestamp)
+        try:
+            send_ipc_payload(pipe_path, {"command": ["set_property", "pause", False]})
+        except Exception:
+            pass
         return True
 
 # Enable VT processing for CONOUT$
