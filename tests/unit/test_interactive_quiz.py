@@ -385,6 +385,20 @@ def test_empty_table_error(quiz_env):
     assert "Error loading" in out
     assert "No vocabulary files could be loaded." in out
 
+def test_invalid_extension_error(quiz_env):
+    """Test handling of unsupported file types like .srt with friendly errors."""
+    srt_file = quiz_env / "20260606211142-anthropic-just-warned-everyone.en.srt"
+    with open(srt_file, "w", encoding="utf-8", newline="\n") as f:
+        f.write("1\n00:00:01,000 --> 00:00:04,000\nHello World\n")
+    
+    code, out, err = run_quiz(quiz_env, [str(srt_file)], [])
+    
+    assert "Error loading" in out
+    assert "appears to be a subtitle file (.srt)" in out
+    assert "Please select a vocabulary TSV file instead." in out
+    assert "No vocabulary files could be loaded." in out
+
+
 def test_headerless_tsv_fallback(quiz_env):
     """Test automatic column layout mapping when the TSV has no header row."""
     headerless_tsv = quiz_env / "headerless.tsv"

@@ -549,6 +549,35 @@ end
 local function load_tsv(filename, config)
 	local vocabulary = {}
 	local raw_rows = {}
+
+	local invalid_exts = {
+		srt = "a subtitle",
+		vtt = "a subtitle",
+		mp4 = "a video",
+		mkv = "a video",
+		avi = "a video",
+		webm = "a video",
+		mov = "a video",
+		mp3 = "an audio",
+		wav = "an audio",
+		m4a = "an audio",
+		png = "an image",
+		jpg = "an image",
+		jpeg = "an image",
+		gif = "an image",
+	}
+	local ext = filename:match("%.([^%.]+)$")
+	if ext then
+		local file_type = invalid_exts[ext:lower()]
+		if file_type then
+			return nil,
+				nil,
+				nil,
+				nil,
+				string.format("Selected file appears to be %s file (.%s). Please select a vocabulary TSV file instead.", file_type, ext:lower())
+		end
+	end
+
 	local file, err = io.open(filename, "r")
 	if not file then
 		return nil, nil, nil, nil, "Could not open file: " .. tostring(err)
