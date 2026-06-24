@@ -376,13 +376,24 @@ def test_exact_length_masking(quiz_env):
 
 def test_empty_table_error(quiz_env):
     """Test handling of invalid or empty TSV gracefully."""
+    # 1. Headerless file with one non-header line that has no valid vocabulary
     empty_tsv = quiz_env / "empty.tsv"
     with open(empty_tsv, "w", encoding="utf-8", newline="\n") as f:
         f.write("Header1\tHeader2\n")
     
     code, out, err = run_quiz(quiz_env, ["empty.tsv"], [])
-    
     assert "Error loading" in out
+    assert "No valid vocabulary entries could be loaded" in out
+    assert "No vocabulary files could be loaded." in out
+
+    # 2. File with valid headers but no data rows
+    empty_headers_tsv = quiz_env / "empty_headers.tsv"
+    with open(empty_headers_tsv, "w", encoding="utf-8", newline="\n") as f:
+        f.write("WordSource\tSentenceSource\n")
+        
+    code, out, err = run_quiz(quiz_env, ["empty_headers.tsv"], [])
+    assert "Error loading" in out
+    assert "No vocabulary entries found (empty file or headers only)." in out
     assert "No vocabulary files could be loaded." in out
 
 def test_invalid_extension_error(quiz_env):

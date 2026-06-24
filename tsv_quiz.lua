@@ -501,6 +501,8 @@ local function save_tsv(filename, raw_rows)
 	for _, row in ipairs(raw_rows) do
 		if row.type == "comment" then
 			file:write(row.content .. "\n")
+		elseif row.type == "empty" then
+			file:write(row.content .. "\n")
 		elseif row.type == "header" then
 			file:write(table.concat(row.columns, "\t") .. "\n")
 		elseif row.type == "data" then
@@ -591,8 +593,11 @@ local function load_tsv(filename, config)
 
 	for line in file:lines() do
 		total_lines = total_lines + 1
+		local clean_line = line:gsub("^%s+", ""):gsub("%s+$", "")
+		if clean_line == "" then
+			table.insert(raw_rows, { type = "empty", content = line })
 		-- Store comment lines directly
-		if line:sub(1, 1) == "#" then
+		elseif line:sub(1, 1) == "#" then
 			table.insert(raw_rows, { type = "comment", content = line })
 		elseif not headers then
 			-- This is the first non-comment line. Check if it is a header row
@@ -833,7 +838,13 @@ local function load_tsv(filename, config)
 		end
 	end
 
-	if #vocabulary == 0 then
+	if parsed_rows == 0 then
+		return nil,
+			nil,
+			nil,
+			nil,
+			"No vocabulary entries found (empty file or headers only)."
+	elseif #vocabulary == 0 then
 		return nil,
 			nil,
 			nil,
