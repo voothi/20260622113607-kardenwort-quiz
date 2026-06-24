@@ -235,11 +235,11 @@ local function load_config(filename)
 		review_sort_order = "due_date",
 		new_sort_order = "order_added",
 		single_card_mode = false,
-		command_mode = false,
-		start_in_command_mode = false,
-		command_mode_esc_toggles = true,
-		command_mode_save_input = false,
-		command_mode_single_key = false,
+		options_mode = false,
+		start_in_options_mode = false,
+		options_mode_esc_toggles = true,
+		options_mode_save_input = false,
+		options_mode_single_key = false,
 		arrow_hints = false,
 		exact_length_mask = false,
 		case_sensitive_diff = true,
@@ -319,16 +319,16 @@ local function load_config(filename)
 								end
 							elseif key == "single_card_mode" then
 								config.single_card_mode = (val == "true" or val == "1")
-							elseif key == "command_mode" then
-								config.command_mode = (val == "true" or val == "1")
-							elseif key == "start_in_command_mode" then
-								config.start_in_command_mode = (val == "true" or val == "1")
-							elseif key == "command_mode_esc_toggles" then
-								config.command_mode_esc_toggles = (val == "true" or val == "1")
-							elseif key == "command_mode_save_input" then
-								config.command_mode_save_input = (val == "true" or val == "1")
-							elseif key == "command_mode_single_key" then
-								config.command_mode_single_key = (val == "true" or val == "1")
+							elseif key == "options_mode" then
+								config.options_mode = (val == "true" or val == "1")
+							elseif key == "start_in_options_mode" then
+								config.start_in_options_mode = (val == "true" or val == "1")
+							elseif key == "options_mode_esc_toggles" then
+								config.options_mode_esc_toggles = (val == "true" or val == "1")
+							elseif key == "options_mode_save_input" then
+								config.options_mode_save_input = (val == "true" or val == "1")
+							elseif key == "options_mode_single_key" then
+								config.options_mode_single_key = (val == "true" or val == "1")
 							elseif key == "arrow_hints" then
 								val = val:lower()
 								if val == "swap" or val == "reverse" then
@@ -1719,7 +1719,7 @@ local function run_quiz(study_queue, config)
 		local hint_n, hint_k, hint_m = 0, 0, 0
 		local has_hint = false
 
-		local is_command_mode = config.start_in_command_mode and config.command_mode
+		local is_options_mode = config.start_in_options_mode and config.options_mode
 		local saved_input = ""
 
 		local function defer_current_card()
@@ -1774,10 +1774,10 @@ local function run_quiz(study_queue, config)
 			local trimmed_input = ""
 			local switch_mode = false
 
-			if config.command_mode and is_command_mode then
-				if config.command_mode_single_key then
+			if config.options_mode and is_options_mode then
+				if config.options_mode_single_key then
 					local allowed = {"a", "d", "q", "?", "\r", "\n", "\x1b", "h", "/", "/hint_left", "/hint_right", "/hint_up", "/hint_down"}
-					local key = press_any_key(bold("Command mode ") .. dim("(? for help, Esc to skip, Enter to input)... "), allowed, config.arrow_hints)
+					local key = press_any_key(bold("Options ") .. dim("(? for help, Esc to skip, Enter to answer)... "), allowed, config.arrow_hints)
 					if key == "" then
 						local line = io.read()
 						key = line and line:sub(1, 1) or ""
@@ -1786,10 +1786,10 @@ local function run_quiz(study_queue, config)
 					local lkey = key:lower()
 					if lkey == "\r" or lkey == "\n" then
 						switch_mode = true
-						is_command_mode = false
+						is_options_mode = false
 					elseif lkey == "\x1b" then
-						if config.command_mode_esc_toggles then
-							is_command_mode = false
+						if config.options_mode_esc_toggles then
+							is_options_mode = false
 							switch_mode = true
 						else
 							trimmed_input = "/d"
@@ -1818,7 +1818,7 @@ local function run_quiz(study_queue, config)
 						trimmed_input = ""
 					end
 				else
-					io.write(bold("Command mode ") .. dim("(? for help, Esc to skip, Enter to input): "))
+					io.write(bold("Options ") .. dim("(? for help, Esc to skip, Enter to answer): "))
 					user_input = read_line_with_esc(config, nil, false, config.arrow_hints)
 					if not user_input then
 						print(magenta("\nExiting quiz early."))
@@ -1827,11 +1827,11 @@ local function run_quiz(study_queue, config)
 					trimmed_input = user_input:gsub("^%s+", ""):gsub("%s+$", "")
 					
 					if trimmed_input == "" then
-						is_command_mode = false
+						is_options_mode = false
 						switch_mode = true
 					elseif trimmed_input == "/d" then
-						if config.command_mode_esc_toggles then
-							is_command_mode = false
+						if config.options_mode_esc_toggles then
+							is_options_mode = false
 							switch_mode = true
 						end
 					else
@@ -1841,15 +1841,15 @@ local function run_quiz(study_queue, config)
 					end
 				end
 			else
-				local help_msg = config.command_mode and "(Esc for command mode)" or "(type '/?' for help, Esc to skip)"
+				local help_msg = config.options_mode and "(Esc for options)" or "(type '/?' for help, Esc to skip)"
 				io.write(bold("Your answer ") .. dim(help_msg .. ": "))
-				user_input = read_line_with_esc(config, saved_input, config.command_mode_save_input, false)
+				user_input = read_line_with_esc(config, saved_input, config.options_mode_save_input, false)
 				if not user_input then
 					print(magenta("\nExiting quiz early."))
 					return
 				end
 
-				if config.command_mode_save_input and user_input:sub(1, 1) == "\x1b" then
+				if config.options_mode_save_input and user_input:sub(1, 1) == "\x1b" then
 					saved_input = user_input:sub(2)
 					user_input = "/d"
 				else
@@ -1858,8 +1858,8 @@ local function run_quiz(study_queue, config)
 
 				trimmed_input = user_input:gsub("^%s+", ""):gsub("%s+$", "")
 				
-				if config.command_mode and trimmed_input == "/d" then
-					is_command_mode = true
+				if config.options_mode and trimmed_input == "/d" then
+					is_options_mode = true
 					switch_mode = true
 				end
 			end
@@ -2280,18 +2280,18 @@ print_interactive_help = function(config)
 	print("  " .. bold("/d") .. ", " .. bold("Esc") .. "                 Skip the current card.")
 	print("  " .. bold("Arrows") .. "                  Dynamic visual hints (if arrow_hints is enabled).")
 	print("  " .. bold("/q") .. ", " .. bold("/quit") .. ", " .. bold("/exit") .. "        Exit the quiz.")
-	if config and config.command_mode then
-		print("\n" .. bold(cyan("Command Mode enabled:")))
-		local esc_cmd_mode = config.command_mode_esc_toggles and "Switch to Input Mode (from command mode)." or "Skip the current card."
-		if config.command_mode_single_key then
-			print("  " .. bold("Esc") .. "                     In input mode: Switch to Command Mode.")
-			print("  " .. bold("Esc") .. "                     In command mode: " .. esc_cmd_mode)
-			print("  " .. bold("Enter") .. "                   In command mode: Switch to Input Mode.")
+	if config and config.options_mode then
+		print("\n" .. bold(cyan("Options Mode enabled:")))
+		local esc_cmd_mode = config.options_mode_esc_toggles and "Switch to Answer (from options)." or "Skip the current card."
+		if config.options_mode_single_key then
+			print("  " .. bold("Esc") .. "                     In answer: Switch to Options.")
+			print("  " .. bold("Esc") .. "                     In options: " .. esc_cmd_mode)
+			print("  " .. bold("Enter") .. "                   In options: Switch to Answer.")
 			print("  " .. bold("a, d, q, ?, h") .. "           Execute commands instantly with single keystrokes.")
 		else
-			print("  " .. bold("Esc") .. "                     In input mode: Switch to Command Mode.")
-			print("  " .. bold("Esc") .. "                     In command mode: " .. esc_cmd_mode)
-			print("  " .. bold("Enter") .. "                   In command mode: Switch to Input Mode.")
+			print("  " .. bold("Esc") .. "                     In answer: Switch to Options.")
+			print("  " .. bold("Esc") .. "                     In options: " .. esc_cmd_mode)
+			print("  " .. bold("Enter") .. "                   In options: Switch to Answer.")
 			print("  " .. bold("a, d, q, ?") .. "              Execute commands without typing '/' (requires Enter).")
 		end
 	end
