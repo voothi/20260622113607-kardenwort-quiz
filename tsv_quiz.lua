@@ -2109,8 +2109,7 @@ local function run_quiz(study_queue, config)
 				print()
 
 				if entry.is_repeat and not config.repeat_counts_in_stats then
-					print(magenta("ℹ ") .. dim("Practice Repeat — progress & score unaffected"))
-				end
+					print(dim("This was a practice repeat. Your score and card progress were not affected."))				end
 
 				if not config.anki_grading then
 					if not save_ok then
