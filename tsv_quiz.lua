@@ -1836,9 +1836,11 @@ local function run_quiz(study_queue, config)
 						return
 					end
 					
+					local esc_triggered = false
 					if save_options and user_input:sub(1, 1) == "\x1b" then
 						saved_options_input = user_input:sub(2)
 						user_input = "/d"
+						esc_triggered = true
 					else
 						saved_options_input = ""
 					end
@@ -1852,6 +1854,9 @@ local function run_quiz(study_queue, config)
 						if config.options_mode_esc_toggles then
 							is_options_mode = false
 							switch_mode = true
+						elseif esc_triggered then
+							-- esc_toggles=false: Esc in Command mode skips the card (same as /d).
+							-- Fall through so /d is dispatched by the command handler below.
 						end
 					else
 						if trimmed_input:sub(1, 1) ~= "/" and trimmed_input ~= "" then

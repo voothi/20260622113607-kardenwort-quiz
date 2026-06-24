@@ -1210,3 +1210,108 @@ def test_options_mode_save_options(quiz_env):
     clean_out = strip_ansi(out)
     assert "💡 Hint: pr" in clean_out
 
+
+def test_options_mode_esc_skip_no_toggle(quiz_env):
+    """Test that Esc in Command mode skips the card when options_mode_esc_toggles=false."""
+    config_path = quiz_env / "config.ini"
+    content = config_path.read_text(encoding="utf-8")
+    content += "\noptions_mode = true\noptions_mode_esc_toggles = false\nstart_in_options_mode = true\noptions_mode_single_key = false\n"
+    config_path.write_text(content, encoding="utf-8", newline="\n")
+
+    focus_single_card(quiz_env, "20260604184114-microsoft-just-shocked-the.en.tsv", "properly")
+    focus_single_card(quiz_env, "20260303214721-text1.de.tsv", "Absätze")
+
+    # Start in Command mode. Press Esc (returned as /d) — should skip the card.
+    # Then quit.
+    code, out, err = run_quiz(
+        quiz_env,
+        ["20260604184114-microsoft-just-shocked-the.en.tsv", "20260303214721-text1.de.tsv"],
+        ["/d", "/q"]
+    )
+    assert code == 0
+    clean_out = strip_ansi(out)
+    assert "Skipping card..." in clean_out
+
+
+def test_options_mode_esc_save_no_toggle_skips(quiz_env):
+    """Test that Esc in Command mode skips the card even when save_options=true and esc_toggles=false.
+
+    Regression test for: when save_options=true, Esc was converted to /d internally but the
+    esc_toggles=false guard caused it to be silently swallowed — card was never skipped.
+    """
+    config_path = quiz_env / "config.ini"
+    content = config_path.read_text(encoding="utf-8")
+    content += (
+        "\noptions_mode = true"
+        "\noptions_mode_esc_toggles = false"
+        "\noptions_mode_save_options = true"
+        "\nstart_in_options_mode = true"
+        "\noptions_mode_single_key = false\n"
+    )
+    config_path.write_text(content, encoding="utf-8", newline="\n")
+
+    focus_single_card(quiz_env, "20260604184114-microsoft-just-shocked-the.en.tsv", "properly")
+    focus_single_card(quiz_env, "20260303214721-text1.de.tsv", "Absätze")
+
+    # In Command mode (start_in_options_mode=true):
+    # Send \x1b prefix to simulate Esc-with-save, which should skip the card.
+    # If the bug is present, the quiz loops back to Command and times out.
+    code, out, err = run_quiz(
+        quiz_env,
+        ["20260604184114-microsoft-just-shocked-the.en.tsv", "20260303214721-text1.de.tsv"],
+        ["\x1b", "/q"]
+    )
+    assert code == 0
+    clean_out = strip_ansi(out)
+    assert "Skipping card..." in clean_out
+
+
+def test_start_in_options_mode(quiz_env):
+    """Test that start_in_options_mode=true begins the card in Command mode, not Answer mode."""
+    config_path = quiz_env / "config.ini"
+    content = config_path.read_text(encoding="utf-8")
+    content += "\noptions_mode = true\nstart_in_options_mode = true\noptions_mode_single_key = false\n"
+    config_path.write_text(content, encoding="utf-8", newline="\n")
+
+    focus_single_card(quiz_env, "20260604184114-microsoft-just-shocked-the.en.tsv", "properly")
+
+    # The Command prompt should appear first (not Answer).
+    # Type Enter ("") to switch to Answer mode, then answer correctly.
+    code, out, err = run_quiz(
+        quiz_env,
+        ["20260604184114-microsoft-just-shocked-the.en.tsv"],
+        ["", "properly", "/q"]
+    )
+    assert code == 0
+    clean_out = strip_ansi(out)
+    # Command prompt must appear before Answer prompt
+    cmd_pos = clean_out.find("Command ")
+    ans_pos = clean_out.find("Answer ")
+    assert cmd_pos != -1, "Expected 'Command ' prompt"
+    assert ans_pos != -1, "Expected 'Answer ' prompt"
+    assert cmd_pos < ans_pos, "Command prompt should appear before Answer prompt"
+    assert "Diff" in clean_out
+
+
+def test_options_mode_single_key(quiz_env):
+    """Test that options_mode_single_key=true dispatches commands on single keypresses."""
+    config_path = quiz_env / "config.ini"
+    content = config_path.read_text(encoding="utf-8")
+    content += "\noptions_mode = true\nstart_in_options_mode = true\noptions_mode_single_key = true\n"
+    config_path.write_text(content, encoding="utf-8", newline="\n")
+
+    focus_single_card(quiz_env, "20260604184114-microsoft-just-shocked-the.en.tsv", "properly")
+    focus_single_card(quiz_env, "20260303214721-text1.de.tsv", "Absätze")
+
+    # In single_key mode the Command prompt reads a single key.
+    # Sending "d" should skip the card immediately (no Enter needed).
+    # Then quit from the next card.
+    code, out, err = run_quiz(
+        quiz_env,
+        ["20260604184114-microsoft-just-shocked-the.en.tsv", "20260303214721-text1.de.tsv"],
+        ["d", "/q"]
+    )
+    assert code == 0
+    clean_out = strip_ansi(out)
+    assert "Skipping card..." in clean_out
+
