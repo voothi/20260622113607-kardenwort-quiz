@@ -1,0 +1,197 @@
+[Leitner]
+# Repetition intervals for each box level (m = minutes, h = hours, d = days)
+# The number of entries here dynamically defines the number of boxes.
+intervals = 5m, 1h, 1d, 3d, 7d
+
+# Max new cards introduced per quiz session.
+# Set to -1 to disable the limit and load all new cards.
+new_cards_per_day = 20
+
+# Study ahead when no cards are due (true/false)
+# - false: If no cards are due, print a summary and exit (default).
+# - true: If no cards are due, let the user study cards ahead of schedule.
+study_ahead = false
+
+# Penalty for incorrect answers (reset / decrease)
+# - reset: Drop progress all the way back to Box 1 (default).
+# - decrease: Drop progress down by one box level.
+incorrect_penalty = reset
+
+# Serving order of new cards vs. due reviews (review_first / new_first / mix)
+# - review_first: Show due reviews before new cards (default).
+# - new_first: Show new cards before due reviews.
+# - mix: Shuffle/interleave due reviews and new cards together.
+new_review_order = review_first
+
+# Sort order for due reviews (due_date / order_added / random)
+# - due_date: Sort by box level ascending and due date (most overdue first - default).
+# - order_added: Present in the sequential order they appear in the TSV file.
+# - random: Shuffle due reviews randomly.
+review_sort_order = due_date
+
+# Sort order for new cards (order_added / random)
+# - order_added: Present in the sequential order they appear in the TSV file (default).
+# - random: Shuffle new cards randomly.
+new_sort_order = order_added
+
+# Enable flashcard mode (true/false)
+# - true: Clear terminal screen and show cards in Front/Back stages.
+# - false: Scroll normally in the terminal (default).
+single_card_mode = true
+
+# Enable command mode (vim-style) (true/false)
+# - true: Esc toggles between input and command modes. Commands can be executed without typing '/'.
+# - false: Normal behavior (default).
+command_mode = false
+
+# Start in command mode (true/false)
+# - true: New cards start in command mode by default.
+# - false: New cards start in input mode by default.
+start_in_command_mode = false
+
+# Esc toggles modes (true/false)
+# - true: Pressing Esc in command mode toggles back to input mode (default).
+# - false: Pressing Esc in command mode skips the card.
+command_mode_esc_toggles = true
+
+# Single-key command mode (true/false)
+# - true: In command mode, single keystrokes (a, d, ?, q, h) execute immediately without pressing Enter.
+# - false: In command mode, you must type the command and press Enter (default).
+command_mode_single_key = false
+
+# Enable keyboard arrow hints (true/false)
+# - true: Up/Down/Left/Right arrow keys will dynamically reveal hints during the 'Your answer:' prompt.
+# - false: Arrow keys behave normally in the terminal (default).
+arrow_hints = false
+
+# Mask context with underscores matching the exact length of the target word/phrase (true/false)
+# - true: Display underscores matching the exact length of the target word (e.g. "_______" for "Absätze").
+# - false: Display a fixed three-underscore mask "___" (default).
+exact_length_mask = true
+
+# Use strict case-sensitive matching for the diff display (true/false)
+# - true: Capitalization errors (e.g. 'jacke' instead of 'Jacke') will be highlighted as errors in the diff (default).
+# - false: Capitalization errors will be ignored in the diff.
+case_sensitive_diff = true
+
+# Ignore punctuation marks when validating answers and generating diffs (true/false)
+# - true: Punctuation (commas, periods, hashtags, etc.) is ignored so you don't have to type it (default).
+# - false: Punctuation must match exactly.
+ignore_punctuation = true
+
+# Use inverted colors for the diff output (true/false)
+# - true: Invert the background and foreground colors in the diff representation.
+# - false: Only change the text color (default).
+diff_inverted_colors = true
+
+# Separate grading from input (Anki-style manual grading) (true/false)
+# - true: Pressing Enter reveals the back side/diff, then you choose Again (1) or Good (3) to grade.
+# - false: Automatically grades based on whether the typed answer matches the target (default).
+anki_grading = true
+
+[fields]
+# Ordered list of headers for headerless files
+Quotation
+WordSource
+WordSource2
+WordSourceInflectedForm
+WordSourceInflectedForm2
+WordDestination
+WordDestinationInflectedForm
+WordSourceContext
+SentenceSourceContextLeft
+SentenceSource
+SentenceSourceContextRight
+SentenceDestinationContextLeft
+SentenceDestination
+SentenceDestinationContextRight
+SentenceDestination2ContextLeft
+SentenceDestination2
+SentenceDestination2ContextRight
+SentenceSourceWordlist
+SentenceSourceCloze
+SentenceSourceRewriteAISentenceSource
+SentenceSourceRewriteAISentenceDestination
+WordSourceMorphologyAI
+Note
+WordRussian
+WordUkrainian
+WordEnglish
+WordGerman
+WordSourceMorphemeFirst
+WordSourceMorphemeFirstDefinition
+WordSourceMorphemeSecond
+WordSourceMorphemeSecondDefinition
+WordSourceMorphemeThird
+WordSourceMorphemeThirdDefinition
+WordSourceMorphemeFourth
+WordSourceMorphemeFourthDefinition
+WordSourceMorphemeFifth
+WordSourceMorphemeFifthDefinition
+WordSourceIPA
+WordSourceSynonymAI
+WordSourceDefinitionAISentenceSource
+WordSourceDefinitionAISentenceDestination
+WordSourceDefinitionFirst
+WordSourceDefinitionFirstClipping
+WordSourceDefinitionSecond
+WordDestinationDefinitionFirst
+WordDestinationDefinitionSecond
+WordSourceAudio
+SentenceSourceIPA
+SentenceSourceAudio
+Image
+WordSourceCloze
+WordSourceContextAI
+TextSource
+TextDestination
+TextSourceURL
+SentenceEnglish
+SentenceGerman
+SentenceUkrainian
+SentenceRussian
+Source
+SourceURL
+SeparatorAudio
+Source-en-GB
+Source-en-US
+Source-de-DE
+Source-uk-UA
+Source-ru-RU
+Destination-en-GB
+Destination-en-US
+Destination-de-DE
+Destination-uk-UA
+Destination-ru-RU
+Overlapping
+ToggleAlwaysEmptyField
+Note ID
+am-all-morphs
+am-all-morphs-count
+am-unknown-morphs
+am-unknown-morphs-count
+am-highlighted
+am-score
+am-score-terms
+am-study-morphs
+SentenceSourceIndex
+Deck
+LeitnerBox
+LeitnerDue
+
+[fields_mapping.word]
+# Mapping rules for single word cards
+WordSourceInflectedForm = source_word
+SentenceSource = source_sentence
+SentenceSourceIndex = source_index
+LeitnerBox = leitner_box
+LeitnerDue = leitner_due
+
+[fields_mapping.sentence]
+# Mapping rules for sentence-level cards
+WordSourceInflectedForm = source_word
+SentenceSource = source_sentence
+SentenceSourceIndex = source_index
+LeitnerBox = leitner_box
+LeitnerDue = leitner_due
+
