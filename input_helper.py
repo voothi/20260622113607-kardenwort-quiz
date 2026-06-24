@@ -667,6 +667,7 @@ if __name__ == "__main__":
         print("Modes:")
         print("  --key                    Read a single key and print it (default).")
         print("  --line                   Read a full line with Esc/Ctrl+C/arrow key interception.")
+        print("  --width                  Print the current terminal width in columns and exit.")
         print("  --sync-mpv <pipe> <tsv> <time>  Sync media playback to MPV at timestamp.")
         print()
         print("Options:")
@@ -706,6 +707,10 @@ if __name__ == "__main__":
             sync_args = (args[i + 1], args[i + 2], args[i + 3])
             i += 4
             continue
+        elif args[i] == "--width":
+            import shutil
+            print(shutil.get_terminal_size((120, 30)).columns)
+            sys.exit(0)
         elif args[i] in ("--key", "--line"):
             mode = args[i]
         elif args[i] == "--arrows":

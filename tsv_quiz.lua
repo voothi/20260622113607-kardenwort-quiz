@@ -1021,6 +1021,56 @@ local function strip_ansi(str)
 	return str:gsub("\27%[%d+;?%d*;?%d*m", "")
 end
 
+local function get_console_width()
+	local handle = io.popen("python input_helper.py --width 2>nul")
+	if handle then
+		local res = handle:read("*a")
+		handle:close()
+		local w = tonumber(res)
+		if w and w > 20 then
+			return w - 1
+		end
+	end
+	return 119
+end
+
+local console_width = get_console_width()
+
+local function wrap_text(text, max_width)
+	max_width = max_width or console_width
+	local lines = {}
+	for line in string.gmatch(text .. "\n", "(.-)\n") do
+		if line == "" then
+			table.insert(lines, "")
+		else
+			local current_line = ""
+			local current_len = 0
+			for word, space in line:gmatch("(%S*)(%s*)") do
+				if word ~= "" or space ~= "" then
+					local word_len = utf8_len(strip_ansi(word))
+					local space_len = utf8_len(strip_ansi(space))
+					
+					if current_len > 0 and current_len + word_len > max_width then
+						table.insert(lines, current_line:gsub("%s+$", ""))
+						current_line = word .. space
+						current_len = word_len + space_len
+					else
+						current_line = current_line .. word .. space
+						current_len = current_len + word_len + space_len
+					end
+				end
+			end
+			if current_line ~= "" then
+				table.insert(lines, current_line:gsub("%s+$", ""))
+			end
+		end
+	end
+	if lines[#lines] == "" then
+		table.remove(lines)
+	end
+	return table.concat(lines, "\n")
+end
+
 local function print_framed_diff(u_line, t_line)
 	local raw_u = strip_ansi(u_line)
 	local raw_t = strip_ansi(t_line)
@@ -1957,7 +2007,7 @@ local function run_quiz(study_queue, config)
 						.. dim(string.format(" [File: %s | Box %d]", basename, entry.box))
 				)
 			end
-			print(masked_context)
+			print(wrap_text(masked_context))
 			if current_hint then
 				print(current_hint)
 			end
@@ -2284,7 +2334,7 @@ local function run_quiz(study_queue, config)
 					config.ignore_punctuation,
 					entry.source_index
 				)
-				print(revealed_context)
+				print(wrap_text(revealed_context))
 
 				print()
 				local u_line, t_line = get_two_line_diff(
