@@ -76,14 +76,14 @@ def get_word_boundary(chars, pos, direction):
             p += 1
     return p
 
-def read_line(enable_arrows=False):
+def read_line(enable_arrows=False, initial_text="", save_esc=False):
     if not sys.stdin.isatty():
         print("NOT_TTY", end="")
         return
 
     con = open("CONOUT$", "w", encoding="utf-8")
-    chars = []
-    cursor_pos = 0
+    chars = list(initial_text)
+    cursor_pos = len(chars)
     anchor_pos = -1
     drawn_cursor_pos = 0
     drawn_len = 0
@@ -138,6 +138,8 @@ def read_line(enable_arrows=False):
     LEFT_CTRL_PRESSED = 0x0008
     RIGHT_CTRL_PRESSED = 0x0004
 
+    draw()
+
     while True:
         e = get_key_event()
         vk = e.wVirtualKeyCode
@@ -148,7 +150,10 @@ def read_line(enable_arrows=False):
         is_ctrl = bool(ctrl & (LEFT_CTRL_PRESSED | RIGHT_CTRL_PRESSED))
         
         if vk == 0x1B:  # Esc
-            print("/d", end="")
+            if save_esc:
+                print("\x1b" + "".join(chars), end="")
+            else:
+                print("/d", end="")
             break
         elif vk == 0x0D:  # Enter
             print("".join(chars), end="")
@@ -248,12 +253,24 @@ def read_line(enable_arrows=False):
 if __name__ == "__main__":
     mode = "--key"
     enable_arrows = False
-    if len(sys.argv) > 1:
-        mode = sys.argv[1]
-    if "--arrows" in sys.argv:
-        enable_arrows = True
+    save_esc = False
+    initial_text = ""
+    
+    args = sys.argv[1:]
+    i = 0
+    while i < len(args):
+        if args[i] in ("--key", "--line"):
+            mode = args[i]
+        elif args[i] == "--arrows":
+            enable_arrows = True
+        elif args[i] == "--save-esc":
+            save_esc = True
+        elif args[i] == "--initial" and i + 1 < len(args):
+            initial_text = args[i + 1]
+            i += 1
+        i += 1
 
     if mode == "--line":
-        read_line(enable_arrows)
+        read_line(enable_arrows, initial_text, save_esc)
     else:
         read_key()

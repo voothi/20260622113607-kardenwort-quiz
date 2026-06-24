@@ -232,6 +232,7 @@ local function load_config(filename)
 		command_mode = false,
 		start_in_command_mode = false,
 		command_mode_esc_toggles = true,
+		command_mode_save_input = false,
 		command_mode_single_key = false,
 		arrow_hints = false,
 		exact_length_mask = false,
@@ -318,6 +319,8 @@ local function load_config(filename)
 								config.start_in_command_mode = (val == "true" or val == "1")
 							elseif key == "command_mode_esc_toggles" then
 								config.command_mode_esc_toggles = (val == "true" or val == "1")
+							elseif key == "command_mode_save_input" then
+								config.command_mode_save_input = (val == "true" or val == "1")
 							elseif key == "command_mode_single_key" then
 								config.command_mode_single_key = (val == "true" or val == "1")
 							elseif key == "arrow_hints" then
@@ -1657,11 +1660,17 @@ local function update_and_save_progress(entry, is_correct, config)
 end
 
 -- Read a line of input, intercepting Esc (skip) and Ctrl+C (quit) on Windows
-local function read_line_with_esc(config)
+local function read_line_with_esc(config, initial_text, save_esc)
 	io.flush()
 	if package.config:sub(1, 1) == "\\" then
 		local arrow_arg = config.arrow_hints and " --arrows" or ""
-		local f = io.popen(string.format('python "%s" --line%s 2>nul', input_helper, arrow_arg))
+		local save_esc_arg = save_esc and " --save-esc" or ""
+		local initial_arg = ""
+		if initial_text and initial_text ~= "" then
+			local escaped_initial = initial_text:gsub('"', '\\"')
+			initial_arg = string.format(' --initial "%s"', escaped_initial)
+		end
+		local f = io.popen(string.format('python "%s" --line%s%s%s 2>nul', input_helper, arrow_arg, save_esc_arg, initial_arg))
 		if f then
 			local res = f:read("*a")
 			f:close()
@@ -1695,6 +1704,7 @@ local function run_quiz(study_queue, config)
 		local has_hint = false
 
 		local is_command_mode = config.start_in_command_mode and config.command_mode
+		local saved_input = ""
 
 		local function defer_current_card()
 			local deferred_entry = {}
@@ -1815,11 +1825,19 @@ local function run_quiz(study_queue, config)
 			else
 				local help_msg = config.command_mode and "(Esc for command mode)" or "(type '/?' for help, Esc to skip)"
 				io.write(bold("Your answer ") .. dim(help_msg .. ": "))
-				user_input = read_line_with_esc(config)
+				user_input = read_line_with_esc(config, saved_input, config.command_mode_save_input)
 				if not user_input then
 					print(magenta("\nExiting quiz early."))
 					return
 				end
+
+				if config.command_mode_save_input and user_input:sub(1, 1) == "\x1b" then
+					saved_input = user_input:sub(2)
+					user_input = "/d"
+				else
+					saved_input = ""
+				end
+
 				trimmed_input = user_input:gsub("^%s+", ""):gsub("%s+$", "")
 				
 				if config.command_mode and trimmed_input == "/d" then
