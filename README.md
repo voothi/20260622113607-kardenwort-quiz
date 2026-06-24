@@ -270,6 +270,8 @@ The TSV Quiz features bidirectional integration with the MPV media player for co
 
 #### Configuration Options in `config.ini`:
 - `mpv_integration`: Enable/disable integration features (`true`/`false`).
+- `mpv_play_on_sync`: Auto-play/unpause the video in MPV when syncing (`true`/`false`, default: `true`).
+- `mpv_cmd`: MPV command or executable name/path (default: `mpv`).
 - `mpv_pipe_path`: The named pipe or socket path of the MPV IPC server (default: `\\.\pipe\mpv-socket`).
 - `quiz_pipe_path`: The reverse listener named pipe or socket path (default: `\\.\pipe\kardenwort-quiz`).
 - `python_cmd`: The python execution command or binary name/path (default: `python`).
