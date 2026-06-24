@@ -2660,6 +2660,7 @@ print_help = function()
 end
 
 print_interactive_help = function(config)
+	local desc_col = 26
 	print()
 	print(bold(cyan("Interactive Controls:")))
 	print("  " .. bold("/h") .. ", " .. bold("/hint") .. "               Reveal the first letter of the target word.")
@@ -2683,14 +2684,14 @@ print_interactive_help = function(config)
 			print("  " .. bold("Esc") .. "                     In Answer: Switch to Command.")
 			print("  " .. bold("Esc") .. "                     In Command: " .. esc_cmd_mode)
 			print("  " .. bold("Enter, Space") .. "            In Command: Switch to Answer.")
-			local spaces = string.rep(" ", 26 - 2 - utf8_len(single_keys))
+			local spaces = string.rep(" ", desc_col - 2 - utf8_len(single_keys))
 			print("  " .. bold(single_keys) .. spaces .. "Execute commands instantly with single keystrokes.")
 		else
 			local multi_keys = config.mpv_integration and "a, d, y, q, ?" or "a, d, q, ?"
 			print("  " .. bold("Esc") .. "                     In Answer: Switch to Command.")
 			print("  " .. bold("Esc") .. "                     In Command: " .. esc_cmd_mode)
 			print("  " .. bold("Enter") .. "                   In Command: Switch to Answer.")
-			local spaces = string.rep(" ", 26 - 2 - utf8_len(multi_keys))
+			local spaces = string.rep(" ", desc_col - 2 - utf8_len(multi_keys))
 			print("  " .. bold(multi_keys) .. spaces .. "Execute commands without typing the slash prefix (requires Enter).")
 		end
 	end
