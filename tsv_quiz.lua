@@ -2656,7 +2656,7 @@ print_help = function()
 	print("  " .. bold("Arrows") .. "                  Dynamic visual hints (if enabled).")
 	print("  " .. bold("/q") .. ", " .. bold("/quit") .. ", " .. bold("/exit") .. "        Exit the quiz.\n")
 	print(bold("Supported TSV Format:"))
-	print("  Requires headers (e.g. Quotation/WordSource and SentenceSource/SentenceSourceContextLeft).")
+	print("  Requires headers (e.g. Quotation or WordSource and SentenceSource or SentenceSourceContextLeft).")
 end
 
 print_interactive_help = function(config)
