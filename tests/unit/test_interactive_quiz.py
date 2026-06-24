@@ -1413,3 +1413,155 @@ def test_arrow_hints_independent_control(quiz_env):
     clean_out = strip_ansi(out)
     assert "Diff" in clean_out
 
+
+def test_repeat_counts_in_stats_default_false(quiz_env):
+    """Test that with repeat_counts_in_stats=false (default), repeat cards do not affect score or progress."""
+    config_path = quiz_env / "config.ini"
+    content = config_path.read_text(encoding="utf-8")
+    content += "\nsingle_card_mode = true\n"
+    config_path.write_text(content, encoding="utf-8", newline="\n")
+
+    focus_single_card(quiz_env, "20260604184114-microsoft-just-shocked-the.en.tsv", "properly")
+
+    # Answer correctly, then press 's' to repeat, answer correctly on repeat, then quit.
+    code, out, err = run_quiz(
+        quiz_env,
+        ["20260604184114-microsoft-just-shocked-the.en.tsv"],
+        ["properly", "s", "properly", "", "/q"]
+    )
+    assert code == 0
+    clean_out = strip_ansi(out)
+
+    # Repeat card should show "Practice Repeat:" label (not "Question X/Y")
+    assert "Practice Repeat:" in clean_out
+    # The info message about score unaffected should appear
+    assert "Practice Repeat" in clean_out
+    assert "progress & score unaffected" in clean_out
+    # Final score should be 1 out of 1 (repeat not counted)
+    assert "You scored 1 out of 1" in clean_out
+
+
+def test_repeat_counts_in_stats_enabled(quiz_env):
+    """Test that with repeat_counts_in_stats=true, repeat cards ARE counted in score and progress."""
+    config_path = quiz_env / "config.ini"
+    content = config_path.read_text(encoding="utf-8")
+    content += "\nsingle_card_mode = true\nrepeat_counts_in_stats = true\n"
+    config_path.write_text(content, encoding="utf-8", newline="\n")
+
+    focus_single_card(quiz_env, "20260604184114-microsoft-just-shocked-the.en.tsv", "properly")
+
+    # Answer correctly, then press 's' to repeat, answer correctly on repeat, then quit.
+    code, out, err = run_quiz(
+        quiz_env,
+        ["20260604184114-microsoft-just-shocked-the.en.tsv"],
+        ["properly", "s", "properly", "", "/q"]
+    )
+    assert code == 0
+    clean_out = strip_ansi(out)
+
+    # Repeat card should show "Question X/Y (Repeat):" label (not "Practice Repeat:")
+    assert "(Repeat):" in clean_out
+    # The "progress & score unaffected" message should NOT appear
+    assert "progress & score unaffected" not in clean_out
+    # Final score should be 2 out of 2 (repeat counted)
+    assert "You scored 2 out of 2" in clean_out
+
+
+def test_repeat_counts_in_stats_enabled_incorrect(quiz_env):
+    """Test that with repeat_counts_in_stats=true, an incorrect repeat answer lowers the score denominator correctly."""
+    config_path = quiz_env / "config.ini"
+    content = config_path.read_text(encoding="utf-8")
+    content += "\nsingle_card_mode = true\nrepeat_counts_in_stats = true\n"
+    config_path.write_text(content, encoding="utf-8", newline="\n")
+
+    focus_single_card(quiz_env, "20260604184114-microsoft-just-shocked-the.en.tsv", "properly")
+
+    # Answer correctly, then press 's' to repeat, answer WRONG on repeat, then quit.
+    code, out, err = run_quiz(
+        quiz_env,
+        ["20260604184114-microsoft-just-shocked-the.en.tsv"],
+        ["properly", "s", "wrong", "", "/q"]
+    )
+    assert code == 0
+    clean_out = strip_ansi(out)
+
+    # First answer correct (1 point), repeat answer wrong (0 points) = 1 out of 2
+    assert "You scored 1 out of 2" in clean_out
+
+
+def test_repeat_counts_in_stats_anki_grading(quiz_env):
+    """Test that with repeat_counts_in_stats=true and anki_grading=true, pressing 's' saves progress for repeats."""
+    config_path = quiz_env / "config.ini"
+    content = config_path.read_text(encoding="utf-8")
+    content += "\nanki_grading = true\nsingle_card_mode = true\nrepeat_counts_in_stats = true\n"
+    config_path.write_text(content, encoding="utf-8", newline="\n")
+
+    focus_single_card(quiz_env, "20260604184114-microsoft-just-shocked-the.en.tsv", "properly")
+
+    # Answer correctly, press 's' (save + repeat), answer correctly on repeat, press '3' (correct), then quit.
+    code, out, err = run_quiz(
+        quiz_env,
+        ["20260604184114-microsoft-just-shocked-the.en.tsv"],
+        ["properly", "s", "properly", "3", ""]
+    )
+    assert code == 0
+    clean_out = strip_ansi(out)
+
+    # Repeat card should show "(Repeat):" label
+    assert "(Repeat):" in clean_out
+    # The "progress & score unaffected" message should NOT appear
+    assert "progress & score unaffected" not in clean_out
+    # Final score: 2 out of 2
+    assert "You scored 2 out of 2" in clean_out
+
+
+def test_repeat_counts_in_stats_anki_grading_default_false(quiz_env):
+    """Test that with repeat_counts_in_stats=false (default) and anki_grading=true, repeats do not affect stats."""
+    config_path = quiz_env / "config.ini"
+    content = config_path.read_text(encoding="utf-8")
+    content += "\nanki_grading = true\nsingle_card_mode = true\n"
+    config_path.write_text(content, encoding="utf-8", newline="\n")
+
+    focus_single_card(quiz_env, "20260604184114-microsoft-just-shocked-the.en.tsv", "properly")
+
+    # Answer correctly, press 's' (save + repeat), answer correctly on repeat, press '3' (correct), then quit.
+    code, out, err = run_quiz(
+        quiz_env,
+        ["20260604184114-microsoft-just-shocked-the.en.tsv"],
+        ["properly", "s", "properly", "3", ""]
+    )
+    assert code == 0
+    clean_out = strip_ansi(out)
+
+    # Repeat card should show "Practice Repeat:" label
+    assert "Practice Repeat:" in clean_out
+    # The info message about score unaffected should appear
+    assert "progress & score unaffected" in clean_out
+    # Final score should be 1 out of 1 (repeat not counted)
+    assert "You scored 1 out of 1" in clean_out
+
+
+def test_repeat_counts_in_stats_progress_saved(quiz_env):
+    """Test that with repeat_counts_in_stats=true, the TSV is updated even for repeat cards."""
+    config_path = quiz_env / "config.ini"
+    content = config_path.read_text(encoding="utf-8")
+    content += "\nsingle_card_mode = true\nrepeat_counts_in_stats = true\n"
+    config_path.write_text(content, encoding="utf-8", newline="\n")
+
+    focus_single_card(quiz_env, "20260604184114-microsoft-just-shocked-the.en.tsv", "properly")
+
+    # Answer correctly (box 1 -> 2), then press 's' to repeat, answer correctly on repeat (box 2 -> 3), then quit.
+    code, out, err = run_quiz(
+        quiz_env,
+        ["20260604184114-microsoft-just-shocked-the.en.tsv"],
+        ["properly", "s", "properly", "", "/q"]
+    )
+    assert code == 0
+
+    # Verify the TSV was updated: first correct bumps to box 2, repeat correct bumps to box 3.
+    tsv_file = quiz_env / "20260604184114-microsoft-just-shocked-the.en.tsv"
+    entry = read_tsv_entry(tsv_file, "properly")
+    assert entry is not None
+    assert entry["LeitnerBox"] == "3", f"Expected Box 3 (two correct answers), got {entry['LeitnerBox']}"
+
+

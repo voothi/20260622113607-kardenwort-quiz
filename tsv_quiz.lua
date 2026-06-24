@@ -1671,7 +1671,7 @@ end
 
 
 local function update_and_save_progress(entry, is_correct, config)
-	if entry.is_repeat then
+	if entry.is_repeat and not config.repeat_counts_in_stats then
 		return true, nil
 	end
 
