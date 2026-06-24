@@ -64,12 +64,15 @@ command_mode_save_input = false
 # - false: In command mode, you must type the command and press Enter (default).
 command_mode_single_key = false
 
-# Enable keyboard arrow hints (true/false/swap)
-# - true: Up/Down/Left/Right arrow keys will dynamically reveal hints when in Command Mode.
-#         (Left reveals from end, Right from start, Up from bottom, Down from top).
-# - swap: Same as true, but swaps Left/Right and Up/Down keys back to the standard mapping.
-#         (Left reveals from start, Right from end, Up from top, Down from bottom).
-# - false: Arrow keys behave normally in the terminal (default).
+# Enable keyboard arrow hints (true/swap/false)
+# When in Command Mode, use arrow keys to dynamically reveal letters and words.
+# - true: Default hint mapping.
+#         Left arrow reveals from the end. Right arrow reveals from the start.
+#         Up arrow reveals from the bottom. Down arrow reveals from the top.
+# - swap: Inverted hint mapping.
+#         Left arrow reveals from the start. Right arrow reveals from the end.
+#         Up arrow reveals from the top. Down arrow reveals from the bottom.
+# - false: Arrow keys behave normally in the terminal. Hints are disabled (default).
 arrow_hints = false
 
 # Mask context with underscores matching the exact length of the target word/phrase (true/false)
