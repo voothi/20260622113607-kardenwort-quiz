@@ -126,16 +126,20 @@ def send_win_pipe(pipe_path, data):
     FILE_SHARE_READ = 1
     FILE_SHARE_WRITE = 2
     
-    handle = kernel32.CreateFileW(
-        pipe_path,
-        GENERIC_READ | GENERIC_WRITE,
-        FILE_SHARE_READ | FILE_SHARE_WRITE,
-        None,
-        OPEN_EXISTING,
-        0,
-        None
-    )
-    if _is_invalid_handle(handle):
+    handle = None
+    for attempt in range(5):
+        handle = kernel32.CreateFileW(
+            pipe_path,
+            GENERIC_READ | GENERIC_WRITE,
+            FILE_SHARE_READ | FILE_SHARE_WRITE,
+            None,
+            OPEN_EXISTING,
+            0,
+            None
+        )
+        if not _is_invalid_handle(handle):
+            break
+        # Fallback: write-only access
         handle = kernel32.CreateFileW(
             pipe_path,
             GENERIC_WRITE,
@@ -145,8 +149,12 @@ def send_win_pipe(pipe_path, data):
             0,
             None
         )
-        if _is_invalid_handle(handle):
-            raise Exception("Failed to open named pipe")
+        if not _is_invalid_handle(handle):
+            break
+        time.sleep(0.05)
+    
+    if _is_invalid_handle(handle):
+        raise Exception("Failed to open named pipe")
             
     written = wintypes.DWORD(0)
     res = kernel32.WriteFile(
