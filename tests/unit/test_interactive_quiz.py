@@ -1342,3 +1342,74 @@ def test_arrow_hints_config_parameters(quiz_env):
     clean_out = strip_ansi(out)
     assert "Exiting quiz early" in clean_out
 
+
+def test_arrow_hints_legacy_fallback(quiz_env):
+    """Test that the legacy arrow_hints key propagates to both modes when mode-specific keys are absent.
+
+    Regression guard: if only arrow_hints is set (old config format), both command_mode_arrow_hints
+    and answer_mode_arrow_hints must inherit its value — the quiz must run normally with no crash.
+    """
+    config_path = quiz_env / "config.ini"
+    config_path.write_text(
+        "[Leitner]\n"
+        "intervals = 5m, 1h, 1d\n"
+        "new_cards_per_day = 10\n"
+        "single_card_mode = false\n"
+        "exact_length_mask = false\n"
+        "new_review_order = review_first\n"
+        "review_sort_order = due_date\n"
+        "command_mode = false\n"
+        "arrow_hints = true\n",  # no command_mode_arrow_hints / answer_mode_arrow_hints
+        encoding="utf-8", newline="\n"
+    )
+
+    focus_single_card(quiz_env, "20260604184114-microsoft-just-shocked-the.en.tsv", "properly")
+
+    code, out, err = run_quiz(
+        quiz_env,
+        ["20260604184114-microsoft-just-shocked-the.en.tsv"],
+        ["properly", "/q"]
+    )
+    assert code == 0
+    clean_out = strip_ansi(out)
+    # Quiz must complete normally: answer processed, diff shown
+    assert "Diff" in clean_out
+
+
+def test_arrow_hints_independent_control(quiz_env):
+    """Test that command_mode_arrow_hints and answer_mode_arrow_hints are independent.
+
+    Scenario: command_mode_arrow_hints = false (disabled), answer_mode_arrow_hints = true (enabled).
+    The quiz must accept a correct answer in Answer mode and complete normally — verifying that
+    answer mode arrow hints enabled alongside command mode arrow hints disabled does not cause
+    incorrect behavior or crashes.
+    """
+    config_path = quiz_env / "config.ini"
+    config_path.write_text(
+        "[Leitner]\n"
+        "intervals = 5m, 1h, 1d\n"
+        "new_cards_per_day = 10\n"
+        "single_card_mode = false\n"
+        "exact_length_mask = false\n"
+        "new_review_order = review_first\n"
+        "review_sort_order = due_date\n"
+        "command_mode = true\n"
+        "start_in_command_mode = true\n"
+        "command_mode_single_key = false\n"
+        "command_mode_arrow_hints = false\n"
+        "answer_mode_arrow_hints = true\n",
+        encoding="utf-8", newline="\n"
+    )
+
+    focus_single_card(quiz_env, "20260604184114-microsoft-just-shocked-the.en.tsv", "properly")
+
+    # Start in command mode: press Enter to switch to answer mode, then answer correctly.
+    code, out, err = run_quiz(
+        quiz_env,
+        ["20260604184114-microsoft-just-shocked-the.en.tsv"],
+        ["", "properly", "/q"]
+    )
+    assert code == 0
+    clean_out = strip_ansi(out)
+    assert "Diff" in clean_out
+
