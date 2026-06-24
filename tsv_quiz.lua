@@ -4,10 +4,38 @@
 
 local print_help
 local print_interactive_help
+local master_vocab = {}
 
 -- Resolve directory of the running script for helper lookups
 local _script_dir = (arg[0] or ""):match("(.*[/\\])") or ""
 local input_helper = _script_dir .. "input_helper.py"
+
+local function parse_zid_and_lang(filepath)
+	local basename = filepath:match("([^/\\]+)$") or filepath
+	local zid = basename:match("^(%d{14})")
+	local lang = basename:match("%.([%w%-_]+)%.[tT][sS][vV]$")
+	if lang then
+		lang = lang:gsub("_", "-"):lower()
+	end
+	return zid, lang
+end
+
+local function sync_forward_to_mpv(entry)
+	local filename = entry.filename
+	local timestamp = entry.source_index or "0.0"
+	local pipe_path = "\\\\.\\pipe\\mpv-socket"
+	if package.config:sub(1, 1) ~= "\\" then
+		pipe_path = "/tmp/mpv-socket"
+	end
+	
+	local cmd
+	if package.config:sub(1, 1) == "\\" then
+		cmd = string.format('start "" /b python "%s" --sync-mpv "%s" "%s" %s 2>nul', input_helper, pipe_path, filename, timestamp)
+	else
+		cmd = string.format('python "%s" --sync-mpv "%s" "%s" %s >/dev/null 2>&1 &', input_helper, pipe_path, filename, timestamp)
+	end
+	os.execute(cmd)
+end
 
 -- 1. Helper function to split a string by a delimiter (tab), preserving empty columns
 local function split_line(line, delimiter)
@@ -1818,7 +1846,7 @@ local function run_quiz(study_queue, config)
 
 			if config.command_mode and is_command_mode then
 				if config.command_mode_single_key then
-					local allowed = {"a", "d", "q", "?", "\r", "\n", "\x1b", "h", "/", " ", "/hint_left", "/hint_right", "/hint_up", "/hint_down"}
+					local allowed = {"a", "d", "p", "q", "?", "\r", "\n", "\x1b", "h", "/", " ", "/hint_left", "/hint_right", "/hint_up", "/hint_down"}
 					local esc_opt = config.command_mode_esc_toggles and "'Esc', 'Space' or 'Enter' to answer" or "'Esc' to skip, 'Space' or 'Enter' to answer"
 					local key = press_any_key(bold("Command ") .. dim("(press '?' for help, " .. esc_opt .. ")... "), allowed, config.command_mode_arrow_hints)
 					if key == "" then
@@ -1841,6 +1869,8 @@ local function run_quiz(study_queue, config)
 						trimmed_input = "/d"
 					elseif lkey == "a" then
 						trimmed_input = "/a"
+					elseif lkey == "p" then
+						trimmed_input = "/p"
 					elseif lkey == "q" then
 						trimmed_input = "/q"
 					elseif lkey == "?" then
@@ -2028,6 +2058,40 @@ local function run_quiz(study_queue, config)
 						end
 						defer_current_card()
 						break
+					elseif lower_cmd == "p" or lower_cmd == "sync_forward" then
+						sync_forward_to_mpv(entry)
+					elseif lower_cmd:match("^sync%s+") or lower_cmd == "sync" then
+						local zid, timestamp_str = cmd_body:match("^sync%s+(%d+)%s+([%d%.]+)")
+						if zid then
+							local timestamp = tonumber(timestamp_str) or 0.0
+							local best_entry = nil
+							local min_diff = math.huge
+							
+							for _, e in ipairs(master_vocab) do
+								local e_filename = e.filename:match("([^/\\]+)$") or e.filename
+								if e_filename:find(zid, 1, true) then
+									local e_time = tonumber(e.source_index) or 0.0
+									local diff = math.abs(e_time - timestamp)
+									if diff < min_diff then
+										min_diff = diff
+										best_entry = e
+									end
+								end
+							end
+							
+							if best_entry then
+								local sync_entry = {}
+								for k, v in pairs(best_entry) do
+									sync_entry[k] = v
+								end
+								table.insert(study_queue, i + 1, sync_entry)
+								if config.repeat_counts_in_stats then total = total + 1 end
+								defer_current_card()
+								break
+							else
+								print(bold(red("Could not find matching card for ZID: ")) .. zid)
+							end
+						end
 					else
 						print(bold(red("Unknown command: ")) .. trimmed_input .. ". Type '/?' for help.\n")
 						if config.single_card_mode then
@@ -2109,7 +2173,7 @@ local function run_quiz(study_queue, config)
 				print()
 
 				if entry.is_repeat and not config.repeat_counts_in_stats then
-					print(dim("This was a practice repeat. Your score and card progress were not affected."))				end
+					print(dim("This was a practice repeat. Your score and card progress were not affected (progress & score unaffected)."))				end
 
 				if not config.anki_grading then
 					if not save_ok then
@@ -2120,7 +2184,7 @@ local function run_quiz(study_queue, config)
 						while true do
 							local key = press_any_key(
 								dim("Press 'Enter' or 'Space' to continue, type '?' for help... "),
-								{ "\r", "\n", " ", "s", "a", "d", "\x1b", "q", "?" }
+								{ "\r", "\n", " ", "s", "a", "d", "p", "\x1b", "q", "?" }
 							)
 							if key == "" then
 								local line = io.read()
@@ -2139,8 +2203,11 @@ local function run_quiz(study_queue, config)
 										.. bold("Esc")
 										.. "                  Skip the current card."
 								)
+								print("  " .. bold("p") .. "                       Sync current card to MPV.")
 								print("  " .. bold("q") .. "                       Exit the quiz.")
 								print()
+							elseif lkey == "p" then
+								sync_forward_to_mpv(entry)
 							elseif lkey == "q" then
 								print(magenta("\nExiting quiz early."))
 								return
@@ -2187,6 +2254,7 @@ local function run_quiz(study_queue, config)
 							table.insert(allowed, "s")
 							table.insert(allowed, "a")
 							table.insert(allowed, "d")
+							table.insert(allowed, "p")
 							table.insert(allowed, "\x1b")
 						end
 
@@ -2218,9 +2286,12 @@ local function run_quiz(study_queue, config)
 										.. bold("Esc")
 										.. "                  Skip the current card."
 								)
+								print("  " .. bold("p") .. "                       Sync current card to MPV.")
 							end
 							print("  " .. bold("q") .. "                       Exit the quiz.")
 							print()
+						elseif lkey == "p" then
+							sync_forward_to_mpv(entry)
 						elseif lkey == "q" then
 							print(magenta("\nExiting quiz early."))
 							return
@@ -2456,7 +2527,7 @@ local function main()
 	local config = load_config(config_path)
 
 	-- Load all vocabulary from resolved files
-	local master_vocab = {}
+	master_vocab = {}
 	local files_loaded = 0
 	local total_files = #resolved_files
 

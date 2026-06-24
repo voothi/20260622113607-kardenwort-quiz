@@ -8,8 +8,16 @@ Modes:
 """
 
 import sys
+import os
+import re
 import ctypes
 from ctypes import wintypes
+import threading
+import queue
+import json
+import socket
+import subprocess
+import time
 
 kernel32 = ctypes.windll.kernel32
 
@@ -34,6 +42,260 @@ STD_OUTPUT_HANDLE = -11
 hIn = kernel32.GetStdHandle(STD_INPUT_HANDLE)
 hOut = kernel32.GetStdHandle(STD_OUTPUT_HANDLE)
 
+# Ctypes API signatures for Named Pipes and Console Writing
+if sys.platform == 'win32':
+    kernel32.WriteConsoleInputW.argtypes = [wintypes.HANDLE, ctypes.c_void_p, wintypes.DWORD, ctypes.POINTER(wintypes.DWORD)]
+    kernel32.WriteConsoleInputW.restype = wintypes.BOOL
+    
+    kernel32.PeekNamedPipe.argtypes = [wintypes.HANDLE, ctypes.c_void_p, wintypes.DWORD, ctypes.POINTER(wintypes.DWORD), ctypes.POINTER(wintypes.DWORD), ctypes.POINTER(wintypes.DWORD)]
+    kernel32.PeekNamedPipe.restype = wintypes.BOOL
+    
+    kernel32.ReadFile.argtypes = [wintypes.HANDLE, ctypes.c_void_p, wintypes.DWORD, ctypes.POINTER(wintypes.DWORD), ctypes.c_void_p]
+    kernel32.ReadFile.restype = wintypes.BOOL
+
+# Queue and Helper Functions for Bidirectional IPC Broker
+sync_event_queue = queue.Queue()
+
+def wake_up_main_thread():
+    if sys.platform == 'win32':
+        record = INPUT_RECORD()
+        record.EventType = 0x0001  # KEY_EVENT
+        record.KeyEvent.bKeyDown = True
+        record.KeyEvent.wRepeatCount = 1
+        record.KeyEvent.wVirtualKeyCode = 0xFF  # Special custom VK
+        record.KeyEvent.wVirtualScanCode = 0
+        record.KeyEvent.UnicodeChar = '\x00'
+        record.KeyEvent.dwControlKeyState = 0
+        
+        written = wintypes.DWORD(0)
+        kernel32.WriteConsoleInputW(hIn, ctypes.byref(record), 1, ctypes.byref(written))
+
+def run_ipc_server_thread(address, family):
+    from multiprocessing.connection import Listener
+    try:
+        if family == 'AF_UNIX' and os.path.exists(address):
+            try:
+                os.remove(address)
+            except Exception:
+                pass
+        
+        listener = Listener(address, family=family)
+        while True:
+            conn = listener.accept()
+            try:
+                msg = conn.recv()
+                sync_event_queue.put(msg)
+                wake_up_main_thread()
+            except Exception:
+                pass
+            finally:
+                conn.close()
+    except Exception:
+        pass
+
+def send_win_pipe(pipe_path, data):
+    GENERIC_READ = 0x80000000
+    GENERIC_WRITE = 0x40000000
+    OPEN_EXISTING = 3
+    FILE_SHARE_READ = 1
+    FILE_SHARE_WRITE = 2
+    
+    handle = kernel32.CreateFileW(
+        pipe_path,
+        GENERIC_READ | GENERIC_WRITE,
+        FILE_SHARE_READ | FILE_SHARE_WRITE,
+        None,
+        OPEN_EXISTING,
+        0,
+        None
+    )
+    if handle == -1 or handle == 0 or handle == 0xFFFFFFFF:
+        handle = kernel32.CreateFileW(
+            pipe_path,
+            GENERIC_WRITE,
+            FILE_SHARE_READ | FILE_SHARE_WRITE,
+            None,
+            OPEN_EXISTING,
+            0,
+            None
+        )
+        if handle == -1 or handle == 0 or handle == 0xFFFFFFFF:
+            raise Exception("Failed to open named pipe")
+            
+    written = wintypes.DWORD(0)
+    res = kernel32.WriteFile(
+        handle,
+        data,
+        len(data),
+        ctypes.byref(written),
+        None
+    )
+    kernel32.CloseHandle(handle)
+    if not res:
+        raise Exception("Failed to write to named pipe")
+
+def send_unix_socket(socket_path, data):
+    s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+    s.connect(socket_path)
+    s.sendall(data)
+    s.close()
+
+def send_ipc_payload(pipe_path, command_dict):
+    payload = (json.dumps(command_dict) + "\n").encode('utf-8')
+    if sys.platform == 'win32':
+        send_win_pipe(pipe_path, payload)
+    else:
+        send_unix_socket(pipe_path, payload)
+
+def send_receive_ipc(pipe_path, command_dict, timeout=1.0):
+    payload = (json.dumps(command_dict) + "\n").encode('utf-8')
+    if sys.platform == 'win32':
+        GENERIC_READ = 0x80000000
+        GENERIC_WRITE = 0x40000000
+        OPEN_EXISTING = 3
+        
+        handle = kernel32.CreateFileW(
+            pipe_path,
+            GENERIC_READ | GENERIC_WRITE,
+            0,
+            None,
+            OPEN_EXISTING,
+            0,
+            None
+        )
+        if handle == -1 or handle == 0 or handle == 0xFFFFFFFF:
+            return None
+            
+        written = wintypes.DWORD(0)
+        res = kernel32.WriteFile(
+            handle,
+            payload,
+            len(payload),
+            ctypes.byref(written),
+            None
+        )
+        if not res:
+            kernel32.CloseHandle(handle)
+            return None
+            
+        time.sleep(0.02)
+        avail = wintypes.DWORD(0)
+        kernel32.PeekNamedPipe(handle, None, 0, None, ctypes.byref(avail), None)
+        
+        response = b""
+        if avail.value > 0:
+            buf = ctypes.create_string_buffer(avail.value)
+            read = wintypes.DWORD(0)
+            kernel32.ReadFile(handle, buf, avail.value, ctypes.byref(read), None)
+            response = buf.raw[:read.value]
+            
+        kernel32.CloseHandle(handle)
+        try:
+            return json.loads(response.decode('utf-8').strip())
+        except Exception:
+            return None
+    else:
+        s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        s.settimeout(timeout)
+        try:
+            s.connect(pipe_path)
+            s.sendall(payload)
+            response = s.recv(4096)
+            s.close()
+            return json.loads(response.decode('utf-8').strip())
+        except Exception:
+            return None
+
+def paths_are_equal(p1, p2):
+    if not p1 or not p2:
+        return False
+    p1_norm = p1.replace('\\', '/').lower()
+    p2_norm = p2.replace('\\', '/').lower()
+    return p1_norm.strip('"\' ') == p2_norm.strip('"\' ')
+
+def find_media_file(tsv_path):
+    tsv_dir = os.path.dirname(tsv_path) or "."
+    tsv_name = os.path.basename(tsv_path)
+    
+    m = re.match(r"^(\d{14})", tsv_name)
+    if not m:
+        return None
+    zid = m.group(1)
+    
+    parts = tsv_name.rsplit('.', 2)
+    lang = None
+    if len(parts) >= 3:
+        lang = parts[-2]
+        
+    video_exts = {'.mp4', '.mkv', '.avi', '.webm', '.flv', '.mov', '.wmv', '.mpg', '.mpeg'}
+    candidates = []
+    
+    def scan_dir(d):
+        try:
+            for entry in os.listdir(d):
+                full_path = os.path.join(d, entry)
+                if os.path.isfile(full_path):
+                    name_no_ext, ext = os.path.splitext(entry)
+                    if ext.lower() in video_exts and zid in name_no_ext:
+                        candidates.append((full_path, name_no_ext))
+        except Exception:
+            pass
+            
+    scan_dir(tsv_dir)
+    
+    try:
+        for entry in os.listdir(tsv_dir):
+            sub_dir = os.path.join(tsv_dir, entry)
+            if os.path.isdir(sub_dir):
+                scan_dir(sub_dir)
+    except Exception:
+        pass
+        
+    if not candidates:
+        return None
+        
+    if lang:
+        for full_path, name_no_ext in candidates:
+            if name_no_ext.endswith("." + lang) or name_no_ext.endswith("-" + lang) or name_no_ext.endswith("_" + lang):
+                return full_path
+                
+    return candidates[0][0]
+
+def spawn_mpv(pipe_path, video_path, start_time):
+    cmd = ["mpv", f"--input-ipc-server={pipe_path}"]
+    if video_path:
+        cmd.append(video_path)
+    if start_time is not None:
+        cmd.append(f"--start={start_time}")
+        
+    kwargs = {}
+    if sys.platform == 'win32':
+        kwargs['creationflags'] = 0x00000008  # DETACHED_PROCESS
+        
+    subprocess.Popen(cmd, **kwargs)
+    
+    retries = 20
+    delay = 0.05
+    for i in range(retries):
+        time.sleep(delay)
+        try:
+            if sys.platform == 'win32':
+                h = kernel32.CreateFileW(
+                    pipe_path, 0x40000000, 1|2, None, 3, 0, None
+                )
+                if h != -1 and h != 0 and h != 0xFFFFFFFF:
+                    kernel32.CloseHandle(h)
+                    return True
+            else:
+                s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+                s.connect(pipe_path)
+                s.close()
+                return True
+        except Exception:
+            pass
+        delay = min(delay * 1.5, 0.5)
+    return False
+
 # Enable VT processing for CONOUT$
 mode = wintypes.DWORD()
 kernel32.GetConsoleMode(hOut, ctypes.byref(mode))
@@ -54,6 +316,16 @@ def read_key(enable_arrows=False, swap_arrows=False):
         return
     while True:
         e = get_key_event()
+        if e.wVirtualKeyCode == 0xFF:
+            try:
+                msg = sync_event_queue.get_nowait()
+                if isinstance(msg, dict):
+                    print(f"/sync {msg.get('zid', '')} {msg.get('time', '0')}", end="")
+                else:
+                    print(f"/{msg}", end="")
+            except Exception:
+                pass
+            return
         # Return if it's a character or significant key
         if e.UnicodeChar != '\x00':
             print(e.UnicodeChar, end="")
@@ -157,6 +429,17 @@ def read_line(enable_arrows=False, initial_text="", save_esc=False, swap_arrows=
         
         is_shift = bool(ctrl & SHIFT_PRESSED)
         is_ctrl = bool(ctrl & (LEFT_CTRL_PRESSED | RIGHT_CTRL_PRESSED))
+        
+        if vk == 0xFF:
+            try:
+                msg = sync_event_queue.get_nowait()
+                if isinstance(msg, dict):
+                    print(f"/sync {msg.get('zid', '')} {msg.get('time', '0')}", end="")
+                else:
+                    print(f"/{msg}", end="")
+            except Exception:
+                pass
+            break
         
         if vk == 0x1B:  # Esc
             if save_esc:
@@ -269,7 +552,45 @@ if __name__ == "__main__":
     args = sys.argv[1:]
     i = 0
     while i < len(args):
-        if args[i] in ("--key", "--line"):
+        if args[i] == "--send-mpv" and i + 2 < len(args):
+            pipe_path = args[i + 1]
+            payload_str = args[i + 2]
+            try:
+                payload = json.loads(payload_str)
+                send_ipc_payload(pipe_path, payload)
+            except Exception as e:
+                print(f"Error: {e}", file=sys.stderr)
+            sys.exit(0)
+        elif args[i] == "--sync-mpv" and i + 3 < len(args):
+            pipe_path = args[i + 1]
+            tsv_path = args[i + 2]
+            try:
+                timestamp = float(args[i + 3])
+            except ValueError:
+                timestamp = 0.0
+            
+            media_file = find_media_file(tsv_path)
+            if not media_file:
+                print(f"Error: Could not find media file for {tsv_path}", file=sys.stderr)
+                sys.exit(1)
+                
+            media_file_mpv = media_file.replace('\\', '/')
+            try:
+                current_info = send_receive_ipc(pipe_path, {"command": ["get_property", "path"]})
+                is_same = False
+                if current_info and isinstance(current_info, dict) and current_info.get("error") == "success":
+                    current_path = current_info.get("data")
+                    is_same = paths_are_equal(current_path, media_file_mpv)
+                    
+                if is_same:
+                    send_ipc_payload(pipe_path, {"command": ["seek", timestamp, "absolute"]})
+                else:
+                    send_ipc_payload(pipe_path, {"command": ["loadfile", media_file_mpv, "replace"]})
+                    send_ipc_payload(pipe_path, {"command": ["seek", timestamp, "absolute"]})
+            except Exception:
+                spawn_mpv(pipe_path, media_file_mpv, timestamp)
+            sys.exit(0)
+        elif args[i] in ("--key", "--line"):
             mode = args[i]
         elif args[i] == "--arrows":
             enable_arrows = True
@@ -282,6 +603,18 @@ if __name__ == "__main__":
             initial_text = args[i + 1]
             i += 1
         i += 1
+
+    # Start reverse IPC listener thread (Windows Named Pipe or Unix Socket)
+    if sys.platform == 'win32':
+        pipe_addr = r'\\.\pipe\kardenwort-quiz'
+        family = 'AF_PIPE'
+    else:
+        pipe_addr = '/tmp/kardenwort-quiz'
+        family = 'AF_UNIX'
+        
+    t = threading.Thread(target=run_ipc_server_thread, args=(pipe_addr, family))
+    t.daemon = True
+    t.start()
 
     if mode == "--line":
         read_line(enable_arrows, initial_text, save_esc, swap_arrows)
