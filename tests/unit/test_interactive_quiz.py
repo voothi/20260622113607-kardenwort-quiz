@@ -770,7 +770,8 @@ def test_interactive_repeat_command(quiz_env):
     
     assert code == 0
     clean_out = strip_ansi(out)
-    assert "Practice Repeat:" in clean_out
+    # Repeat card should show "Practice Repeat:" label (not "Question X/Y")
+    assert "Practice Repeat 1/2:" in clean_out
 
 def test_interactive_skip_command(quiz_env):
     """Test that the /d command skips the current card."""
@@ -1463,9 +1464,8 @@ def test_repeat_counts_in_stats_default_false(quiz_env):
     )
     assert code == 0
     clean_out = strip_ansi(out)
-
     # Repeat card should show "Practice Repeat:" label (not "Question X/Y")
-    assert "Practice Repeat:" in clean_out
+    assert "Practice Repeat 1/1:" in clean_out
     # The info message about score unaffected should appear
     assert "Practice Repeat" in clean_out
     assert "progress & score unaffected" in clean_out
@@ -1564,9 +1564,8 @@ def test_repeat_counts_in_stats_anki_grading_default_false(quiz_env):
     )
     assert code == 0
     clean_out = strip_ansi(out)
-
     # Repeat card should show "Practice Repeat:" label
-    assert "Practice Repeat:" in clean_out
+    assert "Practice Repeat 1/1:" in clean_out
     # The info message about score unaffected should appear
     assert "progress & score unaffected" in clean_out
     # Final score should be 1 out of 1 (repeat not counted)
@@ -2140,7 +2139,231 @@ def test_word_wrap_extreme_length(quiz_env):
     assert f"{first_part}\n{second_part}" in clean_out
 
 
+def test_practice_repeat_progress_display(quiz_env):
+    """4.1 Test that Practice Repeat displays X/Y progress when repeat_counts_in_stats is false."""
+    focus_single_card(quiz_env, "20260604184114-microsoft-just-shocked-the.en.tsv", "properly")
+    focus_single_card(quiz_env, "20260303214721-text1.de.tsv", "Abend vorbei. Wir schlagen")
+    
+    # 2 unique cards in deck. Answer 'properly' (card 1) correctly. Now on card 2.
+    # Type '/a' to repeat card 1. This should display 'Practice Repeat 1/2:'
+    code, out, err = run_quiz(
+        quiz_env,
+        ["20260604184114-microsoft-just-shocked-the.en.tsv", "20260303214721-text1.de.tsv"],
+        ["properly", "/a", "/q"]
+    )
+    assert code == 0
+    clean_out = strip_ansi(out)
+    assert "Practice Repeat 1/2:" in clean_out
 
 
+def test_nested_practice_repeat(quiz_env):
+    """4.2 Test that repeating a repeat card (nested repeat) propagates original_question_num correctly."""
+    focus_single_card(quiz_env, "20260604184114-microsoft-just-shocked-the.en.tsv", "properly")
+    focus_single_card(quiz_env, "20260303214721-text1.de.tsv", "Abend vorbei. Wir schlagen")
+    
+    # Enable single card mode
+    config_path = quiz_env / "config.ini"
+    content = config_path.read_text(encoding="utf-8")
+    content += "\nsingle_card_mode = true\n"
+    config_path.write_text(content, encoding="utf-8", newline="\n")
+
+    # Start quiz:
+    # Front of Card 1: "properly"
+    # Back of Card 1: "" (Enter, to continue to Card 2)
+    # Front of Card 2: "Abend vorbei. Wir schlagen"
+    # Back of Card 2: "a" (repeat previous, i.e. Card 1. Queues R1)
+    # Front of R1: "properly"
+    # Back of R1: "s" (repeat current. Queues R2)
+    # Front of R2: "properly"
+    # Back of R2: "q" (quit)
+    code, out, err = run_quiz(
+        quiz_env,
+        ["20260604184114-microsoft-just-shocked-the.en.tsv", "20260303214721-text1.de.tsv"],
+        ["properly", "", "Abend vorbei. Wir schlagen", "a", "properly", "s", "properly", "q"]
+    )
+    assert code == 0
+    clean_out = strip_ansi(out)
+    assert clean_out.count("Practice Repeat 1/2:") >= 2
 
 
+def test_first_card_repeat_boundary(quiz_env):
+    """4.3 Test that attempting to repeat on the first card does not crash and prints a warning."""
+    focus_single_card(quiz_env, "20260604184114-microsoft-just-shocked-the.en.tsv", "properly")
+    
+    # Type '/a' on the very first card. It should show a warning and not crash.
+    code, out, err = run_quiz(
+        quiz_env,
+        ["20260604184114-microsoft-just-shocked-the.en.tsv"],
+        ["/a", "properly", "/q"]
+    )
+    assert code == 0
+    clean_out = strip_ansi(out)
+    assert "There is no previous card to repeat." in clean_out
+
+
+def test_in_memory_progress_syncing(quiz_env):
+    """4.4 Test in-memory Leitner box and due date syncing for repeat cards when repeat_counts_in_stats is true."""
+    config_path = quiz_env / "config.ini"
+    content = config_path.read_text(encoding="utf-8")
+    content = content.replace("intervals = 5m, 1h, 1d", "intervals = 5m, 1h, 1d, 2d")
+    content += "\nrepeat_counts_in_stats = true\n"
+    config_path.write_text(content, encoding="utf-8", newline="\n")
+
+    focus_single_card(quiz_env, "20260604184114-microsoft-just-shocked-the.en.tsv", "properly")
+    tsv_file = quiz_env / "20260604184114-microsoft-just-shocked-the.en.tsv"
+    
+    # Make both 'properly' and 'meant' due so they are both in the deck
+    lines = tsv_file.read_text(encoding="utf-8").splitlines()
+    new_lines = []
+    header_line_idx = 0
+    while header_line_idx < len(lines) and lines[header_line_idx].startswith("#"):
+        new_lines.append(lines[header_line_idx])
+        header_line_idx += 1
+    headers = lines[header_line_idx].split("\t")
+    new_lines.append(lines[header_line_idx])
+    due_idx = headers.index("LeitnerDue")
+    box_idx = headers.index("LeitnerBox")
+    for line in lines[header_line_idx + 1:]:
+        if not line or line.startswith("#"):
+            continue
+        cols = line.split("\t")
+        while len(cols) < len(headers):
+            cols.append("")
+        word_source = cols[1] if len(cols) > 1 else ""
+        if word_source in ["properly", "meant"]:
+            cols[box_idx] = "1"
+            cols[due_idx] = "0"
+        else:
+            cols[box_idx] = "2"
+            cols[due_idx] = str(int(time.time()) + 100000)
+        new_lines.append("\t".join(cols))
+    tsv_file.write_text("\n".join(new_lines) + "\n", encoding="utf-8", newline="\n")
+
+    # Sequence of answers:
+    # 1. Front Card 1: "properly" (promoted 1 -> 2)
+    # 2. Front Card 2: "/a" (repeats Card 1, R1. R1 starts at 2)
+    # 3. Front R1: "properly" (promoted 2 -> 3, syncs to Card 1 in memory)
+    # 4. Front Card 2: "/a" (repeats Card 1, R2. R2 starts at 3 in memory!)
+    # 5. Front R2: "properly" (promoted 3 -> 4, syncs to Card 1 in memory)
+    # 6. Front Card 2: "/q" (quit)
+    code, out, err = run_quiz(
+        quiz_env,
+        ["20260604184114-microsoft-just-shocked-the.en.tsv"],
+        ["properly", "/a", "properly", "/a", "properly", "/q"]
+    )
+    print("QUIZ OUTPUT:\n", out)
+    print("TSV CONTENT:\n", tsv_file.read_text(encoding="utf-8"))
+    assert code == 0
+    entry = read_tsv_entry(tsv_file, "properly")
+    assert entry is not None
+    # Box should be promoted all the way to 4
+    assert entry["LeitnerBox"] == "4", f"Expected Box 4, got {entry['LeitnerBox']}"
+
+
+def test_sync_command_stats_and_header_repeat_false(quiz_env):
+    """4.5.1 Test that the /sync command handles statistics and header formatting correctly when repeat_counts_in_stats is false."""
+    config_path = quiz_env / "config.ini"
+    content = config_path.read_text(encoding="utf-8")
+    content += "\nmpv_integration = true\n"
+    config_path.write_text(content, encoding="utf-8", newline="\n")
+
+    tsv_file = quiz_env / "20260604184114-microsoft-just-shocked-the.en.tsv"
+    
+    # We set up 'properly' to have a known timestamp '10.5' in the Note field
+    lines = tsv_file.read_text(encoding="utf-8").splitlines()
+    new_lines = []
+    header_line_idx = 0
+    while header_line_idx < len(lines) and lines[header_line_idx].startswith("#"):
+        new_lines.append(lines[header_line_idx])
+        header_line_idx += 1
+    headers = lines[header_line_idx].split("\t")
+    new_lines.append(lines[header_line_idx])
+    due_idx = headers.index("LeitnerDue")
+    box_idx = headers.index("LeitnerBox")
+    note_idx = headers.index("Note")
+    for line in lines[header_line_idx + 1:]:
+        if not line or line.startswith("#"):
+            continue
+        cols = line.split("\t")
+        while len(cols) < len(headers):
+            cols.append("")
+        word_source = cols[1] if len(cols) > 1 else ""
+        if word_source == "properly":
+            cols[box_idx] = "1"
+            cols[due_idx] = "0"
+            cols[note_idx] = "10.5"
+        else:
+            cols[box_idx] = "2"
+            cols[due_idx] = str(int(time.time()) + 100000)
+        new_lines.append("\t".join(cols))
+    tsv_file.write_text("\n".join(new_lines) + "\n", encoding="utf-8", newline="\n")
+
+    # Start quiz.
+    # 1. First card is 'properly'. Type '/sync 20260604184114 10.5'.
+    #    This should load the synced card. Since repeat_counts_in_stats is false,
+    #    the synced card is treated as a repeat (stats denominator stays at 1).
+    # 2. Answer 'properly' correctly.
+    # 3. Answer deferred 'properly' correctly.
+    code, out, err = run_quiz(
+        quiz_env,
+        ["20260604184114-microsoft-just-shocked-the.en.tsv"],
+        ["/sync 20260604184114 10.5", "properly", "properly"]
+    )
+    assert code == 0
+    clean_out = strip_ansi(out)
+    assert "Practice Repeat (Sync):" in clean_out
+    assert "You scored 1 out of 1" in clean_out
+
+
+def test_sync_command_stats_and_header_repeat_true(quiz_env):
+    """4.5.2 Test that the /sync command handles statistics correctly when repeat_counts_in_stats is true."""
+    config_path = quiz_env / "config.ini"
+    content = config_path.read_text(encoding="utf-8")
+    content += "\nmpv_integration = true\nrepeat_counts_in_stats = true\n"
+    config_path.write_text(content, encoding="utf-8", newline="\n")
+
+    tsv_file = quiz_env / "20260604184114-microsoft-just-shocked-the.en.tsv"
+    
+    # We set up 'properly' to have a known timestamp '10.5' in the Note field
+    lines = tsv_file.read_text(encoding="utf-8").splitlines()
+    new_lines = []
+    header_line_idx = 0
+    while header_line_idx < len(lines) and lines[header_line_idx].startswith("#"):
+        new_lines.append(lines[header_line_idx])
+        header_line_idx += 1
+    headers = lines[header_line_idx].split("\t")
+    new_lines.append(lines[header_line_idx])
+    due_idx = headers.index("LeitnerDue")
+    box_idx = headers.index("LeitnerBox")
+    note_idx = headers.index("Note")
+    for line in lines[header_line_idx + 1:]:
+        if not line or line.startswith("#"):
+            continue
+        cols = line.split("\t")
+        while len(cols) < len(headers):
+            cols.append("")
+        word_source = cols[1] if len(cols) > 1 else ""
+        if word_source == "properly":
+            cols[box_idx] = "1"
+            cols[due_idx] = "0"
+            cols[note_idx] = "10.5"
+        else:
+            cols[box_idx] = "2"
+            cols[due_idx] = str(int(time.time()) + 100000)
+        new_lines.append("\t".join(cols))
+    tsv_file.write_text("\n".join(new_lines) + "\n", encoding="utf-8", newline="\n")
+
+    # Start quiz.
+    # 1. First card is 'properly'. Type '/sync 20260604184114 10.5'.
+    #    Since repeat_counts_in_stats is true, the synced card increases the total count.
+    # 2. Answer 'properly' correctly.
+    # 3. Answer deferred 'properly' correctly.
+    code, out, err = run_quiz(
+        quiz_env,
+        ["20260604184114-microsoft-just-shocked-the.en.tsv"],
+        ["/sync 20260604184114 10.5", "properly", "properly"]
+    )
+    assert code == 0
+    clean_out = strip_ansi(out)
+    # The total should increment, so it is "You scored 2 out of 2" (first card + synced card)
+    assert "You scored 2 out of 2" in clean_out

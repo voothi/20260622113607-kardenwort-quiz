@@ -1976,6 +1976,15 @@ local function update_and_save_progress(entry, is_correct, config)
 	entry.raw_columns[entry.box_idx] = tostring(new_box)
 	entry.raw_columns[entry.due_idx] = tostring(new_due)
 
+	if config.repeat_counts_in_stats and entry.original_card then
+		entry.original_card.box = new_box
+		entry.original_card.due = new_due
+		if entry.original_card.raw_columns then
+			entry.original_card.raw_columns[entry.box_idx] = tostring(new_box)
+			entry.original_card.raw_columns[entry.due_idx] = tostring(new_due)
+		end
+	end
+
 	return save_tsv(entry.filename, entry.raw_rows)
 end
 
@@ -2018,6 +2027,30 @@ local function read_line_with_esc(config, initial_text, save_esc, use_arrows)
 end
 
 -- 3. Run the interactive CLI quiz
+-- Helper to create a repeat entry copy
+local function make_repeat_entry(target_card, target_idx, study_queue)
+	local repeat_entry = {}
+	for k, v in pairs(target_card) do
+		repeat_entry[k] = v
+	end
+	repeat_entry.is_repeat = true
+	repeat_entry.repeat_target_idx = target_idx
+	repeat_entry.original_card = target_card.original_card or target_card
+
+	if target_card.is_repeat then
+		repeat_entry.original_question_num = target_card.original_question_num
+	else
+		local count = 0
+		for idx = 1, target_idx do
+			if not study_queue[idx].is_repeat then
+				count = count + 1
+			end
+		end
+		repeat_entry.original_question_num = count
+	end
+	return repeat_entry
+end
+
 local function run_quiz(study_queue, config)
 	if not study_queue or #study_queue == 0 then
 		print("No cards to review.")
@@ -2076,7 +2109,13 @@ local function run_quiz(study_queue, config)
 
 			local basename = entry.filename:match("([^/\\]+)$") or entry.filename
 			if entry.is_repeat and not config.repeat_counts_in_stats then
-				print(bold(cyan("Practice Repeat:")) .. dim(string.format(" [File: %s | Box %d]", basename, entry.box)))
+				local header_prefix
+				if entry.original_question_num then
+					header_prefix = string.format("Practice Repeat %d/%d:", entry.original_question_num, total)
+				else
+					header_prefix = "Practice Repeat (Sync):"
+				end
+				print(bold(cyan(header_prefix)) .. dim(string.format(" [File: %s | Box %d]", basename, entry.box)))
 			else
 				local cycle = math.ceil(question_num / total)
 				local disp_num = ((question_num - 1) % total) + 1
@@ -2277,12 +2316,7 @@ local function run_quiz(study_queue, config)
 					elseif lower_cmd == "a" then
 						local target_idx = entry.is_repeat and ((entry.repeat_target_idx or i) - 1) or (i - 1)
 						if target_idx >= 1 then
-							local repeat_entry = {}
-							for k, v in pairs(study_queue[target_idx]) do
-								repeat_entry[k] = v
-							end
-							repeat_entry.is_repeat = true
-							repeat_entry.repeat_target_idx = target_idx
+							local repeat_entry = make_repeat_entry(study_queue[target_idx], target_idx, study_queue)
 
 							table.insert(study_queue, i + 1, repeat_entry)
 							if config.repeat_counts_in_stats then total = total + 1 end
@@ -2335,6 +2369,8 @@ local function run_quiz(study_queue, config)
 									for k, v in pairs(best_entry) do
 										sync_entry[k] = v
 									end
+									sync_entry.is_repeat = true
+									sync_entry.original_card = best_entry
 									table.insert(study_queue, i + 1, sync_entry)
 									if config.repeat_counts_in_stats then total = total + 1 end
 									defer_current_card()
@@ -2381,8 +2417,14 @@ local function run_quiz(study_queue, config)
 					print_header(config)
 					local basename = entry.filename:match("([^/\\]+)$") or entry.filename
 					if entry.is_repeat and not config.repeat_counts_in_stats then
+						local header_prefix
+						if entry.original_question_num then
+							header_prefix = string.format("Practice Repeat %d/%d:", entry.original_question_num, total)
+						else
+							header_prefix = "Practice Repeat (Sync):"
+						end
 						print(
-							bold(cyan("Practice Repeat:"))
+							bold(cyan(header_prefix))
 								.. dim(string.format(" [File: %s | Box %d]", basename, entry.box))
 						)
 					else
@@ -2468,12 +2510,7 @@ local function run_quiz(study_queue, config)
 							elseif lkey == "a" then
 								local target_idx = entry.is_repeat and ((entry.repeat_target_idx or i) - 1) or (i - 1)
 								if target_idx >= 1 then
-									local repeat_entry = {}
-									for k, v in pairs(study_queue[target_idx]) do
-										repeat_entry[k] = v
-									end
-									repeat_entry.is_repeat = true
-									repeat_entry.repeat_target_idx = target_idx
+									local repeat_entry = make_repeat_entry(study_queue[target_idx], target_idx, study_queue)
 									table.insert(study_queue, i + 1, repeat_entry)
 									if config.repeat_counts_in_stats then total = total + 1 end
 									break
@@ -2482,12 +2519,8 @@ local function run_quiz(study_queue, config)
 									print(bold(red("There is no previous card to repeat.")))
 								end
 							elseif lkey == "s" then
-								local repeat_entry = {}
-								for k, v in pairs(entry) do
-									repeat_entry[k] = v
-								end
-								repeat_entry.is_repeat = true
-								repeat_entry.repeat_target_idx = entry.repeat_target_idx or i
+								local target_idx = entry.repeat_target_idx or i
+								local repeat_entry = make_repeat_entry(entry, target_idx, study_queue)
 								table.insert(study_queue, i + 1, repeat_entry)
 								if config.repeat_counts_in_stats then total = total + 1 end
 								break
@@ -2554,12 +2587,7 @@ local function run_quiz(study_queue, config)
 						elseif lkey == "a" then
 							local target_idx = entry.is_repeat and ((entry.repeat_target_idx or i) - 1) or (i - 1)
 							if target_idx >= 1 then
-								local repeat_entry = {}
-								for k, v in pairs(study_queue[target_idx]) do
-									repeat_entry[k] = v
-								end
-								repeat_entry.is_repeat = true
-								repeat_entry.repeat_target_idx = target_idx
+								local repeat_entry = make_repeat_entry(study_queue[target_idx], target_idx, study_queue)
 								table.insert(study_queue, i + 1, repeat_entry)
 								if config.repeat_counts_in_stats then total = total + 1 end
 								break
@@ -2581,12 +2609,8 @@ local function run_quiz(study_queue, config)
 								end
 							end
 
-							local repeat_entry = {}
-							for k, v in pairs(entry) do
-								repeat_entry[k] = v
-							end
-							repeat_entry.is_repeat = true
-							repeat_entry.repeat_target_idx = entry.repeat_target_idx or i
+							local target_idx = entry.repeat_target_idx or i
+							local repeat_entry = make_repeat_entry(entry, target_idx, study_queue)
 							table.insert(study_queue, i + 1, repeat_entry)
 							if config.repeat_counts_in_stats then total = total + 1 end
 							break
