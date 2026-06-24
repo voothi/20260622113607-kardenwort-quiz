@@ -1701,6 +1701,22 @@ def test_input_helper_sync_mpv_flow(tmp_path, monkeypatch):
     assert len(sent_commands) == 1
     assert sent_commands[0] == {"command": ["seek", timestamp, "absolute"]}
 
+def test_input_helper_sync_mpv_no_media(tmp_path):
+    """Test that if find_media_file returns None, sync_mpv returns False."""
+    import importlib.util
+    import shutil
+    shutil.copy2(Path(__file__).parent.parent.parent / "input_helper.py", tmp_path / "input_helper.py")
+    spec = importlib.util.spec_from_file_location("input_helper_test", str(tmp_path / "input_helper.py"))
+    input_helper_test = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(input_helper_test)
+
+    # Creating a TSV file but NO video files exist
+    tsv_file = tmp_path / "20260303214721-text1.de.tsv"
+    tsv_file.touch()
+
+    success = input_helper_test.sync_mpv("mock_pipe", str(tsv_file), 12.34)
+    assert success is False
+
 
 def test_input_helper_sync_mpv_spawn_fallback(tmp_path, monkeypatch):
     """Test that if connection fails (send_receive_ipc returns None), spawn_mpv is called."""
