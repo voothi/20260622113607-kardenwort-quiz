@@ -231,6 +231,7 @@ local function load_config(filename)
 		single_card_mode = false,
 		command_mode = false,
 		start_in_command_mode = false,
+		command_mode_esc_toggles = true,
 		command_mode_single_key = false,
 		arrow_hints = false,
 		exact_length_mask = false,
@@ -315,6 +316,8 @@ local function load_config(filename)
 								config.command_mode = (val == "true" or val == "1")
 							elseif key == "start_in_command_mode" then
 								config.start_in_command_mode = (val == "true" or val == "1")
+							elseif key == "command_mode_esc_toggles" then
+								config.command_mode_esc_toggles = (val == "true" or val == "1")
 							elseif key == "command_mode_single_key" then
 								config.command_mode_single_key = (val == "true" or val == "1")
 							elseif key == "arrow_hints" then
@@ -1758,7 +1761,14 @@ local function run_quiz(study_queue, config)
 					if lkey == "\r" or lkey == "\n" then
 						switch_mode = true
 						is_command_mode = false
-					elseif lkey == "\x1b" or lkey == "d" then
+					elseif lkey == "\x1b" then
+						if config.command_mode_esc_toggles then
+							is_command_mode = false
+							switch_mode = true
+						else
+							trimmed_input = "/d"
+						end
+					elseif lkey == "d" then
 						trimmed_input = "/d"
 					elseif lkey == "a" then
 						trimmed_input = "/a"
@@ -1792,7 +1802,10 @@ local function run_quiz(study_queue, config)
 						is_command_mode = false
 						switch_mode = true
 					elseif trimmed_input == "/d" then
-						-- Esc or explicit /d
+						if config.command_mode_esc_toggles then
+							is_command_mode = false
+							switch_mode = true
+						end
 					else
 						if trimmed_input:sub(1, 1) ~= "/" and trimmed_input ~= "" then
 							trimmed_input = "/" .. trimmed_input
@@ -2233,13 +2246,16 @@ print_interactive_help = function(config)
 	print("  " .. bold("/q") .. ", " .. bold("/quit") .. ", " .. bold("/exit") .. "        Exit the quiz.")
 	if config and config.command_mode then
 		print("\n" .. bold(cyan("Command Mode enabled:")))
+		local esc_cmd_mode = config.command_mode_esc_toggles and "Switch to Input Mode (from command mode)." or "Skip the current card."
 		if config.command_mode_single_key then
-			print("  " .. bold("Esc") .. "                     Switch to Command Mode (from input mode).")
-			print("  " .. bold("Enter") .. "                   Switch to Input Mode (from command mode).")
+			print("  " .. bold("Esc") .. "                     In input mode: Switch to Command Mode.")
+			print("  " .. bold("Esc") .. "                     In command mode: " .. esc_cmd_mode)
+			print("  " .. bold("Enter") .. "                   In command mode: Switch to Input Mode.")
 			print("  " .. bold("a, d, q, ?, h") .. "           Execute commands instantly with single keystrokes.")
 		else
-			print("  " .. bold("Esc") .. "                     Switch to Command Mode (from input mode).")
-			print("  " .. bold("Enter") .. "                   Switch to Input Mode (from command mode).")
+			print("  " .. bold("Esc") .. "                     In input mode: Switch to Command Mode.")
+			print("  " .. bold("Esc") .. "                     In command mode: " .. esc_cmd_mode)
+			print("  " .. bold("Enter") .. "                   In command mode: Switch to Input Mode.")
 			print("  " .. bold("a, d, q, ?") .. "              Execute commands without typing '/' (requires Enter).")
 		end
 	end
