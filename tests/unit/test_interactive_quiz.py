@@ -2067,14 +2067,14 @@ def test_input_helper_send_receive_ipc_busy_retry(tmp_path, monkeypatch):
             if peek_calls == 1:
                 lpTotalBytesAvail[0] = 0
             else:
-                lpTotalBytesAvail[0] = 12
+                lpTotalBytesAvail[0] = 14
         return True
         
     def mock_read_file(hFile, lpBuffer, nNumberOfBytesToRead, lpNumberOfBytesRead, lpOverlapped):
         calls.append("ReadFile")
         if lpNumberOfBytesRead:
-            lpNumberOfBytesRead[0] = 12
-        ctypes.memmove(lpBuffer, b'{"res": "ok"}\n', 12)
+            lpNumberOfBytesRead[0] = 14
+        ctypes.memmove(lpBuffer, b'{"res": "ok"}\n', 14)
         return True
         
     def mock_close_handle(hObject):
@@ -2105,7 +2105,6 @@ def test_input_helper_send_receive_ipc_busy_retry(tmp_path, monkeypatch):
     monkeypatch.setattr(input_helper_test.kernel32, "CloseHandle", mock_close_handle)
     
     res = input_helper_test.send_receive_ipc("dummy_pipe", {"cmd": "test"}, timeout=1.0)
-    
     assert res == {"res": "ok"}
     assert create_file_calls == 3
     assert wait_calls == 2
