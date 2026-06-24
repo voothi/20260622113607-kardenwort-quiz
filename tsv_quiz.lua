@@ -1786,7 +1786,7 @@ local function run_quiz(study_queue, config)
 				if config.options_mode_single_key then
 					local allowed = {"a", "d", "q", "?", "\r", "\n", "\x1b", "h", "/", "/hint_left", "/hint_right", "/hint_up", "/hint_down"}
 					local esc_opt = config.options_mode_esc_toggles and "'Esc' or 'Enter' to answer" or "'Esc' to skip, 'Enter' to answer"
-					local key = press_any_key(bold("Options ") .. dim("(press '?' for help, " .. esc_opt .. ")... "), allowed, config.arrow_hints)
+					local key = press_any_key(bold("Command ") .. dim("(press '?' for help, " .. esc_opt .. ")... "), allowed, config.arrow_hints)
 					if key == "" then
 						local line = io.read()
 						key = line and line:sub(1, 1) or ""
@@ -1829,7 +1829,7 @@ local function run_quiz(study_queue, config)
 				else
 					local save_options = config.options_mode_save_options
 					local esc_opt = config.options_mode_esc_toggles and "press 'Esc' or 'Enter' to answer" or "press 'Esc' to skip, 'Enter' to answer"
-					io.write(bold("Options ") .. dim("(type '?' for help, " .. esc_opt .. "): "))
+					io.write(bold("Command ") .. dim("(type '?' for help, " .. esc_opt .. "): "))
 					user_input = read_line_with_esc(config, saved_options_input, save_options, config.arrow_hints)
 					if not user_input then
 						print(magenta("\nExiting quiz early."))
@@ -1860,8 +1860,8 @@ local function run_quiz(study_queue, config)
 					end
 				end
 			else
-				local help_msg = config.options_mode and "(type '/?' for help, press 'Esc' for options)" or "(type '/?' for help, press 'Esc' to skip)"
-				io.write(bold("Your answer ") .. dim(help_msg .. ": "))
+				local help_msg = config.options_mode and "(type '/?' for help, press 'Esc' for commands)" or "(type '/?' for help, press 'Esc' to skip)"
+				io.write(bold("Answer ") .. dim(help_msg .. ": "))
 				user_input = read_line_with_esc(config, saved_input, config.options_mode_save_input, false)
 				if not user_input then
 					print(magenta("\nExiting quiz early."))
@@ -2301,17 +2301,17 @@ print_interactive_help = function(config)
 	print("  " .. bold("Arrows") .. "                  Dynamic visual hints (if arrow_hints is enabled).")
 	print("  " .. bold("/q") .. ", " .. bold("/quit") .. ", " .. bold("/exit") .. "        Exit the quiz.")
 	if config and config.options_mode then
-		print("\n" .. bold(cyan("Options Mode enabled:")))
-		local esc_cmd_mode = config.options_mode_esc_toggles and "Switch to Answer (from options)." or "Skip the current card."
+		print("\n" .. bold(cyan("Command Mode enabled:")))
+		local esc_cmd_mode = config.options_mode_esc_toggles and "Switch to Answer (from command)." or "Skip the current card."
 		if config.options_mode_single_key then
-			print("  " .. bold("Esc") .. "                     In answer: Switch to Options.")
-			print("  " .. bold("Esc") .. "                     In options: " .. esc_cmd_mode)
-			print("  " .. bold("Enter") .. "                   In options: Switch to Answer.")
+			print("  " .. bold("Esc") .. "                     In Answer: Switch to Command.")
+			print("  " .. bold("Esc") .. "                     In Command: " .. esc_cmd_mode)
+			print("  " .. bold("Enter") .. "                   In Command: Switch to Answer.")
 			print("  " .. bold("a, d, q, ?, h") .. "           Execute commands instantly with single keystrokes.")
 		else
-			print("  " .. bold("Esc") .. "                     In answer: Switch to Options.")
-			print("  " .. bold("Esc") .. "                     In options: " .. esc_cmd_mode)
-			print("  " .. bold("Enter") .. "                   In options: Switch to Answer.")
+			print("  " .. bold("Esc") .. "                     In Answer: Switch to Command.")
+			print("  " .. bold("Esc") .. "                     In Command: " .. esc_cmd_mode)
+			print("  " .. bold("Enter") .. "                   In Command: Switch to Answer.")
 			print("  " .. bold("a, d, q, ?") .. "              Execute commands without typing '/' (requires Enter).")
 		end
 	end

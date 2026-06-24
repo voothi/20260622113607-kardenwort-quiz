@@ -39,38 +39,38 @@ new_sort_order = order_added
 # - false: Scroll normally in the terminal (default).
 single_card_mode = true
 
-# Enable options (vim-style) (true/false)
-# - true: Esc toggles between answer and options. Commands can be executed without typing '/'.
+# Enable command mode (vim-style) (true/false)
+# - true: Esc toggles between answer and command prompts. Commands can be executed without typing '/'.
 # - false: Normal behavior (default).
 options_mode = true
 
-# Start in options (true/false)
-# - true: New cards start in options by default.
-# - false: New cards start in answer by default.
+# Start in command mode (true/false)
+# - true: New cards start in command mode by default.
+# - false: New cards start in answer prompt by default.
 start_in_options_mode = false
 
 # Esc toggles modes (true/false)
-# - true: Pressing Esc in options toggles back to answer (default).
-# - false: Pressing Esc in options skips the card.
+# - true: Pressing Esc in command mode toggles back to answer prompt (default).
+# - false: Pressing Esc in command mode skips the card.
 options_mode_esc_toggles = true
 
 # Save input on mode switch (true/false)
-# - true: When switching from answer to options with Esc, saves the typed text and restores it when returning.
+# - true: When switching from answer to command prompt with Esc, saves the typed text and restores it when returning.
 # - false: Typed text is discarded on mode switch (default).
 options_mode_save_input = false
 
-# Save options input on mode switch (true/false)
-# - true: When switching from options to answer with Esc or Enter, saves the typed options text and restores it when returning.
-# - false: Typed options text is discarded on mode switch (default).
+# Save command input on mode switch (true/false)
+# - true: When switching from command prompt to answer with Esc or Enter, saves the typed command text and restores it when returning.
+# - false: Typed command text is discarded on mode switch (default).
 options_mode_save_options = false
 
-# Single-key options (true/false)
-# - true: In options, single keystrokes (a, d, ?, q, h) execute immediately without pressing Enter.
-# - false: In options, you must type the command and press Enter (default).
+# Single-key commands (true/false)
+# - true: In command mode, single keystrokes (a, d, ?, q, h) execute immediately without pressing Enter.
+# - false: In command mode, you must type the command and press Enter (default).
 options_mode_single_key = false
 
 # Enable keyboard arrow hints (true, swap, false)
-# When in Options, use arrow keys to dynamically reveal letters and words.
+# When in Command mode, use arrow keys to dynamically reveal letters and words.
 # - true: Default hint mapping.
 #         Left arrow reveals from the end. Right arrow reveals from the start.
 #         Up arrow reveals from the middle. Down arrow hides and resets the hints.
