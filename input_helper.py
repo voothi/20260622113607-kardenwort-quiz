@@ -611,6 +611,10 @@ def get_preview_replacement(u_part, target, use_exact, battleship, case_sensitiv
     target_len = len(target)
     p_len = len(u_part)
     
+    if p_len == 0:
+        placeholder = "_" * target_len if use_exact else "___"
+        return format_wildcard(placeholder, blank_inverted_colors, "33", blank_color)
+        
     if use_exact:
         if p_len < target_len:
             if battleship:
@@ -618,7 +622,8 @@ def get_preview_replacement(u_part, target, use_exact, battleship, case_sensitiv
                 colored = get_inline_colored_diff(u_part, target_prefix, case_sensitive, ignore_punctuation, blank_inverted_colors)
                 return colored + format_wildcard("_" * (target_len - p_len), blank_inverted_colors, "33", blank_color)
             else:
-                return format_wildcard(u_part + "_" * (target_len - p_len), blank_inverted_colors, None, blank_color)
+                typed_colored = format_wildcard(u_part, blank_inverted_colors, None, blank_color)
+                return typed_colored + format_wildcard("_" * (target_len - p_len), blank_inverted_colors, "33", blank_color)
         elif p_len > target_len:
             fitted_plain = target
             if target_len <= 1:
@@ -637,12 +642,8 @@ def get_preview_replacement(u_part, target, use_exact, battleship, case_sensitiv
                 return format_wildcard(u_part, blank_inverted_colors, None, blank_color)
     else:
         if battleship:
-            if p_len < target_len:
-                target_prefix = target[:p_len]
-                colored = get_inline_colored_diff(u_part, target_prefix, case_sensitive, ignore_punctuation, blank_inverted_colors)
-                return colored
-            else:
-                return get_inline_colored_diff(u_part, target, case_sensitive, ignore_punctuation, blank_inverted_colors)
+            target_prefix = target[:p_len] if p_len < target_len else target
+            return get_inline_colored_diff(u_part, target_prefix, case_sensitive, ignore_punctuation, blank_inverted_colors)
         else:
             return format_wildcard(u_part, blank_inverted_colors, None, blank_color)
 

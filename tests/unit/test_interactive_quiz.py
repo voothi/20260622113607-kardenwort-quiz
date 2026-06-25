@@ -2533,7 +2533,8 @@ def test_input_helper_preview_helpers():
         ignore_punctuation=True,
         diff_inverted_colors=False
     )
-    assert "\033[1mHa___\033[0m" in res
+    assert "\033[1mHa" in res
+    assert "\033[33m___" in res
 
     # 4. Test render_preview_template
     rendered = input_helper.render_preview_template(
@@ -2819,6 +2820,70 @@ def test_command_preview_suppression():
     assert rendered_for_command == rendered_for_empty
     # Verify it doesn't contain command characters
     assert "/h" not in rendered_for_command
+
+
+def test_non_battleship_yellow_placeholders():
+    """7.2 Test that in non-battleship preview mode, placeholders are yellow (when blank_color='yellow') and typed text is standard."""
+    import input_helper
+
+    # Case A: Exact length, empty input -> all underscores should be yellow
+    res_empty_exact = input_helper.get_preview_replacement(
+        u_part="",
+        target="Hause",
+        use_exact=True,
+        battleship=False,
+        case_sensitive=True,
+        ignore_punctuation=True,
+        blank_inverted_colors=False,
+        blank_color="yellow"
+    )
+    assert "\033[33m" in res_empty_exact
+    assert "\033[1m" in res_empty_exact
+    assert "_____" in res_empty_exact
+
+    # Case B: Exact length, partial input "Ha" -> "Ha" is standard, remaining "___" is yellow
+    res_partial_exact = input_helper.get_preview_replacement(
+        u_part="Ha",
+        target="Hause",
+        use_exact=True,
+        battleship=False,
+        case_sensitive=True,
+        ignore_punctuation=True,
+        blank_inverted_colors=False,
+        blank_color="yellow"
+    )
+    assert "\033[1mHa" in res_partial_exact
+    assert "\033[33m___" in res_partial_exact
+
+    # Case C: Non-exact length, empty input -> "___" placeholder should be yellow
+    res_empty_nonexact = input_helper.get_preview_replacement(
+        u_part="",
+        target="Hause",
+        use_exact=False,
+        battleship=False,
+        case_sensitive=True,
+        ignore_punctuation=True,
+        blank_inverted_colors=False,
+        blank_color="yellow"
+    )
+    assert "\033[33m" in res_empty_nonexact
+    assert "\033[1m" in res_empty_nonexact
+    assert "___" in res_empty_nonexact
+
+    # Case D: Non-exact length, partial input "Ha" -> "Ha" should be standard bold, no yellow
+    res_partial_nonexact = input_helper.get_preview_replacement(
+        u_part="Ha",
+        target="Hause",
+        use_exact=False,
+        battleship=False,
+        case_sensitive=True,
+        ignore_punctuation=True,
+        blank_inverted_colors=False,
+        blank_color="yellow"
+    )
+    assert "\033[1mHa\033[0m" in res_partial_nonexact
+    assert "\033[33m" not in res_partial_nonexact
+
 
 
 
