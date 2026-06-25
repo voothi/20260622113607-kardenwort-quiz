@@ -119,6 +119,25 @@ def test_help_argument(quiz_env):
     assert "Usage:" in out
     assert "lua tsv_quiz.lua [file.tsv]" in out
 
+def test_startup_sync_argument(quiz_env):
+    """Test launching the quiz with the --sync <zid> <time> arguments."""
+    focus_single_card(quiz_env, "20260604184114-microsoft-just-shocked-the.en.tsv", "properly")
+    code, out, err = run_quiz(quiz_env, ["20260604184114-microsoft-just-shocked-the.en.tsv", "--sync", "20260604184114", "330.9"], ["/q"])
+    assert code == 0
+    clean_out = strip_ansi(out).replace("\n", " ")
+    assert "Practice Repeat" in clean_out
+    assert "clear way to use it" in clean_out
+
+def test_startup_sync_empty_queue(quiz_env):
+    """Test launching the quiz with --sync when there are no due cards in the queue."""
+    # Focus a nonexistent word so all actual cards are scheduled in the far future (0 due, 0 new)
+    focus_single_card(quiz_env, "20260604184114-microsoft-just-shocked-the.en.tsv", "nonexistent")
+    code, out, err = run_quiz(quiz_env, ["20260604184114-microsoft-just-shocked-the.en.tsv", "--sync", "20260604184114", "330.9"], ["/q"])
+    assert code == 0
+    clean_out = strip_ansi(out).replace("\n", " ")
+    assert "Practice Repeat" in clean_out
+    assert "clear way to use it" in clean_out
+
 def test_single_file_quit(quiz_env):
     """Test that the user can start and quit the quiz gracefully."""
     code, out, err = run_quiz(quiz_env, ["20260604184114-microsoft-just-shocked-the.en.tsv"], ["/q"])
