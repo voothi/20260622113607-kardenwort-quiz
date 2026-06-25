@@ -1,3 +1,4 @@
+---@diagnostic disable: undefined-field
 -- tsv_quiz.lua
 -- A command-line utility to parse vocabulary from a TSV file and run a study quiz.
 -- Demonstrates core Lua concepts: File I/O, tables, loops, string parsing, and interactive console input.
@@ -57,7 +58,7 @@ if has_ffi then
 end
 
 local function read_preview_pipe(pipe_handle)
-	if not pipe_handle or pipe_handle == INVALID_HANDLE_VALUE then
+	if not C or not pipe_handle or pipe_handle == INVALID_HANDLE_VALUE then
 		return nil
 	end
 	
@@ -2183,7 +2184,7 @@ local function read_line_with_esc(
 		local pipe_handle = nil
 		local preview_pipe_arg = ""
 		local use_preview = config.typing_preview and config.single_card_mode and entry and has_ffi and C
-		if use_preview then
+		if use_preview and C then
 			local preview_pipe_path = config.quiz_pipe_path .. "-preview"
 			pipe_handle = C.CreateNamedPipeA(
 				preview_pipe_path,
@@ -2209,7 +2210,7 @@ local function read_line_with_esc(
 		local f = io.popen(cmd)
 		if f then
 			local res = nil
-			if use_preview and pipe_handle and pipe_handle ~= INVALID_HANDLE_VALUE then
+			if use_preview and C and pipe_handle and pipe_handle ~= INVALID_HANDLE_VALUE then
 				local last_buffer = ""
 				while true do
 					-- Poll preview pipe
@@ -3314,7 +3315,8 @@ local function main()
 	end
 end
 
-if os.getenv("TEST_LUA_EVAL") then
+local test_eval = os.getenv("TEST_LUA_EVAL")
+if test_eval then
 	_G.load_config = load_config
 	_G.mask_context = mask_context
 	_G.get_inline_colored_diff = get_inline_colored_diff
@@ -3325,7 +3327,7 @@ if os.getenv("TEST_LUA_EVAL") then
 	_G.yellow = yellow
 	_G.c = c
 	_G.invert = invert
-	local chunk, err = load(os.getenv("TEST_LUA_EVAL"))
+	local chunk, err = load(test_eval)
 	if chunk then
 		local ok_eval, eval_err = pcall(chunk)
 		if not ok_eval then
