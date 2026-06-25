@@ -565,7 +565,21 @@ def wrap_text(text, max_width):
     return "\n".join(lines)
 
 def get_wrap_width():
-    columns, _ = shutil.get_terminal_size((120, 30))
+    columns = 0
+    if sys.platform == 'win32':
+        try:
+            with open("CONOUT$", "w") as f:
+                columns = os.get_terminal_size(f.fileno()).columns
+        except Exception:
+            pass
+    if not columns:
+        try:
+            columns = os.get_terminal_size(sys.__stdout__.fileno()).columns
+        except Exception:
+            try:
+                columns, _ = shutil.get_terminal_size((120, 30))
+            except Exception:
+                columns = 120
     return columns - 1
 
 def is_punctuation_or_space(c):
@@ -1039,7 +1053,7 @@ if __name__ == "__main__":
             i += 4
             continue
         elif args[i] == "--width":
-            print(shutil.get_terminal_size((120, 30)).columns)
+            print(get_wrap_width() + 1)
             sys.exit(0)
         elif args[i] in ("--key", "--line"):
             mode = args[i]
