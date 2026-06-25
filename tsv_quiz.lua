@@ -2225,6 +2225,7 @@ local function run_quiz(study_queue, config)
 		end
 
 		while true do
+			console_width = get_console_width()
 			local masked_context = mask_context(
 				entry.context,
 				target_word,
