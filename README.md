@@ -111,6 +111,16 @@ answer_mode_arrow_hints = false
 # Mask context with underscores matching the exact length of the target word/phrase (true/false)
 exact_length_mask = true
 
+# Show your typed text inside the blank as you type (true/false)
+# - true: While typing in the answer prompt, the current text is rendered into the blank of the context sentence in real time (Windows only).
+# - false: The blank shows the placeholder until you submit (default).
+typing_preview = false
+
+# Color the live preview like a Battleship board (true/false)
+# - true: In the preview, characters matching the target at the right position are green (hit) and others are red (miss). Requires typing_preview = true.
+# - false: The preview is shown without per-character coloring (default).
+battleship_feedback = false
+
 # Use strict case-sensitive matching for the diff display (true/false)
 case_sensitive_diff = true
 

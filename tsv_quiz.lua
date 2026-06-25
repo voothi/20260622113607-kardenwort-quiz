@@ -326,6 +326,8 @@ local function load_config(filename)
 		command_mode_arrow_hints = nil,
 		answer_mode_arrow_hints = nil,
 		exact_length_mask = false,
+		typing_preview = false,
+		battleship_feedback = false,
 		case_sensitive_diff = true,
 		ignore_punctuation = true,
 		diff_inverted_colors = false,
@@ -447,6 +449,10 @@ local function load_config(filename)
 								end
 							elseif key == "exact_length_mask" then
 								config.exact_length_mask = (val == "true" or val == "1")
+							elseif key == "typing_preview" then
+								config.typing_preview = (val == "true" or val == "1")
+							elseif key == "battleship_feedback" then
+								config.battleship_feedback = (val == "true" or val == "1")
 							elseif key == "case_sensitive_diff" then
 								config.case_sensitive_diff = (val == "true" or val == "1")
 							elseif key == "ignore_punctuation" then
@@ -1461,7 +1467,8 @@ local function mask_context(
 	user_input,
 	case_sensitive_diff,
 	ignore_punctuation,
-	source_index
+	source_index,
+	preview_format
 )
 	local p1, p2 = target_word:match("^(.-)%s*%.%.%.%s*(.-)$")
 
@@ -1691,10 +1698,15 @@ local function mask_context(
 			r1 = bold(yellow(hp1))
 			r2 = bold(yellow(hp2))
 		else
-			local mask1 = get_mask_placeholder(p1, use_exact)
-			local mask2 = get_mask_placeholder(p2, use_exact)
-			r1 = bold(yellow(mask1))
-			r2 = bold(yellow(mask2))
+			if preview_format then
+				r1 = "[[TARGET:" .. p1 .. "]]"
+				r2 = "[[TARGET:" .. p2 .. "]]"
+			else
+				local mask1 = get_mask_placeholder(p1, use_exact)
+				local mask2 = get_mask_placeholder(p2, use_exact)
+				r1 = bold(yellow(mask1))
+				r2 = bold(yellow(mask2))
+			end
 		end
 
 		local function try_replace(p1_case, p2_case)
@@ -1815,7 +1827,9 @@ local function mask_context(
 
 		local rep_parts = {}
 		for _, part in ipairs(parts) do
-			if is_correct then
+			if preview_format then
+				table.insert(rep_parts, "[[TARGET:" .. part .. "]]")
+			elseif is_correct then
 				table.insert(rep_parts, bold(green(part)))
 			elseif has_hint and use_exact then
 				table.insert(rep_parts, bold(yellow(get_hint_masked_word(part, hint_n, hint_k, hint_m))))
@@ -1932,7 +1946,9 @@ local function mask_context(
 		local fallback_context = context
 		for _, match in ipairs(non_overlapping) do
 			local rep
-			if is_correct ~= nil then
+			if preview_format then
+				rep = "[[TARGET:" .. match.m .. "]]"
+			elseif is_correct ~= nil then
 				if is_correct then
 					rep = bold(green(match.m))
 				else
@@ -1995,8 +2011,66 @@ local function update_and_save_progress(entry, is_correct, config)
 	return save_tsv(entry.filename, entry.raw_rows)
 end
 
+local function to_hex(str)
+	return (str:gsub('.', function(c)
+		return string.format('%02x', string.byte(c))
+	end))
+end
+
+local function json_encode(tbl)
+	local parts = {}
+	for k, v in pairs(tbl) do
+		local key_str = '"' .. k .. '"'
+		local val_str
+		if type(v) == "boolean" then
+			val_str = v and "true" or "false"
+		elseif type(v) == "number" then
+			val_str = tostring(v)
+		else
+			local escaped = tostring(v):gsub("\\", "\\\\"):gsub('"', '\\"'):gsub("\n", "\\n"):gsub("\r", "\\r")
+			val_str = '"' .. escaped .. '"'
+		end
+		table.insert(parts, key_str .. ":" .. val_str)
+	end
+	return "{" .. table.concat(parts, ",") .. "}"
+end
+
+local function get_card_header(config, question_num, total, entry)
+	local lines = {}
+	table.insert(lines, bold(cyan("Kardenwort TSV Quiz")))
+	table.insert(lines, bold(cyan("-------------------")))
+	if config.exact_length_mask then
+		table.insert(lines, dim("Fill in the blanks based on the context sentence."))
+	else
+		table.insert(lines, dim("Fill in the blank '") .. yellow("___") .. dim("' based on the context sentence."))
+	end
+	table.insert(lines, dim("Type '/q' or '/exit' to quit.\n"))
+
+	local basename = entry.filename:match("([^/\\]+)$") or entry.filename
+	if entry.is_repeat and not config.repeat_counts_in_stats then
+		local header_prefix
+		if entry.original_question_num then
+			header_prefix = string.format("Practice Repeat %d/%d:", entry.original_question_num, total)
+		else
+			header_prefix = "Practice Repeat (Sync):"
+		end
+		table.insert(lines, bold(cyan(header_prefix)) .. dim(string.format(" [File: %s | Box %d]", basename, entry.box)))
+	else
+		local cycle = math.ceil(question_num / total)
+		local disp_num = ((question_num - 1) % total) + 1
+		local cycle_str = cycle > 1 and string.format(" (Cycle %d)", cycle) or ""
+		local repeat_str = entry.is_repeat and " (Repeat)" or ""
+		table.insert(
+			lines,
+			bold(cyan(string.format("Question %d/%d%s%s:", disp_num, total, cycle_str, repeat_str)))
+				.. dim(string.format(" [File: %s | Box %d]", basename, entry.box))
+		)
+	end
+	return table.concat(lines, "\n") .. "\n"
+end
+
 -- Read a line of input, intercepting Esc (skip) and Ctrl+C (quit) on Windows
-local function read_line_with_esc(config, initial_text, save_esc, use_arrows)
+local function read_line_with_esc(config, initial_text, save_esc, use_arrows, preview_data)
 	io.flush()
 	if package.config:sub(1, 1) == "\\" then
 		local arrow_arg = ""
@@ -2011,8 +2085,12 @@ local function read_line_with_esc(config, initial_text, save_esc, use_arrows)
 			local escaped_initial = initial_text:gsub('"', '\\"')
 			initial_arg = string.format(' --initial "%s"', escaped_initial)
 		end
+		local preview_arg = ""
+		if preview_data and preview_data ~= "" then
+			preview_arg = string.format(' --preview-data "%s"', preview_data)
+		end
 		local prefix = get_helper_cmd_prefix("--line")
-		local cmd = string.format('%s%s%s%s 2>nul', prefix, arrow_arg, save_esc_arg, initial_arg)
+		local cmd = string.format('%s%s%s%s%s 2>nul', prefix, arrow_arg, save_esc_arg, initial_arg, preview_arg)
 		if cmd:sub(1, 1) == '"' then
 			cmd = '"' .. cmd .. '"'
 		end
@@ -2025,6 +2103,9 @@ local function read_line_with_esc(config, initial_text, save_esc, use_arrows)
 				return res -- return even if empty (empty Enter = empty answer)
 			end
 		end
+	end
+	if preview_data and preview_data ~= "" and package.config:sub(1, 1) == "\\" then
+		io.write(bold("Answer ") .. dim("(type '/?' for help): "))
 	end
 	local val = io.read()
 	if val == "" and initial_text and initial_text ~= "" then
@@ -2236,8 +2317,40 @@ local function run_quiz(study_queue, config)
 					end
 				end
 			else
-				io.write(bold("Answer ") .. dim("(type '/?' for help): "))
-				user_input = read_line_with_esc(config, saved_input, config.command_mode_save_input, config.answer_mode_arrow_hints)
+				local preview_data = nil
+				if config.typing_preview and config.single_card_mode then
+					local preview_template = mask_context(
+						entry.context,
+						target_word,
+						config.exact_length_mask,
+						false,
+						0,
+						0,
+						0,
+						nil,
+						nil,
+						config.case_sensitive_diff,
+						config.ignore_punctuation,
+						entry.source_index,
+						true -- preview_format
+					)
+					local payload = {
+						header = get_card_header(config, question_num, total, entry),
+						template = preview_template,
+						hint = current_hint or "",
+						prompt = bold("Answer ") .. dim("(type '/?' for help): "),
+						exact_length_mask = config.exact_length_mask,
+						battleship_feedback = config.battleship_feedback,
+						case_sensitive_diff = config.case_sensitive_diff,
+						ignore_punctuation = config.ignore_punctuation,
+						diff_inverted_colors = config.diff_inverted_colors
+					}
+					preview_data = to_hex(json_encode(payload))
+				end
+				if not preview_data or package.config:sub(1, 1) ~= "\\" then
+					io.write(bold("Answer ") .. dim("(type '/?' for help): "))
+				end
+				user_input = read_line_with_esc(config, saved_input, config.command_mode_save_input, config.answer_mode_arrow_hints, preview_data)
 				if not user_input then
 					print(magenta("\nExiting quiz early."))
 					return
@@ -2808,6 +2921,13 @@ print_interactive_help = function(config)
 	print("  " .. bold("/h N M") .. "                  Reveal N letters from the start and M from the end.")
 	print("  " .. bold("/h N K M") .. "                Reveal N from the start, K from the middle, M from the end.")
 	print("  " .. bold("Arrows") .. "                  Dynamic visual hints (if enabled).")
+	if config and config.typing_preview then
+		local preview_desc = "Live preview of typed answer in the blank."
+		if config.battleship_feedback then
+			preview_desc = "Live preview in the blank with green/red (Battleship) correctness feedback."
+		end
+		print("  " .. bold("Live Preview") .. "            " .. preview_desc)
+	end
 	print("  " .. bold("/a") .. "                      Repeat the previous card.")
 	local esc_skip = (config and config.command_mode and config.command_mode_esc_toggles) and "     " or ", " .. bold("Esc")
 	print("  " .. bold("/d") .. esc_skip .. "                 Skip the current card.")
@@ -3128,6 +3248,34 @@ local function main()
 		run_quiz(study_queue, config)
 	end
 end
+
+local function run_lua_eval()
+	if os.getenv("TEST_LUA_EVAL") then
+		_G.load_config = load_config
+		_G.mask_context = mask_context
+		_G.get_inline_colored_diff = get_inline_colored_diff
+		_G.bold = bold
+		_G.green = green
+		_G.red = red
+		_G.yellow = yellow
+		_G.c = c
+		_G.invert = invert
+		local chunk, err = load(os.getenv("TEST_LUA_EVAL"))
+		if chunk then
+			local ok_eval, eval_err = pcall(chunk)
+			if not ok_eval then
+				io.stderr:write("Eval error: " .. tostring(eval_err) .. "\n")
+				os.exit(1)
+			end
+		else
+			io.stderr:write("Load error: " .. tostring(err) .. "\n")
+			os.exit(1)
+		end
+		os.exit(0)
+	end
+end
+
+run_lua_eval()
 
 local ok, err = pcall(main)
 if not ok then

@@ -19,6 +19,8 @@ import json
 import socket
 import subprocess
 import time
+import unicodedata
+import string
 
 kernel32 = ctypes.windll.kernel32
 
@@ -471,7 +473,185 @@ def get_word_boundary(chars, pos, direction):
             p += 1
     return p
 
-def read_line(enable_arrows=False, initial_text="", save_esc=False, swap_arrows=False):
+def is_punctuation_or_space(c):
+    if c.isspace():
+        return True
+    category = unicodedata.category(c)
+    return category.startswith('P') or category.startswith('S')
+
+def get_inline_colored_diff(user_str, original_target, case_sensitive, ignore_punctuation, diff_inverted_colors=False):
+    GREEN_CODE = "32"
+    RED_CODE = "31"
+    
+    def c(code, text):
+        if diff_inverted_colors:
+            return f"\033[7m\033[{code}m{text}\033[0m"
+        else:
+            return f"\033[{code}m\033[1m{text}\033[0m"
+            
+    if ignore_punctuation:
+        user_clean = "".join(ch for ch in user_str if not is_punctuation_or_space(ch))
+        target_clean = "".join(ch for ch in original_target if not is_punctuation_or_space(ch))
+    else:
+        user_clean = "".join(ch for ch in user_str if not ch.isspace())
+        target_clean = "".join(ch for ch in original_target if not ch.isspace())
+        
+    if not target_clean:
+        return original_target
+        
+    A = list(user_clean)
+    B = list(target_clean)
+    n = len(A)
+    m = len(B)
+    
+    dp = [[0] * (m + 1) for _ in range(n + 1)]
+    for i in range(n + 1):
+        dp[i][0] = i
+    for j in range(m + 1):
+        dp[0][j] = j
+        
+    for i in range(1, n + 1):
+        for j in range(1, m + 1):
+            if case_sensitive:
+                cost = 0 if A[i - 1] == B[j - 1] else 1
+            else:
+                cost = 0 if A[i - 1].lower() == B[j - 1].lower() else 1
+            dp[i][j] = min(dp[i - 1][j] + 1, dp[i][j - 1] + 1, dp[i - 1][j - 1] + cost)
+            
+    i, j = n, m
+    ops = []
+    last_op = None
+    
+    while i > 0 or j > 0:
+        match = False
+        if i > 0 and j > 0:
+            if case_sensitive:
+                match = (A[i - 1] == B[j - 1])
+            else:
+                match = (A[i - 1].lower() == B[j - 1].lower())
+        cost = 0 if match else 1
+        
+        can_match = i > 0 and j > 0 and dp[i][j] == dp[i - 1][j - 1] + cost
+        can_missing = j > 0 and dp[i][j] == dp[i][j - 1] + 1
+        can_extra = i > 0 and dp[i][j] == dp[i - 1][j] + 1
+        
+        op_type = None
+        if can_match and cost == 0:
+            if last_op == "match" or (not can_missing and not can_extra):
+                op_type = "match"
+            elif last_op == "missing" and can_missing:
+                op_type = "missing"
+            elif last_op == "extra" and can_extra:
+                op_type = "extra"
+            elif can_missing:
+                op_type = "missing"
+            else:
+                op_type = "extra"
+        else:
+            if can_missing and can_extra:
+                if last_op == "missing":
+                    op_type = "missing"
+                elif last_op == "extra":
+                    op_type = "extra"
+                else:
+                    op_type = "missing"
+            elif can_missing:
+                op_type = "missing"
+            elif can_extra:
+                op_type = "extra"
+            else:
+                op_type = "replace"
+            
+        ops.append({"type": op_type})
+        last_op = op_type
+        if op_type == "match" or op_type == "replace":
+            i -= 1
+            j -= 1
+        elif op_type == "missing":
+            j -= 1
+        elif op_type == "extra":
+            i -= 1
+            
+    tags = []
+    for op in reversed(ops):
+        if op["type"] != "extra":
+            tags.append(op["type"])
+            
+    res = []
+    tag_idx = 0
+    for ch in list(original_target):
+        if is_punctuation_or_space(ch):
+            res.append(c(GREEN_CODE, ch))
+        else:
+            tag = tags[tag_idx] if tag_idx < len(tags) else "missing"
+            tag_idx += 1
+            if tag == "match":
+                res.append(c(GREEN_CODE, ch))
+            else:
+                res.append(c(RED_CODE, ch))
+    return "".join(res)
+
+def get_preview_replacement(u_part, target, use_exact, battleship, case_sensitive, ignore_punctuation, diff_inverted_colors):
+    target_len = len(target)
+    p_len = len(u_part)
+    
+    def bold(text):
+        return f"\033[1m{text}\033[0m"
+        
+    def bold_yellow(text):
+        return f"\033[1m\033[33m{text}\033[0m"
+        
+    if use_exact:
+        if p_len < target_len:
+            if battleship:
+                target_prefix = target[:p_len]
+                colored = get_inline_colored_diff(u_part, target_prefix, case_sensitive, ignore_punctuation, diff_inverted_colors)
+                return colored + bold_yellow("_" * (target_len - p_len))
+            else:
+                return bold(u_part + "_" * (target_len - p_len))
+        elif p_len > target_len:
+            fitted_plain = target
+            if target_len <= 1:
+                fitted_plain = "…"
+            else:
+                fitted_plain = target[:target_len - 1] + "…"
+                
+            if battleship:
+                return get_inline_colored_diff(fitted_plain, target, case_sensitive, ignore_punctuation, diff_inverted_colors)
+            else:
+                return bold(fitted_plain)
+        else:
+            if battleship:
+                return get_inline_colored_diff(u_part, target, case_sensitive, ignore_punctuation, diff_inverted_colors)
+            else:
+                return bold(u_part)
+    else:
+        if battleship:
+            if p_len < target_len:
+                target_prefix = target[:p_len]
+                colored = get_inline_colored_diff(u_part, target_prefix, case_sensitive, ignore_punctuation, diff_inverted_colors)
+                return colored
+            else:
+                return get_inline_colored_diff(u_part, target, case_sensitive, ignore_punctuation, diff_inverted_colors)
+        else:
+            return bold(u_part)
+
+def render_preview_template(template, typed_text, use_exact, battleship, case_sensitive, ignore_punctuation, diff_inverted_colors):
+    placeholders = re.findall(r'\[\[TARGET:(.*?)\]\]', template)
+    if not placeholders:
+        return template
+        
+    u_parts = re.findall(r'[^\s]+', typed_text)
+    
+    rendered = template
+    for idx, target in enumerate(placeholders):
+        u_part = u_parts[idx] if idx < len(u_parts) else ""
+        replacement = get_preview_replacement(u_part, target, use_exact, battleship, case_sensitive, ignore_punctuation, diff_inverted_colors)
+        rendered = rendered.replace(f"[[TARGET:{target}]]", replacement, 1)
+        
+    return rendered
+
+def read_line(enable_arrows=False, initial_text="", save_esc=False, swap_arrows=False, preview_data=None):
     if not sys.stdin.isatty():
         print("NOT_TTY", end="")
         return
@@ -483,12 +663,46 @@ def read_line(enable_arrows=False, initial_text="", save_esc=False, swap_arrows=
     drawn_cursor_pos = 0
     drawn_len = 0
 
+    header_text = None
+    template = None
+    hint_text = None
+    prompt_text = None
+    use_exact = False
+    battleship = False
+    case_sensitive = True
+    ignore_punctuation = True
+    diff_inverted_colors = False
+    
+    if preview_data:
+        header_text = preview_data.get("header")
+        template = preview_data.get("template")
+        hint_text = preview_data.get("hint")
+        prompt_text = preview_data.get("prompt")
+        use_exact = bool(preview_data.get("exact_length_mask"))
+        battleship = bool(preview_data.get("battleship_feedback"))
+        case_sensitive = bool(preview_data.get("case_sensitive_diff"))
+        ignore_punctuation = bool(preview_data.get("ignore_punctuation"))
+        diff_inverted_colors = bool(preview_data.get("diff_inverted_colors"))
+
     def draw():
         nonlocal drawn_cursor_pos, drawn_len
         
-        # move back to start of what we drew
-        if drawn_cursor_pos > 0:
-            con.write("\b" * drawn_cursor_pos)
+        typed = "".join(chars)
+        
+        if preview_data and template:
+            live_context = render_preview_template(
+                template, typed, use_exact, battleship,
+                case_sensitive, ignore_punctuation, diff_inverted_colors
+            )
+            con.write("\033[2J\033[H")
+            con.write(header_text)
+            con.write(live_context + "\n")
+            if hint_text:
+                con.write(hint_text + "\n")
+            con.write(prompt_text)
+        else:
+            if drawn_cursor_pos > 0:
+                con.write("\b" * drawn_cursor_pos)
             
         text = ""
         s_start = min(anchor_pos, cursor_pos) if anchor_pos != -1 else -1
@@ -502,13 +716,11 @@ def read_line(enable_arrows=False, initial_text="", save_esc=False, swap_arrows=
                 
         con.write(text)
         
-        # clear leftover characters
         clear_len = max(0, drawn_len - len(chars))
         if clear_len > 0:
             con.write(" " * clear_len)
             con.write("\b" * clear_len)
             
-        # move to actual cursor pos
         if len(chars) > cursor_pos:
             con.write("\b" * (len(chars) - cursor_pos))
             
@@ -691,6 +903,7 @@ if __name__ == "__main__":
     initial_text = ""
     mpv_integration = False
     quiz_pipe_path = None
+    preview_data = None
     
     play_on_sync = "--play" in args
     mpv_cmd_path = "mpv"
@@ -728,6 +941,14 @@ if __name__ == "__main__":
         elif args[i] == "--quiz-pipe-path" and i + 1 < len(args):
             quiz_pipe_path = args[i + 1]
             i += 1
+        elif args[i] == "--preview-data" and i + 1 < len(args):
+            hex_data = args[i + 1]
+            try:
+                preview_data_str = bytes.fromhex(hex_data).decode('utf-8')
+                preview_data = json.loads(preview_data_str)
+            except Exception:
+                pass
+            i += 1
         elif args[i] == "--mpv-cmd" and i + 1 < len(args):
             # Already handled in pre-scan, just skip
             i += 1
@@ -761,6 +982,6 @@ if __name__ == "__main__":
         t.start()
 
     if mode == "--line":
-        read_line(enable_arrows, initial_text, save_esc, swap_arrows)
+        read_line(enable_arrows, initial_text, save_esc, swap_arrows, preview_data)
     else:
         read_key(enable_arrows, swap_arrows)

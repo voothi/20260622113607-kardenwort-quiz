@@ -2386,3 +2386,165 @@ def test_sync_command_stats_and_header_repeat_true(quiz_env):
     assert entry is not None
     # Synced card was graded correct (1 -> 2), then deferred card was graded correct (2 -> 3)
     assert entry["LeitnerBox"] == "3"
+
+
+def run_lua_eval(env_dir, lua_code, env=None):
+    import subprocess
+    import os
+    if env is None:
+        env = os.environ.copy()
+    else:
+        env = env.copy()
+    env["TEST_LUA_EVAL"] = lua_code
+    cmd = ["lua", "tsv_quiz.lua"]
+    process = subprocess.Popen(
+        cmd,
+        cwd=env_dir,
+        stdin=subprocess.PIPE,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+        encoding="utf-8",
+        env=env
+    )
+    stdout, stderr = process.communicate(timeout=5)
+    return process.returncode, stdout, stderr
+
+
+def test_config_preview_options(quiz_env):
+    """Test that typing_preview and battleship_feedback config options are parsed correctly and default to false."""
+    config_path = quiz_env / "config.ini"
+    
+    # 1. Test defaults
+    config_path.write_text("[Leitner]\n", encoding="utf-8")
+    lua_code = """
+        local config = load_config("config.ini")
+        print("typing_preview=" .. tostring(config.typing_preview))
+        print("battleship_feedback=" .. tostring(config.battleship_feedback))
+    """
+    code, out, err = run_lua_eval(quiz_env, lua_code)
+    assert code == 0, f"Lua run failed: {err}"
+    assert "typing_preview=false" in out
+    assert "battleship_feedback=false" in out
+
+    # 2. Test explicit true values
+    config_path.write_text("[Leitner]\ntyping_preview = true\nbattleship_feedback = 1\n", encoding="utf-8")
+    code, out, err = run_lua_eval(quiz_env, lua_code)
+    assert code == 0, f"Lua run failed: {err}"
+    assert "typing_preview=true" in out
+    assert "battleship_feedback=true" in out
+
+
+def test_mask_context_preview_format(quiz_env):
+    """Test that mask_context with preview_format=true returns clean [[TARGET:part]] placeholders."""
+    # Context with a single target word
+    lua_code_single = """
+        local template = mask_context(
+            "Ich gehe heute nach Hause.", -- context
+            "Hause", -- target_word
+            false, -- use_exact
+            false, -- has_hint
+            0, 0, 0, -- hint params
+            nil, -- is_correct
+            nil, -- user_input
+            true, -- case_sensitive_diff
+            true, -- ignore_punctuation
+            nil, -- source_index
+            true -- preview_format
+        )
+        print("SINGLE:" .. template)
+    """
+    code, out, err = run_lua_eval(quiz_env, lua_code_single)
+    assert code == 0, f"Lua run failed: {err}"
+    assert "SINGLE:Ich gehe heute nach [[TARGET:Hause]]." in out
+
+    # Context with a separable verb (multiple target parts)
+    lua_code_separable = """
+        local template = mask_context(
+            "Ich fange morgen an.", -- context
+            "fange ... an", -- target_word
+            false, -- use_exact
+            false, -- has_hint
+            0, 0, 0, -- hint params
+            nil, -- is_correct
+            nil, -- user_input
+            true, -- case_sensitive_diff
+            true, -- ignore_punctuation
+            nil, -- source_index
+            true -- preview_format
+        )
+        print("SEPARABLE:" .. template)
+    """
+    code, out, err = run_lua_eval(quiz_env, lua_code_separable)
+    assert code == 0, f"Lua run failed: {err}"
+    assert "SEPARABLE:Ich [[TARGET:fange]] morgen [[TARGET:an]]." in out
+
+
+def test_input_helper_preview_helpers():
+    """Test the Python-side helper functions in input_helper.py for typing preview and battleship feedback."""
+    import sys
+    from pathlib import Path
+    project_root = str(Path(__file__).parent.parent.parent)
+    if project_root not in sys.path:
+        sys.path.insert(0, project_root)
+    import input_helper
+
+    # 1. Test is_punctuation_or_space
+    assert input_helper.is_punctuation_or_space(" ") is True
+    assert input_helper.is_punctuation_or_space(".") is True
+    assert input_helper.is_punctuation_or_space("a") is False
+    assert input_helper.is_punctuation_or_space("Z") is False
+
+    # 2. Test get_inline_colored_diff
+    res = input_helper.get_inline_colored_diff("abc", "abc", case_sensitive=True, ignore_punctuation=True, diff_inverted_colors=False)
+    assert "\033[32m\033[1ma\033[0m" in res
+    assert "\033[32m\033[1mb\033[0m" in res
+    assert "\033[32m\033[1mc\033[0m" in res
+    assert "\033[31m" not in res
+
+    res = input_helper.get_inline_colored_diff("axc", "abc", case_sensitive=True, ignore_punctuation=True, diff_inverted_colors=False)
+    assert "\033[32m\033[1ma\033[0m" in res
+    assert "\033[31m\033[1mb\033[0m" in res
+    assert "\033[32m\033[1mc\033[0m" in res
+
+    res = input_helper.get_inline_colored_diff("a", "a.", case_sensitive=True, ignore_punctuation=True, diff_inverted_colors=False)
+    assert "\033[32m\033[1m.\033[0m" in res
+
+    # 3. Test get_preview_replacement
+    res = input_helper.get_preview_replacement(
+        u_part="Ha",
+        target="Hause",
+        use_exact=True,
+        battleship=True,
+        case_sensitive=True,
+        ignore_punctuation=True,
+        diff_inverted_colors=False
+    )
+    assert "\033[32m\033[1mH\033[0m" in res
+    assert "\033[32m\033[1ma\033[0m" in res
+    assert "\033[1m\033[33m___\033[0m" in res
+
+    res = input_helper.get_preview_replacement(
+        u_part="Ha",
+        target="Hause",
+        use_exact=True,
+        battleship=False,
+        case_sensitive=True,
+        ignore_punctuation=True,
+        diff_inverted_colors=False
+    )
+    assert "\033[1mHa___\033[0m" in res
+
+    # 4. Test render_preview_template
+    rendered = input_helper.render_preview_template(
+        template="Ich gehe nach [[TARGET:Hause]] morgen.",
+        typed_text="Ha",
+        use_exact=True,
+        battleship=True,
+        case_sensitive=True,
+        ignore_punctuation=True,
+        diff_inverted_colors=False
+    )
+    assert "Ich gehe nach " in rendered
+    assert " morgen." in rendered
+    assert "\033[1m\033[33m___\033[0m" in rendered
