@@ -2741,7 +2741,7 @@ def test_blank_color_customization(quiz_env):
             "Hause",
             false, false, 0, 0, 0,
             nil, nil, true, true, nil,
-            true, -- preview_format
+            false, -- preview_format
             false, -- blank_inverted_colors
             "standard"
         )
