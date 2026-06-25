@@ -121,6 +121,11 @@ ignore_punctuation = true
 # - false: Only change the text color (default).
 diff_inverted_colors = true
 
+# Use inverted background colors for the live typing preview (true/false)
+# - true: Characters in the live preview are shown with inverted background colors.
+# - false: Characters in the live preview are shown using standard bold colored text (default).
+preview_inverted_colors = false
+
 # Separate grading from input (Anki-style manual grading) (true/false)
 # - true: Pressing Enter reveals the back side/diff, then you choose Again (1) or Good (3) to grade.
 # - false: Automatically grades based on whether the typed answer matches the target (default).

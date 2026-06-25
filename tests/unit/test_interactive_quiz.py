@@ -2412,7 +2412,7 @@ def run_lua_eval(env_dir, lua_code, env=None):
 
 
 def test_config_preview_options(quiz_env):
-    """Test that typing_preview and battleship_feedback config options are parsed correctly and default to false."""
+    """Test that typing_preview, battleship_feedback, and preview_inverted_colors config options are parsed correctly and default to false."""
     config_path = quiz_env / "config.ini"
     
     # 1. Test defaults
@@ -2421,18 +2421,21 @@ def test_config_preview_options(quiz_env):
         local config = load_config("config.ini")
         print("typing_preview=" .. tostring(config.typing_preview))
         print("battleship_feedback=" .. tostring(config.battleship_feedback))
+        print("preview_inverted_colors=" .. tostring(config.preview_inverted_colors))
     """
     code, out, err = run_lua_eval(quiz_env, lua_code)
     assert code == 0, f"Lua run failed: {err}"
     assert "typing_preview=false" in out
     assert "battleship_feedback=false" in out
+    assert "preview_inverted_colors=false" in out
 
     # 2. Test explicit true values
-    config_path.write_text("[Leitner]\ntyping_preview = true\nbattleship_feedback = 1\n", encoding="utf-8")
+    config_path.write_text("[Leitner]\ntyping_preview = true\nbattleship_feedback = 1\npreview_inverted_colors = true\n", encoding="utf-8")
     code, out, err = run_lua_eval(quiz_env, lua_code)
     assert code == 0, f"Lua run failed: {err}"
     assert "typing_preview=true" in out
     assert "battleship_feedback=true" in out
+    assert "preview_inverted_colors=true" in out
 
 
 def test_mask_context_preview_format(quiz_env):

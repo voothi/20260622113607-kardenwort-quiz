@@ -331,6 +331,7 @@ local function load_config(filename)
 		case_sensitive_diff = true,
 		ignore_punctuation = true,
 		diff_inverted_colors = false,
+		preview_inverted_colors = false,
 		anki_grading = false,
 		repeat_counts_in_stats = false,
 		mpv_integration = false,
@@ -459,6 +460,8 @@ local function load_config(filename)
 								config.ignore_punctuation = (val == "true" or val == "1")
 							elseif key == "diff_inverted_colors" then
 								config.diff_inverted_colors = (val == "true" or val == "1")
+							elseif key == "preview_inverted_colors" then
+								config.preview_inverted_colors = (val == "true" or val == "1")
 							elseif key == "anki_grading" then
 								config.anki_grading = (val == "true" or val == "1")
 							elseif key == "repeat_counts_in_stats" then
@@ -2344,7 +2347,7 @@ local function run_quiz(study_queue, config)
 						config.ignore_punctuation,
 						entry.source_index,
 						true, -- preview_format
-						config.diff_inverted_colors
+						config.preview_inverted_colors
 					)
 					local payload = {
 						header = get_card_header(config, question_num, total, entry),
@@ -2355,7 +2358,7 @@ local function run_quiz(study_queue, config)
 						battleship_feedback = config.battleship_feedback,
 						case_sensitive_diff = config.case_sensitive_diff,
 						ignore_punctuation = config.ignore_punctuation,
-						diff_inverted_colors = config.diff_inverted_colors
+						diff_inverted_colors = config.preview_inverted_colors
 					}
 					preview_data = to_hex(json_encode(payload))
 				end
