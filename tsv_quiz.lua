@@ -78,6 +78,27 @@ end
 local function magenta(text)
 	return c("35", text)
 end
+local function light_red(text)
+	return c("91", text)
+end
+local function white(text)
+	return c("97", text)
+end
+
+-- Map a color name string (from config) to a coloring function.
+-- Supported names: red, coral, light_red, yellow, cyan, green, magenta, white, standard
+local function get_prompt_color_fn(name)
+	name = (name or "standard"):lower()
+	if name == "red"      then return red
+	elseif name == "coral" or name == "light_red" then return light_red
+	elseif name == "yellow"  then return yellow
+	elseif name == "cyan"    then return cyan
+	elseif name == "green"   then return green
+	elseif name == "magenta" then return magenta
+	elseif name == "white"   then return white
+	else return nil  -- "standard": bold only, no extra color
+	end
+end
 
 local function invert(text)
 	return c("7", text)
@@ -353,6 +374,8 @@ local function load_config(filename)
 		diff_inverted_colors = false,
 		blank_inverted_colors = false,
 		blank_color = "yellow",
+		command_mode_prompt_color = "coral",
+		answer_mode_prompt_color = "standard",
 		show_diff_with_battleship = true,
 		anki_grading = false,
 		repeat_counts_in_stats = false,
@@ -486,6 +509,10 @@ local function load_config(filename)
 								config.blank_inverted_colors = (val == "true" or val == "1")
 							elseif key == "blank_color" then
 								config.blank_color = val:lower()
+							elseif key == "command_mode_prompt_color" then
+								config.command_mode_prompt_color = val:lower()
+							elseif key == "answer_mode_prompt_color" then
+								config.answer_mode_prompt_color = val:lower()
 							elseif key == "show_diff_with_battleship" then
 								config.show_diff_with_battleship = (val == "true" or val == "1")
 							elseif key == "preview_inverted_colors" then
@@ -2157,7 +2184,8 @@ local function read_line_with_esc(config, initial_text, save_esc, use_arrows, pr
 		end
 	end
 	if preview_data and preview_data ~= "" and package.config:sub(1, 1) == "\\" then
-		io.write(bold("Answer ") .. dim("(type '/?' for help): "))
+		local _ans_color_fn = active_config and get_prompt_color_fn(active_config.answer_mode_prompt_color) or nil
+		io.write(bold(_ans_color_fn and _ans_color_fn("Answer") or "Answer") .. dim(" (type '/?' for help): "))
 	end
 	local val = io.read()
 	if val == "" and initial_text and initial_text ~= "" then
@@ -2327,7 +2355,8 @@ local function run_quiz(study_queue, config, start_sync_zid, start_sync_time)
 			if config.command_mode and is_command_mode then
 				if config.command_mode_single_key then
 					local allowed = {"a", "d", "y", "q", "?", "\r", "\n", "\x1b", "h", "/", " ", "/hint_left", "/hint_right", "/hint_up", "/hint_down"}
-					local key = press_any_key(bold("Command ") .. dim("(press '?' for help)... "), allowed, config.command_mode_arrow_hints)
+					local _cmd_color_fn = get_prompt_color_fn(config.command_mode_prompt_color)
+					local key = press_any_key(bold(_cmd_color_fn and _cmd_color_fn("Command") or "Command") .. dim(" (press '?' for help)... "), allowed, config.command_mode_arrow_hints)
 					if key == "" then
 						local line = io.read()
 						key = line and line:sub(1, 1) or ""
@@ -2380,7 +2409,8 @@ local function run_quiz(study_queue, config, start_sync_zid, start_sync_time)
 				else
 					local save_command = config.command_mode_save_command
 					if cur_redraw then
-						io.write(bold("Command ") .. dim("(type '?' for help): "))
+						local _cmd_color_fn2 = get_prompt_color_fn(config.command_mode_prompt_color)
+						io.write(bold(_cmd_color_fn2 and _cmd_color_fn2("Command") or "Command") .. dim(" (type '?' for help): "))
 					end
 					user_input = read_line_with_esc(config, saved_command_input, save_command, config.command_mode_arrow_hints)
 					if not user_input then
@@ -2446,7 +2476,7 @@ local function run_quiz(study_queue, config, start_sync_zid, start_sync_time)
 						header = get_card_header(config, question_num, total, entry),
 						template = preview_template,
 						hint = current_hint or "",
-						prompt = bold("Answer ") .. dim("(type '/?' for help): "),
+						prompt = (function() local _f = get_prompt_color_fn(config.answer_mode_prompt_color); return bold(_f and _f("Answer") or "Answer") .. dim(" (type '/?' for help): ") end)(),
 						exact_length_mask = config.exact_length_mask,
 						battleship_feedback = config.battleship_feedback,
 						case_sensitive_diff = config.case_sensitive_diff,
@@ -2459,7 +2489,8 @@ local function run_quiz(study_queue, config, start_sync_zid, start_sync_time)
 				end
 				if cur_redraw then
 					if not preview_data or package.config:sub(1, 1) ~= "\\" or config.single_card_mode then
-						io.write(bold("Answer ") .. dim("(type '/?' for help): "))
+						local _ans_color_fn2 = get_prompt_color_fn(config.answer_mode_prompt_color)
+						io.write(bold(_ans_color_fn2 and _ans_color_fn2("Answer") or "Answer") .. dim(" (type '/?' for help): "))
 					end
 				end
 				user_input = read_line_with_esc(config, saved_input, config.command_mode_save_input, config.answer_mode_arrow_hints, preview_data)
