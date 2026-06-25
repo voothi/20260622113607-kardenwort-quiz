@@ -1795,18 +1795,20 @@ def test_input_helper_sync_mpv_flow(tmp_path, monkeypatch):
     assert success is True
 
     media_file_mpv = str(video_file).replace('\\', '/')
-    assert len(sent_commands) == 2
-    assert sent_commands[0] == {"command": ["loadfile", media_file_mpv, "replace"]}
-    assert sent_commands[1] == {"command": ["seek", timestamp, "absolute"]}
+    assert len(sent_commands) == 1
+    assert len(sent_commands[0]) == 2
+    assert sent_commands[0][0] == {"command": ["loadfile", media_file_mpv, "replace"]}
+    assert sent_commands[0][1] == {"command": ["seek", timestamp, "absolute"]}
 
     # 2. Test with play_on_sync = True
     sent_commands.clear()
     success = input_helper_test.sync_mpv(pipe_path, str(tsv_file), timestamp, play_on_sync=True)
     assert success is True
-    assert len(sent_commands) == 3
-    assert sent_commands[0] == {"command": ["loadfile", media_file_mpv, "replace"]}
-    assert sent_commands[1] == {"command": ["seek", timestamp, "absolute"]}
-    assert sent_commands[2] == {"command": ["set_property", "pause", False]}
+    assert len(sent_commands) == 1
+    assert len(sent_commands[0]) == 3
+    assert sent_commands[0][0] == {"command": ["loadfile", media_file_mpv, "replace"]}
+    assert sent_commands[0][1] == {"command": ["seek", timestamp, "absolute"]}
+    assert sent_commands[0][2] == {"command": ["set_property", "pause", False]}
 
     # Test same file path check with play_on_sync = False
     sent_commands.clear()
@@ -1821,15 +1823,18 @@ def test_input_helper_sync_mpv_flow(tmp_path, monkeypatch):
     assert success is True
 
     assert len(sent_commands) == 1
-    assert sent_commands[0] == {"command": ["seek", timestamp, "absolute"]}
+    assert len(sent_commands[0]) == 1
+    assert sent_commands[0][0] == {"command": ["seek", timestamp, "absolute"]}
 
     # Test same file path check with play_on_sync = True
     sent_commands.clear()
     success = input_helper_test.sync_mpv(pipe_path, str(tsv_file), timestamp, play_on_sync=True)
     assert success is True
-    assert len(sent_commands) == 2
-    assert sent_commands[0] == {"command": ["seek", timestamp, "absolute"]}
-    assert sent_commands[1] == {"command": ["set_property", "pause", False]}
+    assert len(sent_commands) == 1
+    assert len(sent_commands[0]) == 2
+    assert sent_commands[0][0] == {"command": ["seek", timestamp, "absolute"]}
+    assert sent_commands[0][1] == {"command": ["set_property", "pause", False]}
+
 
 def test_input_helper_sync_mpv_no_media(tmp_path):
     """Test that if find_media_file returns None, sync_mpv returns False."""

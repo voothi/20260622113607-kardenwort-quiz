@@ -149,9 +149,9 @@ def send_win_pipe(pipe_path, data, timeout_ms=5000):
             break
             
         err = ctypes.GetLastError()
-        # 231 = ERROR_PIPE_BUSY
+        # Retry on: 231 = ERROR_PIPE_BUSY, 5 = ERROR_ACCESS_DENIED
         remaining_ms = int(timeout_ms - (time.time() - start_time) * 1000)
-        if err != 231 or remaining_ms <= 0:
+        if (err != 231 and err != 5) or remaining_ms <= 0:
             raise Exception(f"Failed to open named pipe, error: {err}")
             
         # Wait for the pipe to become available, max 50ms per wait call to be responsive
@@ -175,8 +175,11 @@ def send_unix_socket(socket_path, data):
     s.sendall(data)
     s.close()
 
-def send_ipc_payload(pipe_path, command_dict):
-    payload = (json.dumps(command_dict) + "\n").encode('utf-8')
+def send_ipc_payload(pipe_path, command_dict_or_list):
+    if isinstance(command_dict_or_list, list):
+        payload = b"".join((json.dumps(cmd) + "\n").encode('utf-8') for cmd in command_dict_or_list)
+    else:
+        payload = (json.dumps(command_dict_or_list) + "\n").encode('utf-8')
     if sys.platform == 'win32':
         send_win_pipe(pipe_path, payload)
     else:
@@ -208,9 +211,9 @@ def send_receive_ipc(pipe_path, command_dict, timeout=1.0):
                 break
                 
             err = ctypes.GetLastError()
-            # 231 = ERROR_PIPE_BUSY
+            # Retry on: 231 = ERROR_PIPE_BUSY, 5 = ERROR_ACCESS_DENIED
             remaining_ms = int((timeout - (time.time() - start_time)) * 1000)
-            if err != 231 or remaining_ms <= 0:
+            if (err != 231 and err != 5) or remaining_ms <= 0:
                 return None
                 
             # Wait for pipe to be available, max 50ms per wait call to be responsive
@@ -396,20 +399,21 @@ def sync_mpv(pipe_path, tsv_path, timestamp, play_on_sync=False, mpv_cmd="mpv"):
         current_path = current_info.get("data")
         is_same = paths_are_equal(current_path, media_file_mpv)
         
+    commands = []
+    if is_same:
+        commands.append({"command": ["seek", timestamp, "absolute"]})
+    else:
+        commands.append({"command": ["loadfile", media_file_mpv, "replace"]})
+        commands.append({"command": ["seek", timestamp, "absolute"]})
+        
+    if play_on_sync:
+        commands.append({"command": ["set_property", "pause", False]})
+        
     try:
-        if is_same:
-            send_ipc_payload(pipe_path, {"command": ["seek", timestamp, "absolute"]})
-        else:
-            send_ipc_payload(pipe_path, {"command": ["loadfile", media_file_mpv, "replace"]})
-            send_ipc_payload(pipe_path, {"command": ["seek", timestamp, "absolute"]})
+        send_ipc_payload(pipe_path, commands)
     except Exception:
         spawn_mpv(pipe_path, media_file_mpv, timestamp, mpv_cmd or "mpv")
-
-    if play_on_sync:
-        try:
-            send_ipc_payload(pipe_path, {"command": ["set_property", "pause", False]})
-        except Exception:
-            pass
+        
     return True
 
 # Enable VT processing for CONOUT$
