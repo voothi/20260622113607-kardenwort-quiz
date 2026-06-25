@@ -84,8 +84,12 @@ local function invert(text)
 end
 
 local function format_wildcard(color_fn, text, blank_inverted_colors, blank_color)
-	if blank_color == "standard" then
-		color_fn = function(t) return t end
+	if color_fn == yellow then
+		if blank_color == "standard" then
+			color_fn = function(t) return t end
+		elseif blank_color == "gray" or blank_color == "grey" then
+			color_fn = dim
+		end
 	end
 	if blank_inverted_colors then
 		return invert(color_fn(text))

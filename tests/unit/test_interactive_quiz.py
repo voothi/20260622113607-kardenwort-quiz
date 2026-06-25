@@ -2885,5 +2885,82 @@ def test_non_battleship_yellow_placeholders():
     assert "\033[33m" not in res_partial_nonexact
 
 
+def test_blank_color_gray(quiz_env):
+    """8.4 Test that blank_color = gray is parsed and renders as dim gray (code 90) in Lua and Python."""
+    config_path = quiz_env / "config.ini"
+
+    # 1. Verify config parsing in Lua
+    config_path.write_text("[Leitner]\nblank_color = gray\n", encoding="utf-8")
+    lua_code_parse = """
+        local config = load_config("config.ini")
+        print("blank_color=" .. tostring(config.blank_color))
+    """
+    code, out, err = run_lua_eval(quiz_env, lua_code_parse)
+    assert code == 0, f"Lua run failed: {err}"
+    assert "blank_color=gray" in out
+
+    # 2. Test Lua mask_context formatting with blank_color = "gray"
+    lua_code_gray = """
+        local template = mask_context(
+            "Ich gehe heute nach Hause.",
+            "Hause",
+            false, false, 0, 0, 0,
+            nil, nil, true, true, nil,
+            false, -- preview_format
+            false, -- blank_inverted_colors
+            "gray"
+        )
+        print("LUA_GRAY:" .. template)
+    """
+    code, out, err = run_lua_eval(quiz_env, lua_code_gray)
+    assert code == 0, f"Lua run failed: {err}"
+    # Gray uses dim (c("90", text)), which has escape code \033[90m and bold \033[1m
+    assert "\033[90m" in out
+    assert "\033[1m" in out
+    assert "\033[33m" not in out # no yellow
+
+    # 3. Test Python get_preview_replacement with blank_color = "gray"
+    import input_helper
+    res_gray = input_helper.get_preview_replacement(
+        u_part="Ha",
+        target="Hause",
+        use_exact=True,
+        battleship=False,
+        case_sensitive=True,
+        ignore_punctuation=True,
+        blank_inverted_colors=False,
+        blank_color="gray"
+    )
+    # Typed text standard, unfilled underscores gray:
+    assert "\033[1mHa" in res_gray
+    assert "\033[90m___" in res_gray
+    assert "\033[33m" not in res_gray # no yellow
+
+    # 4. Parity check with blank_color = "gray"
+    py_res = input_helper.get_preview_replacement("Ha", "Hause", True, True, True, True, True, blank_color="gray")
+    # Lua side
+    lua_code_parity = """
+        local template = mask_context(
+            "Ich gehe heute nach Hause.",
+            "Hause",
+            true, false, 0, 0, 0,
+            nil, nil, true, true, nil,
+            true, -- preview_format
+            true, -- blank_inverted_colors
+            "gray"
+        )
+        print("LUA:" .. template)
+    """
+    code, out, err = run_lua_eval(quiz_env, lua_code_parity)
+    assert code == 0, f"Lua run failed: {err}"
+    
+    rendered = input_helper.render_preview_template(
+        "Ich gehe heute nach [[TARGET:Hause]].",
+        "Ha", True, True, True, True, True, blank_color="gray"
+    )
+    assert f"nach {py_res}." in rendered
+
+
+
 
 

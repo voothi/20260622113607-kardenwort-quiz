@@ -128,6 +128,7 @@ blank_inverted_colors = false
 
 # Color of the wildcard ___ placeholder mask
 # - yellow: Style the placeholder with yellow coloring (default).
+# - gray: Style the placeholder with dim gray coloring.
 # - standard: Use the terminal's default text color for the placeholder.
 blank_color = yellow
 

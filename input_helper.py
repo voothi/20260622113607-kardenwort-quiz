@@ -592,8 +592,11 @@ def get_inline_colored_diff(user_str, original_target, case_sensitive, ignore_pu
     return "".join(res)
 
 def format_wildcard(text, blank_inverted_colors, color_code=None, blank_color=None):
-    if blank_color == "standard":
-        color_code = None
+    if color_code == "33":
+        if blank_color == "standard":
+            color_code = None
+        elif blank_color in ("gray", "grey"):
+            color_code = "90"
     if color_code:
         if blank_inverted_colors:
             return f"\033[7m\033[{color_code}m{text}\033[0m"
