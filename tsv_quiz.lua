@@ -1059,7 +1059,11 @@ local function strip_ansi(str)
 end
 
 local function get_console_width()
-	local handle = io.popen("python input_helper.py --width 2>nul")
+	local cmd = get_helper_cmd_prefix("--width") .. " 2>nul"
+	if cmd:sub(1, 1) == '"' then
+		cmd = '"' .. cmd .. '"'
+	end
+	local handle = io.popen(cmd)
 	if handle then
 		local res = handle:read("*a")
 		handle:close()
