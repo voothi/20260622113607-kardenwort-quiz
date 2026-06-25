@@ -24,6 +24,71 @@ local print_interactive_help
 local master_vocab = {}
 local active_config = nil
 
+local has_ffi, ffi = pcall(require, "ffi")
+local C = nil
+local INVALID_HANDLE_VALUE = nil
+if has_ffi then
+	C = ffi.C
+	INVALID_HANDLE_VALUE = ffi.cast("void*", -1)
+	if package.config:sub(1, 1) == "\\" then
+		ffi.cdef[[
+			typedef void* HANDLE;
+			typedef uint32_t DWORD;
+			typedef int BOOL;
+			typedef intptr_t INT_PTR;
+			
+			HANDLE CreateNamedPipeA(
+				const char* lpName,
+				DWORD dwOpenMode,
+				DWORD dwPipeMode,
+				DWORD nMaxInstances,
+				DWORD nOutBufferSize,
+				DWORD nInBufferSize,
+				DWORD nDefaultTimeOut,
+				void* lpSecurityAttributes
+			);
+			BOOL ConnectNamedPipe(HANDLE hNamedPipe, void* lpOverlapped);
+			BOOL PeekNamedPipe(HANDLE hNamedPipe, void* lpBuffer, DWORD nBufferSize, DWORD* lpBytesRead, DWORD* lpTotalBytesAvail, DWORD* lpBytesLeftThisMessage);
+			BOOL ReadFile(HANDLE hFile, void* lpBuffer, DWORD nNumberOfBytesToRead, DWORD* lpNumberOfBytesRead, void* lpOverlapped);
+			BOOL CloseHandle(HANDLE hObject);
+			void Sleep(DWORD dwMilliseconds);
+		]]
+	end
+end
+
+local function read_preview_pipe(pipe_handle)
+	if not pipe_handle or pipe_handle == INVALID_HANDLE_VALUE then
+		return nil
+	end
+	
+	local avail = ffi.new("DWORD[1]")
+	local res = C.PeekNamedPipe(pipe_handle, nil, 0, nil, avail, nil)
+	if res ~= 0 and avail[0] > 0 then
+		local buf = ffi.new("char[?]", avail[0] + 1)
+		local read = ffi.new("DWORD[1]")
+		local read_res = C.ReadFile(pipe_handle, buf, avail[0], read, nil)
+		if read_res ~= 0 and read[0] > 0 then
+			return ffi.string(buf, read[0])
+		end
+	end
+	return nil
+end
+
+local function parse_latest_preview(data)
+	if not data or data == "" then
+		return nil
+	end
+	local latest = nil
+	for line in data:gmatch("[^\r\n]+") do
+		local buf = line:match('^{"buffer":%s*"(.-)"}')
+		if buf then
+			buf = buf:gsub('\\"', '"'):gsub('\\\\', '\\')
+			latest = buf
+		end
+	end
+	return latest
+end
+
 -- Resolve directory of the running script for helper lookups
 local _script_dir = (arg[0] or ""):match("(.*[/\\])") or ""
 local input_helper = _script_dir .. "input_helper.py"
@@ -321,6 +386,8 @@ local function load_config(filename)
 		command_mode_arrow_hints = nil,
 		answer_mode_arrow_hints = nil,
 		exact_length_mask = false,
+		typing_preview = false,
+		battleship_feedback = false,
 		case_sensitive_diff = true,
 		ignore_punctuation = true,
 		diff_inverted_colors = false,
@@ -442,6 +509,10 @@ local function load_config(filename)
 								end
 							elseif key == "exact_length_mask" then
 								config.exact_length_mask = (val == "true" or val == "1")
+							elseif key == "typing_preview" then
+								config.typing_preview = (val == "true" or val == "1")
+							elseif key == "battleship_feedback" then
+								config.battleship_feedback = (val == "true" or val == "1")
 							elseif key == "case_sensitive_diff" then
 								config.case_sensitive_diff = (val == "true" or val == "1")
 							elseif key == "ignore_punctuation" then
@@ -1350,7 +1421,7 @@ local function get_two_line_diff(user_str, target_str, case_sensitive, ignore_pu
 	return table.concat(user_parts, ""), table.concat(target_parts, "")
 end
 
-local function get_inline_colored_diff(user_str, original_target, case_sensitive, ignore_punctuation)
+local function get_inline_colored_diff(user_str, original_target, case_sensitive, ignore_punctuation, inverted_colors)
 	local function to_chars(str)
 		local ok, chars = pcall(function()
 			local c = {}
@@ -1423,23 +1494,73 @@ local function get_inline_colored_diff(user_str, original_target, case_sensitive
 		end
 	end
 
+	local function format_char(color_fn, char)
+		if inverted_colors then
+			return color_fn(invert(char))
+		else
+			return color_fn(char)
+		end
+	end
+
 	local res = {}
 	local tag_idx = 1
 	local orig_chars = to_chars(original_target)
 	for _, ch in ipairs(orig_chars) do
 		if ch:match("[%p%s]") then
-			table.insert(res, bold(green(ch)))
+			table.insert(res, bold(format_char(green, ch)))
 		else
 			local tag = tags[tag_idx] or "missing"
 			tag_idx = tag_idx + 1
 			if tag == "match" then
-				table.insert(res, bold(green(ch)))
+				table.insert(res, bold(format_char(green, ch)))
 			else
-				table.insert(res, bold(red(ch)))
+				table.insert(res, bold(format_char(red, ch)))
 			end
 		end
 	end
 	return table.concat(res, "")
+end
+
+local function get_preview_replacement(preview_text, target_word, use_exact, battleship_feedback, case_sensitive_diff, ignore_punctuation, diff_inverted_colors)
+	local target_len = utf8_len(target_word)
+	local p_len = utf8_len(preview_text)
+
+	local replacement
+	if use_exact then
+		if p_len < target_len then
+			if battleship_feedback then
+				local colored = get_inline_colored_diff(preview_text, target_word, case_sensitive_diff, ignore_punctuation, diff_inverted_colors)
+				replacement = colored .. bold(yellow(string.rep("_", target_len - p_len)))
+			else
+				replacement = bold(preview_text .. string.rep("_", target_len - p_len))
+			end
+		elseif p_len > target_len then
+			local fitted_plain
+			if target_len <= 1 then
+				fitted_plain = "…"
+			else
+				fitted_plain = utf8_sub(preview_text, 1, target_len - 1) .. "…"
+			end
+			if battleship_feedback then
+				replacement = get_inline_colored_diff(fitted_plain, target_word, case_sensitive_diff, ignore_punctuation, diff_inverted_colors)
+			else
+				replacement = bold(fitted_plain)
+			end
+		else
+			if battleship_feedback then
+				replacement = get_inline_colored_diff(preview_text, target_word, case_sensitive_diff, ignore_punctuation, diff_inverted_colors)
+			else
+				replacement = bold(preview_text)
+			end
+		end
+	else
+		if battleship_feedback then
+			replacement = get_inline_colored_diff(preview_text, target_word, case_sensitive_diff, ignore_punctuation, diff_inverted_colors)
+		else
+			replacement = bold(preview_text)
+		end
+	end
+	return replacement
 end
 
 -- Replace the target word in the context sentence with a blank line (or exact length blank)
@@ -1456,7 +1577,10 @@ local function mask_context(
 	user_input,
 	case_sensitive_diff,
 	ignore_punctuation,
-	source_index
+	source_index,
+	preview_text,
+	battleship_feedback,
+	diff_inverted_colors
 )
 	local p1, p2 = target_word:match("^(.-)%s*%.%.%.%s*(.-)$")
 
@@ -1655,7 +1779,25 @@ local function mask_context(
 
 	if p1 and p2 then
 		local r1, r2
-		if is_correct ~= nil then
+		if preview_text and preview_text ~= "" then
+			local preview_p1, preview_p2 = "", ""
+			local u_parts = {}
+			for part in preview_text:gmatch("[^%s]+") do
+				table.insert(u_parts, part)
+			end
+			if #u_parts >= 2 then
+				preview_p1 = u_parts[1]
+				local rest = {}
+				for idx = 2, #u_parts do
+					table.insert(rest, u_parts[idx])
+				end
+				preview_p2 = table.concat(rest, " ")
+			elseif #u_parts == 1 then
+				preview_p1 = u_parts[1]
+			end
+			r1 = get_preview_replacement(preview_p1, p1, use_exact, battleship_feedback, case_sensitive_diff, ignore_punctuation, diff_inverted_colors)
+			r2 = get_preview_replacement(preview_p2, p2, use_exact, battleship_feedback, case_sensitive_diff, ignore_punctuation, diff_inverted_colors)
+		elseif is_correct ~= nil then
 			if is_correct then
 				r1 = bold(green(p1))
 				r2 = bold(green(p2))
@@ -1809,13 +1951,25 @@ local function mask_context(
 		end
 
 		local rep_parts = {}
-		for _, part in ipairs(parts) do
-			if is_correct then
-				table.insert(rep_parts, bold(green(part)))
-			elseif has_hint and use_exact then
-				table.insert(rep_parts, bold(yellow(get_hint_masked_word(part, hint_n, hint_k, hint_m))))
-			else
-				table.insert(rep_parts, bold(yellow(get_mask_placeholder(part, use_exact))))
+		if preview_text and preview_text ~= "" then
+			local u_parts = {}
+			for part in preview_text:gmatch("[^%s]+") do
+				table.insert(u_parts, part)
+			end
+			for idx, part in ipairs(parts) do
+				local u_part = u_parts[idx] or ""
+				local rep = get_preview_replacement(u_part, part, use_exact, battleship_feedback, case_sensitive_diff, ignore_punctuation, diff_inverted_colors)
+				table.insert(rep_parts, rep)
+			end
+		else
+			for _, part in ipairs(parts) do
+				if is_correct then
+					table.insert(rep_parts, bold(green(part)))
+				elseif has_hint and use_exact then
+					table.insert(rep_parts, bold(yellow(get_hint_masked_word(part, hint_n, hint_k, hint_m))))
+				else
+					table.insert(rep_parts, bold(yellow(get_mask_placeholder(part, use_exact))))
+				end
 			end
 		end
 		local replacement = table.concat(rep_parts, " ")
@@ -1843,7 +1997,9 @@ local function mask_context(
 			local replaced = context
 			for _, match in ipairs(matches) do
 				local rep
-				if is_correct ~= nil then
+				if preview_text and preview_text ~= "" then
+					rep = replacement
+				elseif is_correct ~= nil then
 					if is_correct then
 						local m_parts = {}
 						for part in match.m:gmatch("[^%s]+") do
@@ -1927,7 +2083,9 @@ local function mask_context(
 		local fallback_context = context
 		for _, match in ipairs(non_overlapping) do
 			local rep
-			if is_correct ~= nil then
+			if preview_text and preview_text ~= "" then
+				rep = replacement
+			elseif is_correct ~= nil then
 				if is_correct then
 					rep = bold(green(match.m))
 				else
@@ -1991,7 +2149,22 @@ local function update_and_save_progress(entry, is_correct, config)
 end
 
 -- Read a line of input, intercepting Esc (skip) and Ctrl+C (quit) on Windows
-local function read_line_with_esc(config, initial_text, save_esc, use_arrows)
+local function read_line_with_esc(
+	config,
+	initial_text,
+	save_esc,
+	use_arrows,
+	entry,
+	question_num,
+	total,
+	target_word,
+	masked_context,
+	has_hint,
+	hint_n,
+	hint_k,
+	hint_m,
+	current_hint
+)
 	io.flush()
 	if package.config:sub(1, 1) == "\\" then
 		local arrow_arg = ""
@@ -2006,14 +2179,107 @@ local function read_line_with_esc(config, initial_text, save_esc, use_arrows)
 			local escaped_initial = initial_text:gsub('"', '\\"')
 			initial_arg = string.format(' --initial "%s"', escaped_initial)
 		end
+
+		local pipe_handle = nil
+		local preview_pipe_arg = ""
+		local use_preview = config.typing_preview and config.single_card_mode and entry and has_ffi and C
+		if use_preview then
+			local preview_pipe_path = config.quiz_pipe_path .. "-preview"
+			pipe_handle = C.CreateNamedPipeA(
+				preview_pipe_path,
+				1, -- PIPE_ACCESS_INBOUND
+				1, -- PIPE_NOWAIT (non-blocking!)
+				1, -- max instances
+				1024,
+				1024,
+				0,
+				nil
+			)
+			if pipe_handle ~= INVALID_HANDLE_VALUE then
+				C.ConnectNamedPipe(pipe_handle, nil)
+				preview_pipe_arg = string.format(' --preview-pipe "%s"', preview_pipe_path)
+			end
+		end
+
 		local prefix = get_helper_cmd_prefix("--line")
-		local cmd = string.format('%s%s%s%s 2>nul', prefix, arrow_arg, save_esc_arg, initial_arg)
+		local cmd = string.format('%s%s%s%s%s 2>nul', prefix, arrow_arg, save_esc_arg, initial_arg, preview_pipe_arg)
 		if cmd:sub(1, 1) == '"' then
 			cmd = '"' .. cmd .. '"'
 		end
 		local f = io.popen(cmd)
 		if f then
-			local res = f:read("*a")
+			local res = nil
+			if use_preview and pipe_handle and pipe_handle ~= INVALID_HANDLE_VALUE then
+				local last_buffer = ""
+				while true do
+					-- Poll preview pipe
+					local data = read_preview_pipe(pipe_handle)
+					local latest_buf = parse_latest_preview(data)
+					if latest_buf and latest_buf ~= last_buffer then
+						last_buffer = latest_buf
+						
+						-- Re-render the front card!
+						clear_screen()
+						print_header(config)
+						local basename = entry.filename:match("([^/\\]+)$") or entry.filename
+						if entry.is_repeat and not config.repeat_counts_in_stats then
+							local header_prefix
+							if entry.original_question_num then
+								header_prefix = string.format("Practice Repeat %d/%d:", entry.original_question_num, total)
+							else
+								header_prefix = "Practice Repeat (Sync):"
+							end
+							print(bold(cyan(header_prefix)) .. dim(string.format(" [File: %s | Box %d]", basename, entry.box)))
+						else
+							local cycle = math.ceil(question_num / total)
+							local disp_num = ((question_num - 1) % total) + 1
+							local cycle_str = cycle > 1 and string.format(" (Cycle %d)", cycle) or ""
+							local repeat_str = entry.is_repeat and " (Repeat)" or ""
+							print(
+								bold(cyan(string.format("Question %d/%d%s%s:", disp_num, total, cycle_str, repeat_str)))
+									.. dim(string.format(" [File: %s | Box %d]", basename, entry.box))
+							)
+						end
+						
+						local live_context = mask_context(
+							entry.context,
+							target_word,
+							config.exact_length_mask,
+							has_hint,
+							hint_n,
+							hint_k,
+							hint_m,
+							nil,
+							nil,
+							config.case_sensitive_diff,
+							config.ignore_punctuation,
+							entry.source_index,
+							latest_buf,
+							config.battleship_feedback,
+							config.diff_inverted_colors
+						)
+						print(wrap_text(live_context))
+						if current_hint and not config.exact_length_mask then
+							print(current_hint)
+						end
+						io.write(bold("Answer ") .. dim("(type '/?' for help): "))
+						io.flush()
+					end
+					
+					-- Check if the helper has closed the pipe (meaning it has exited)
+					local avail = ffi.new("DWORD[1]")
+					local ok = C.PeekNamedPipe(pipe_handle, nil, 0, nil, avail, nil)
+					if ok == 0 then
+						break
+					end
+					
+					C.Sleep(10)
+				end
+				C.CloseHandle(pipe_handle)
+				res = f:read("*a")
+			else
+				res = f:read("*a")
+			end
 			f:close()
 			if res ~= "NOT_TTY" then
 				print() -- move to next line after input
@@ -2230,7 +2496,22 @@ local function run_quiz(study_queue, config)
 				end
 			else
 				io.write(bold("Answer ") .. dim("(type '/?' for help): "))
-				user_input = read_line_with_esc(config, saved_input, config.command_mode_save_input, config.answer_mode_arrow_hints)
+				user_input = read_line_with_esc(
+					config,
+					saved_input,
+					config.command_mode_save_input,
+					config.answer_mode_arrow_hints,
+					entry,
+					question_num,
+					total,
+					target_word,
+					masked_context,
+					has_hint,
+					hint_n,
+					hint_k,
+					hint_m,
+					current_hint
+				)
 				if not user_input then
 					print(magenta("\nExiting quiz early."))
 					return
@@ -2479,7 +2760,8 @@ local function run_quiz(study_queue, config)
 				print()
 
 				if entry.is_repeat and not config.repeat_counts_in_stats then
-					print(dim("This was a practice repeat. Your score and card progress were not affected."))				end
+					print(magenta("ℹ ") .. dim("Practice Repeat — progress & score unaffected"))
+				end
 
 				if not config.anki_grading then
 					if not save_ok then
@@ -2704,6 +2986,13 @@ print_interactive_help = function(config)
 	print("  " .. bold("/h N M") .. "                  Reveal N letters from the start and M from the end.")
 	print("  " .. bold("/h N K M") .. "                Reveal N from the start, K from the middle, M from the end.")
 	print("  " .. bold("Arrows") .. "                  Dynamic visual hints (if enabled).")
+	if config and config.typing_preview then
+		local preview_desc = "Live preview of typed answer in the blank."
+		if config.battleship_feedback then
+			preview_desc = "Live preview in the blank with green/red (Battleship) correctness feedback."
+		end
+		print("  " .. bold("Live Preview") .. "            " .. preview_desc)
+	end
 	print("  " .. bold("/a") .. "                      Repeat the previous card.")
 	local esc_skip = (config and config.command_mode and config.command_mode_esc_toggles) and "     " or ", " .. bold("Esc")
 	print("  " .. bold("/d") .. esc_skip .. "                 Skip the current card.")
@@ -3023,6 +3312,31 @@ local function main()
 		)
 		run_quiz(study_queue, config)
 	end
+end
+
+if os.getenv("TEST_LUA_EVAL") then
+	_G.load_config = load_config
+	_G.mask_context = mask_context
+	_G.get_inline_colored_diff = get_inline_colored_diff
+	_G.traceback_lcs = traceback_lcs
+	_G.bold = bold
+	_G.green = green
+	_G.red = red
+	_G.yellow = yellow
+	_G.c = c
+	_G.invert = invert
+	local chunk, err = load(os.getenv("TEST_LUA_EVAL"))
+	if chunk then
+		local ok_eval, eval_err = pcall(chunk)
+		if not ok_eval then
+			io.stderr:write("Eval error: " .. tostring(eval_err) .. "\n")
+			os.exit(1)
+		end
+	else
+		io.stderr:write("Load error: " .. tostring(err) .. "\n")
+		os.exit(1)
+	end
+	os.exit(0)
 end
 
 local ok, err = pcall(main)

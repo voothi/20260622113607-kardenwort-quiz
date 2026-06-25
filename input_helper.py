@@ -173,6 +173,9 @@ def send_unix_socket(socket_path, data):
     s.sendall(data)
     s.close()
 
+def get_preview_frame_payload(buffer_str):
+    return json.dumps({"buffer": buffer_str}) + "\n"
+
 def send_ipc_payload(pipe_path, command_dict):
     payload = (json.dumps(command_dict) + "\n").encode('utf-8')
     if sys.platform == 'win32':
@@ -471,7 +474,7 @@ def get_word_boundary(chars, pos, direction):
             p += 1
     return p
 
-def read_line(enable_arrows=False, initial_text="", save_esc=False, swap_arrows=False):
+def read_line(enable_arrows=False, initial_text="", save_esc=False, swap_arrows=False, preview_pipe=None):
     if not sys.stdin.isatty():
         print("NOT_TTY", end="")
         return
@@ -482,6 +485,43 @@ def read_line(enable_arrows=False, initial_text="", save_esc=False, swap_arrows=
     anchor_pos = -1
     drawn_cursor_pos = 0
     drawn_len = 0
+
+    preview_handle = None
+    if preview_pipe and sys.platform == 'win32':
+        try:
+            preview_handle = kernel32.CreateFileW(
+                preview_pipe,
+                0x40000000,  # GENERIC_WRITE
+                1 | 2,  # FILE_SHARE_READ | FILE_SHARE_WRITE
+                None,
+                3,  # OPEN_EXISTING
+                0,
+                None
+            )
+            if _is_invalid_handle(preview_handle):
+                preview_handle = None
+        except Exception:
+            preview_handle = None
+
+    def send_preview(buffer_str):
+        if not preview_pipe:
+            return
+        try:
+            payload = get_preview_frame_payload(buffer_str).encode('utf-8')
+            if sys.platform == 'win32':
+                if preview_handle:
+                    written = wintypes.DWORD(0)
+                    kernel32.WriteFile(
+                        preview_handle,
+                        payload,
+                        len(payload),
+                        ctypes.byref(written),
+                        None
+                    )
+            else:
+                send_unix_socket(preview_pipe, payload)
+        except Exception:
+            pass
 
     def draw():
         nonlocal drawn_cursor_pos, drawn_len
@@ -515,6 +555,7 @@ def read_line(enable_arrows=False, initial_text="", save_esc=False, swap_arrows=
         con.flush()
         drawn_cursor_pos = cursor_pos
         drawn_len = len(chars)
+        send_preview("".join(chars))
 
     def delete_selection():
         nonlocal chars, cursor_pos, anchor_pos
@@ -562,6 +603,7 @@ def read_line(enable_arrows=False, initial_text="", save_esc=False, swap_arrows=
                 print("/d", end="")
             break
         elif vk == 0x0D:  # Enter
+            send_preview("".join(chars))
             print("".join(chars), end="")
             break
         elif vk == 0x43 and is_ctrl:  # Ctrl+C
@@ -654,6 +696,8 @@ def read_line(enable_arrows=False, initial_text="", save_esc=False, swap_arrows=
                     cursor_pos += 1
                     draw()
 
+    if preview_handle:
+        kernel32.CloseHandle(preview_handle)
     con.close()
 
 if __name__ == "__main__":
@@ -691,6 +735,7 @@ if __name__ == "__main__":
     initial_text = ""
     mpv_integration = False
     quiz_pipe_path = None
+    preview_pipe = None
     
     play_on_sync = "--play" in args
     mpv_cmd_path = "mpv"
@@ -728,6 +773,9 @@ if __name__ == "__main__":
         elif args[i] == "--quiz-pipe-path" and i + 1 < len(args):
             quiz_pipe_path = args[i + 1]
             i += 1
+        elif args[i] == "--preview-pipe" and i + 1 < len(args):
+            preview_pipe = args[i + 1]
+            i += 1
         elif args[i] == "--mpv-cmd" and i + 1 < len(args):
             # Already handled in pre-scan, just skip
             i += 1
@@ -761,6 +809,6 @@ if __name__ == "__main__":
         t.start()
 
     if mode == "--line":
-        read_line(enable_arrows, initial_text, save_esc, swap_arrows)
+        read_line(enable_arrows, initial_text, save_esc, swap_arrows, preview_pipe)
     else:
         read_key(enable_arrows, swap_arrows)

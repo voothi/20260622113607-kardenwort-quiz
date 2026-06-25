@@ -2370,3 +2370,128 @@ def test_sync_command_stats_and_header_repeat_true(quiz_env):
     assert entry is not None
     # Synced card was graded correct (1 -> 2), then deferred card was graded correct (2 -> 3)
     assert entry["LeitnerBox"] == "3"
+
+
+def test_load_config_typing_preview(quiz_env):
+    """6.1 Test that typing_preview and battleship_feedback parse correctly and default to false."""
+    config_path = quiz_env / "config.ini"
+    content = config_path.read_text(encoding="utf-8")
+    content += "\ntyping_preview = true\nbattleship_feedback = true\n"
+    config_path.write_text(content, encoding="utf-8", newline="\n")
+
+    eval_code = """
+    local cfg = load_config('config.ini')
+    assert(cfg.typing_preview == true, 'typing_preview should be true')
+    assert(cfg.battleship_feedback == true, 'battleship_feedback should be true')
+    print('CONFIG_OK')
+    """
+    import subprocess
+    res = subprocess.run(["lua", "tsv_quiz.lua"], cwd=quiz_env, env={"TEST_LUA_EVAL": eval_code}, capture_output=True, text=True)
+    assert res.returncode == 0
+    assert "CONFIG_OK" in res.stdout
+
+
+def test_mask_context_preview_text(quiz_env):
+    """6.2 Test that a non-empty preview_text replaces the placeholder."""
+    eval_code = """
+    -- Case 1: Nil/empty preview_text keeps placeholder
+    local res1 = mask_context('Ich habe ein Auto.', 'Auto', true, false, nil, nil, nil, nil, nil, true, true, nil, nil, false, false)
+    assert(res1:find('____'), 'Should keep underscore placeholder')
+    
+    -- Case 2: Non-empty preview_text replaces placeholder
+    local res2 = mask_context('Ich habe ein Auto.', 'Auto', true, false, nil, nil, nil, nil, nil, true, true, nil, 'Aut', false, false)
+    assert(res2:find('Aut_'), 'Should replace with preview and pad')
+    print('MASK_PREVIEW_OK')
+    """
+    import subprocess
+    res = subprocess.run(["lua", "tsv_quiz.lua"], cwd=quiz_env, env={"TEST_LUA_EVAL": eval_code}, capture_output=True, text=True)
+    assert res.returncode == 0
+    assert "MASK_PREVIEW_OK" in res.stdout
+
+
+def test_mask_context_width_fitting(quiz_env):
+    """6.3 Test exact_length_mask width-fitting behavior (padding when shorter, truncation when longer)."""
+    eval_code = """
+    -- Shorter: should pad
+    local res1 = mask_context('Ich habe ein Auto.', 'Auto', true, false, nil, nil, nil, nil, nil, true, true, nil, 'Au', false, false)
+    assert(res1:find('Au__'), 'Should pad with underscores')
+    
+    -- Longer: should truncate with ellipsis
+    local res2 = mask_context('Ich habe ein Auto.', 'Auto', true, false, nil, nil, nil, nil, nil, true, true, nil, 'Autotransporter', false, false)
+    assert(res2:find('Aut…'), 'Should truncate with ellipsis')
+    print('WIDTH_FITTING_OK')
+    """
+    import subprocess
+    res = subprocess.run(["lua", "tsv_quiz.lua"], cwd=quiz_env, env={"TEST_LUA_EVAL": eval_code}, capture_output=True, text=True)
+    assert res.returncode == 0
+    assert "WIDTH_FITTING_OK" in res.stdout
+
+
+def test_battleship_feedback_coloring(quiz_env):
+    """6.4 Test battleship_feedback coloring (green for match, red for mismatch)."""
+    eval_code = r"""
+    -- Case sensitive: true. Target: 'Auto'. Preview: 'Autc'
+    local res1 = mask_context('Ich habe ein Auto.', 'Auto', true, false, nil, nil, nil, nil, nil, true, true, nil, 'Autc', true, false)
+    -- 'A', 'u', 't' should be green, 'c' should be red
+    assert(res1:find('\27%[32m'), 'Matching chars should be green')
+    assert(res1:find('\27%[31m'), 'Mismatch char should be red')
+    print('BATTLESHIP_OK')
+    """
+    import subprocess
+    res = subprocess.run(["lua", "tsv_quiz.lua"], cwd=quiz_env, env={"TEST_LUA_EVAL": eval_code}, capture_output=True, text=True)
+    assert res.returncode == 0
+    assert "BATTLESHIP_OK" in res.stdout
+
+
+def test_battleship_feedback_no_op(quiz_env):
+    """6.5 Test that battleship_feedback is a no-op when typing_preview is false."""
+    eval_code = """
+    local res = mask_context('Ich habe ein Auto.', 'Auto', true, false, nil, nil, nil, nil, nil, true, true, nil, nil, true, false)
+    assert(res:find('____'), 'Should keep plain underscore placeholder')
+    print('NO_OP_OK')
+    """
+    import subprocess
+    res = subprocess.run(["lua", "tsv_quiz.lua"], cwd=quiz_env, env={"TEST_LUA_EVAL": eval_code}, capture_output=True, text=True)
+    assert res.returncode == 0
+    assert "NO_OP_OK" in res.stdout
+
+
+def test_input_helper_framing(tmp_path):
+    """6.6 Test input_helper.py JSON framing logic for preview payload."""
+    import importlib.util
+    import shutil
+    from pathlib import Path
+    shutil.copy2(Path(__file__).parent.parent.parent / "input_helper.py", tmp_path / "input_helper.py")
+    spec = importlib.util.spec_from_file_location("input_helper_test", str(tmp_path / "input_helper.py"))
+    input_helper_test = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(input_helper_test)
+    
+    payload = input_helper_test.get_preview_frame_payload("hello")
+    assert payload == '{"buffer": "hello"}\n'
+
+
+def test_integration_preview_equivalence(quiz_env):
+    """6.7 Confirm submitted answer, grading, and back-side diff are identical with typing_preview on vs off."""
+    focus_single_card(quiz_env, "20260604184114-microsoft-just-shocked-the.en.tsv", "properly")
+    
+    # Run with typing_preview = false
+    code1, out1, err1 = run_quiz(quiz_env, ["20260604184114-microsoft-just-shocked-the.en.tsv"], ["properly", "/q"])
+    
+    # Enable typing_preview and battleship_feedback
+    config_path = quiz_env / "config.ini"
+    content = config_path.read_text(encoding="utf-8")
+    content += "\ntyping_preview = true\nbattleship_feedback = true\n"
+    config_path.write_text(content, encoding="utf-8", newline="\n")
+    
+    # Reset card state so it is due again
+    focus_single_card(quiz_env, "20260604184114-microsoft-just-shocked-the.en.tsv", "properly")
+    
+    # Run with typing_preview = true
+    code2, out2, err2 = run_quiz(quiz_env, ["20260604184114-microsoft-just-shocked-the.en.tsv"], ["properly", "/q"])
+    
+    assert code1 == 0
+    assert code2 == 0
+    assert "Diff" in out1
+    assert "Diff" in out2
+    assert "You scored 1 out of 1" in out1
+    assert "You scored 1 out of 1" in out2

@@ -28,6 +28,8 @@ The Kardenwort TSV Quiz is a flashcard study tool written in Lua that helps you 
 - **Flexible Ordering**: Sort due reviews and new cards by due date, added order, or randomly.
 - **Flashcard Mode**: Clear terminal screen stages for front and back viewing.
 - **Context Masking**: Option to use underscores matching the exact length of the target word for better hints.
+- **Live Typing Preview**: Real-time rendering of your typed answer into the blank as you type (Windows only, opt-in).
+- **Battleship Feedback**: Real-time character-by-character color coding of the live preview (green for correct letter, red for mismatch, requires typing preview).
 - **Command Mode (Vim-style)**: Fast command execution with single-key actions, toggleable answer/command modes with state saving, and separate configurations for keyboard arrow hints.
 - **Easy Windows Integration**: An automatic shortcut installer (`install.py`) to add the quiz to your Windows "Send to" right-click menu.
 
@@ -110,6 +112,12 @@ answer_mode_arrow_hints = false
 
 # Mask context with underscores matching the exact length of the target word/phrase (true/false)
 exact_length_mask = true
+
+# Show your typed text inside the blank as you type (true/false)
+typing_preview = false
+
+# Color the live preview like a Battleship board (true/false)
+battleship_feedback = false
 
 # Use strict case-sensitive matching for the diff display (true/false)
 case_sensitive_diff = true
