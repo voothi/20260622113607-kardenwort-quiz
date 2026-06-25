@@ -487,39 +487,73 @@ def read_line(enable_arrows=False, initial_text="", save_esc=False, swap_arrows=
     drawn_len = 0
 
     preview_handle = None
-    if preview_pipe and sys.platform == 'win32':
-        try:
-            preview_handle = kernel32.CreateFileW(
-                preview_pipe,
-                0x40000000,  # GENERIC_WRITE
-                1 | 2,  # FILE_SHARE_READ | FILE_SHARE_WRITE
-                None,
-                3,  # OPEN_EXISTING
-                0,
-                None
-            )
-            if _is_invalid_handle(preview_handle):
+    use_file_preview = False
+    if preview_pipe:
+        if sys.platform == 'win32' and preview_pipe.startswith('\\\\.\\pipe\\'):
+            try:
+                preview_handle = kernel32.CreateFileW(
+                    preview_pipe,
+                    0x40000000,  # GENERIC_WRITE
+                    1 | 2,  # FILE_SHARE_READ | FILE_SHARE_WRITE
+                    None,
+                    3,  # OPEN_EXISTING
+                    0,
+                    None
+                )
+                if _is_invalid_handle(preview_handle):
+                    preview_handle = None
+            except Exception:
                 preview_handle = None
-        except Exception:
-            preview_handle = None
+        else:
+            use_file_preview = True
 
     def send_preview(buffer_str):
         if not preview_pipe:
             return
         try:
-            payload = get_preview_frame_payload(buffer_str).encode('utf-8')
-            if sys.platform == 'win32':
-                if preview_handle:
-                    written = wintypes.DWORD(0)
-                    kernel32.WriteFile(
-                        preview_handle,
-                        payload,
-                        len(payload),
-                        ctypes.byref(written),
-                        None
-                    )
+            payload = get_preview_frame_payload(buffer_str)
+            if use_file_preview:
+                with open(preview_pipe, "w", encoding="utf-8") as f_prev:
+                    f_prev.write(payload)
             else:
-                send_unix_socket(preview_pipe, payload)
+                payload_bytes = payload.encode('utf-8')
+                if sys.platform == 'win32':
+                    if preview_handle:
+                        written = wintypes.DWORD(0)
+                        kernel32.WriteFile(
+                            preview_handle,
+                            payload_bytes,
+                            len(payload_bytes),
+                            ctypes.byref(written),
+                            None
+                        )
+                else:
+                    send_unix_socket(preview_pipe, payload_bytes)
+        except Exception:
+            pass
+
+    def send_preview_exit():
+        if not preview_pipe:
+            return
+        try:
+            payload = json.dumps({"exit": True}) + "\n"
+            if use_file_preview:
+                with open(preview_pipe, "w", encoding="utf-8") as f_prev:
+                    f_prev.write(payload)
+            else:
+                payload_bytes = payload.encode('utf-8')
+                if sys.platform == 'win32':
+                    if preview_handle:
+                        written = wintypes.DWORD(0)
+                        kernel32.WriteFile(
+                            preview_handle,
+                            payload_bytes,
+                            len(payload_bytes),
+                            ctypes.byref(written),
+                            None
+                        )
+                else:
+                    send_unix_socket(preview_pipe, payload_bytes)
         except Exception:
             pass
 
@@ -586,6 +620,7 @@ def read_line(enable_arrows=False, initial_text="", save_esc=False, swap_arrows=
         is_ctrl = bool(ctrl & (LEFT_CTRL_PRESSED | RIGHT_CTRL_PRESSED))
         
         if vk == 0xFF:
+            send_preview_exit()
             try:
                 msg = sync_event_queue.get_nowait()
                 if isinstance(msg, dict):
@@ -597,16 +632,18 @@ def read_line(enable_arrows=False, initial_text="", save_esc=False, swap_arrows=
             break
         
         if vk == 0x1B:  # Esc
+            send_preview_exit()
             if save_esc:
                 print("\x1b" + "".join(chars), end="")
             else:
                 print("/d", end="")
             break
         elif vk == 0x0D:  # Enter
-            send_preview("".join(chars))
+            send_preview_exit()
             print("".join(chars), end="")
             break
         elif vk == 0x43 and is_ctrl:  # Ctrl+C
+            send_preview_exit()
             print("/q", end="")
             break
         elif vk == 0x08:  # Backspace

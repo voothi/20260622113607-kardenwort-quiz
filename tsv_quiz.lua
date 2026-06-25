@@ -77,17 +77,21 @@ end
 
 local function parse_latest_preview(data)
 	if not data or data == "" then
-		return nil
+		return nil, false
 	end
 	local latest = nil
+	local should_exit = false
 	for line in data:gmatch("[^\r\n]+") do
+		if line:match('"exit":%s*true') then
+			should_exit = true
+		end
 		local buf = line:match('^{"buffer":%s*"(.-)"}')
 		if buf then
 			buf = buf:gsub('\\"', '"'):gsub('\\\\', '\\')
 			latest = buf
 		end
 	end
-	return latest
+	return latest, should_exit
 end
 
 -- Resolve directory of the running script for helper lookups
@@ -2183,22 +2187,30 @@ local function read_line_with_esc(
 
 		local pipe_handle = nil
 		local preview_pipe_arg = ""
-		local use_preview = config.typing_preview and config.single_card_mode and entry and has_ffi and C
-		if use_preview and C then
-			local preview_pipe_path = config.quiz_pipe_path .. "-preview"
-			pipe_handle = C.CreateNamedPipeA(
-				preview_pipe_path,
-				1, -- PIPE_ACCESS_INBOUND
-				1, -- PIPE_NOWAIT (non-blocking!)
-				1, -- max instances
-				1024,
-				1024,
-				0,
-				nil
-			)
-			if pipe_handle ~= INVALID_HANDLE_VALUE then
-				C.ConnectNamedPipe(pipe_handle, nil)
+		local use_preview = config.typing_preview and config.single_card_mode and entry
+		local preview_is_file = not (has_ffi and C)
+		local preview_pipe_path = ""
+		if use_preview then
+			if preview_is_file then
+				preview_pipe_path = ".preview.tmp"
+				os.remove(preview_pipe_path)
 				preview_pipe_arg = string.format(' --preview-pipe "%s"', preview_pipe_path)
+			elseif C then
+				preview_pipe_path = config.quiz_pipe_path .. "-preview"
+				pipe_handle = C.CreateNamedPipeA(
+					preview_pipe_path,
+					1, -- PIPE_ACCESS_INBOUND
+					1, -- PIPE_NOWAIT (non-blocking!)
+					1, -- max instances
+					1024,
+					1024,
+					0,
+					nil
+				)
+				if pipe_handle ~= INVALID_HANDLE_VALUE then
+					C.ConnectNamedPipe(pipe_handle, nil)
+					preview_pipe_arg = string.format(' --preview-pipe "%s"', preview_pipe_path)
+				end
 			end
 		end
 
@@ -2210,12 +2222,26 @@ local function read_line_with_esc(
 		local f = io.popen(cmd)
 		if f then
 			local res = nil
-			if use_preview and C and pipe_handle and pipe_handle ~= INVALID_HANDLE_VALUE then
+			if use_preview and (preview_is_file or (C and pipe_handle and pipe_handle ~= INVALID_HANDLE_VALUE)) then
 				local last_buffer = ""
 				while true do
-					-- Poll preview pipe
-					local data = read_preview_pipe(pipe_handle)
-					local latest_buf = parse_latest_preview(data)
+					-- Poll preview pipe or file
+					local data = nil
+					if preview_is_file then
+						local f_prev = io.open(preview_pipe_path, "r")
+						if f_prev then
+							data = f_prev:read("*a")
+							f_prev:close()
+						end
+					else
+						data = read_preview_pipe(pipe_handle)
+					end
+
+					local latest_buf, should_exit = parse_latest_preview(data)
+					if should_exit then
+						break
+					end
+
 					if latest_buf and latest_buf ~= last_buffer then
 						last_buffer = latest_buf
 						
@@ -2267,16 +2293,25 @@ local function read_line_with_esc(
 						io.flush()
 					end
 					
-					-- Check if the helper has closed the pipe (meaning it has exited)
-					local avail = ffi.new("DWORD[1]")
-					local ok = C.PeekNamedPipe(pipe_handle, nil, 0, nil, avail, nil)
-					if ok == 0 then
-						break
+					if not preview_is_file then
+						-- Check if the helper has closed the pipe (meaning it has exited)
+						local avail = ffi.new("DWORD[1]")
+						local ok = C.PeekNamedPipe(pipe_handle, nil, 0, nil, avail, nil)
+						if ok == 0 then
+							break
+						end
+						C.Sleep(10)
+					else
+						-- Clock-based delay in standard Lua (10ms) to avoid high CPU or external deps
+						local t_start = os.clock()
+						while os.clock() - t_start < 0.01 do end
 					end
-					
-					C.Sleep(10)
 				end
-				C.CloseHandle(pipe_handle)
+				if preview_is_file then
+					os.remove(preview_pipe_path)
+				elseif C and pipe_handle and pipe_handle ~= INVALID_HANDLE_VALUE then
+					C.CloseHandle(pipe_handle)
+				end
 				res = f:read("*a")
 			else
 				res = f:read("*a")
