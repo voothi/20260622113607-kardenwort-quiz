@@ -300,21 +300,23 @@ local function press_any_key(prompt, allowed_keys, use_arrows)
 		end
 
 		if key:sub(1, 1) == "/" then
-			if key ~= "/resize" then
+			if key ~= "/resize" and not (active_config and active_config.single_card_mode) then
 				print()
 			end
 			return key
 		end
 
 		if not allowed_keys then
-			print()
+			if not (active_config and active_config.single_card_mode) then
+				print()
+			end
 			return key
 		end
 
 		local lkey = key:lower()
 		for _, v in ipairs(allowed_keys) do
 			if key == v or lkey == v then
-				if key ~= "\x1b" and key ~= "\27" then
+				if key ~= "\x1b" and key ~= "\27" and not (active_config and active_config.single_card_mode) then
 					print()
 				end
 				return key
