@@ -902,7 +902,7 @@ def read_line(enable_arrows=False, initial_text="", save_esc=False, swap_arrows=
             if save_esc:
                 print("\x1b" + "".join(chars), end="")
             else:
-                print("/d", end="")
+                print("\x1b/d", end="")
             break
         elif vk == 0x0D:  # Enter
             print("".join(chars), end="")

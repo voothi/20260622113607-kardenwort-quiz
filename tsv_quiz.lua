@@ -2144,7 +2144,9 @@ local function read_line_with_esc(config, initial_text, save_esc, use_arrows, pr
 			local res = f:read("*a")
 			f:close()
 			if res ~= "NOT_TTY" then
-				print() -- move to next line after input
+				if res:sub(1, 1) ~= "\27" then
+					print() -- move to next line after input
+				end
 				return res -- return even if empty (empty Enter = empty answer)
 			end
 		end
@@ -2409,9 +2411,14 @@ local function run_quiz(study_queue, config)
 					return
 				end
 
-				if config.command_mode_save_input and user_input:sub(1, 1) == "\x1b" then
-					saved_input = user_input:sub(2)
-					user_input = "/d"
+				if user_input:sub(1, 1) == "\27" or user_input:sub(1, 1) == "\x1b" then
+					if config.command_mode_save_input then
+						saved_input = user_input:sub(2)
+						user_input = "/d"
+					else
+						saved_input = ""
+						user_input = user_input:sub(2)
+					end
 				else
 					saved_input = ""
 				end
