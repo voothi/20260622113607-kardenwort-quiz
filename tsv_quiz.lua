@@ -285,6 +285,11 @@ local function press_any_key(prompt, allowed_keys, use_arrows)
 			return key
 		end
 
+		if key:sub(1, 1) == "/" then
+			print()
+			return key
+		end
+
 		if not allowed_keys then
 			print()
 			return key
@@ -2156,7 +2161,9 @@ local function run_quiz(study_queue, config)
 						if key == "" then key = "\r" end
 					end
 					local lkey = key:lower()
-					if lkey == "\r" or lkey == "\n" or lkey == " " then
+					if key:sub(1, 1) == "/" and key ~= "/" then
+						trimmed_input = key
+					elseif lkey == "\r" or lkey == "\n" or lkey == " " then
 						switch_mode = true
 						is_command_mode = false
 					elseif lkey == "\x1b" then
@@ -2479,7 +2486,8 @@ local function run_quiz(study_queue, config)
 				print()
 
 				if entry.is_repeat and not config.repeat_counts_in_stats then
-					print(dim("This was a practice repeat. Your score and card progress were not affected."))				end
+					print(dim("This was a practice repeat (progress & score unaffected)."))
+				end
 
 				if not config.anki_grading then
 					if not save_ok then
@@ -2487,6 +2495,7 @@ local function run_quiz(study_queue, config)
 					end
 
 					if config.single_card_mode then
+						local break_outer = false
 						while true do
 							local key = press_any_key(
 								dim("Press 'Enter' or 'Space' to continue, type '?' for help... "),
@@ -2497,7 +2506,51 @@ local function run_quiz(study_queue, config)
 								key = line and line:sub(1, 1) or ""
 							end
 							local lkey = key and key:lower()
-							if lkey == "?" then
+							if key:sub(1, 1) == "/" then
+								local cmd_body = key:sub(2):gsub("^%s+", ""):gsub("%s+$", "")
+								local lower_cmd = cmd_body:lower()
+								if lower_cmd:match("^sync%s+") or lower_cmd == "sync" then
+									if not config.mpv_integration then
+										print(bold(red("MPV Integration is disabled in config.ini.")))
+									else
+										local zid, timestamp_str = cmd_body:match("^sync%s+(%d+)%s+([%d%.]+)")
+										if zid then
+											local timestamp = tonumber(timestamp_str) or 0.0
+											local best_entry = nil
+											local min_diff = math.huge
+											for _, e in ipairs(master_vocab) do
+												local e_filename = e.filename:match("([^/\\]+)$") or e.filename
+												if e_filename:find(zid, 1, true) then
+													local e_time = tonumber(e.timestamp) or tonumber(e.source_index) or 0.0
+													local diff = math.abs(e_time - timestamp)
+													if diff < min_diff then
+														min_diff = diff
+														best_entry = e
+													end
+												end
+											end
+											if best_entry then
+												local sync_entry = {}
+												for k, v in pairs(best_entry) do
+													sync_entry[k] = v
+												end
+												sync_entry.is_repeat = true
+												sync_entry.original_card = best_entry
+												table.insert(study_queue, i + 1, sync_entry)
+												if config.repeat_counts_in_stats then total = total + 1 end
+												defer_current_card()
+												break_outer = true
+												break
+											else
+												print(bold(red("Could not find matching card for ZID: ")) .. zid)
+											end
+										end
+									end
+								elseif lower_cmd == "q" or lower_cmd == "quit" or lower_cmd == "exit" then
+									print(magenta("\nExiting quiz early."))
+									return
+								end
+							elseif lkey == "?" then
 								print(bold(cyan("\nBack Side Options:")))
 								print("  " .. bold("Enter, Space") .. "            Continue to the next card.")
 								print("  " .. bold("s") .. "                       Repeat the current card.")
@@ -2542,9 +2595,13 @@ local function run_quiz(study_queue, config)
 								break
 							end
 						end
+						if break_outer then
+							break
+						end
 					end
 				else
 					-- Anki manual grading mode
+					local break_outer = false
 					while true do
 						local prompt_str = bold("Grade ") .. dim("(press '?' for help, override with '1' as incorrect, '3' as correct)... ")
 
@@ -2564,7 +2621,51 @@ local function run_quiz(study_queue, config)
 						end
 						local lkey = key and key:lower()
 
-						if lkey == "?" then
+						if key:sub(1, 1) == "/" then
+							local cmd_body = key:sub(2):gsub("^%s+", ""):gsub("%s+$", "")
+							local lower_cmd = cmd_body:lower()
+							if lower_cmd:match("^sync%s+") or lower_cmd == "sync" then
+								if not config.mpv_integration then
+									print(bold(red("MPV Integration is disabled in config.ini.")))
+								else
+									local zid, timestamp_str = cmd_body:match("^sync%s+(%d+)%s+([%d%.]+)")
+									if zid then
+										local timestamp = tonumber(timestamp_str) or 0.0
+										local best_entry = nil
+										local min_diff = math.huge
+										for _, e in ipairs(master_vocab) do
+											local e_filename = e.filename:match("([^/\\]+)$") or e.filename
+											if e_filename:find(zid, 1, true) then
+												local e_time = tonumber(e.timestamp) or tonumber(e.source_index) or 0.0
+												local diff = math.abs(e_time - timestamp)
+												if diff < min_diff then
+													min_diff = diff
+													best_entry = e
+												end
+											end
+										end
+										if best_entry then
+											local sync_entry = {}
+											for k, v in pairs(best_entry) do
+												sync_entry[k] = v
+											end
+											sync_entry.is_repeat = true
+											sync_entry.original_card = best_entry
+											table.insert(study_queue, i + 1, sync_entry)
+											if config.repeat_counts_in_stats then total = total + 1 end
+											defer_current_card()
+											break_outer = true
+											break
+										else
+											print(bold(red("Could not find matching card for ZID: ")) .. zid)
+										end
+									end
+								end
+							elseif lower_cmd == "q" or lower_cmd == "quit" or lower_cmd == "exit" then
+								print(magenta("\nExiting quiz early."))
+								return
+							end
+						elseif lkey == "?" then
 							print(bold(cyan("\nBack Side Options:")))
 							print("  " .. bold("1") .. "                       Override as incorrect.")
 							print("  " .. bold("3") .. "                       Override as correct.")
@@ -2650,6 +2751,9 @@ local function run_quiz(study_queue, config)
 							end
 							break
 						end
+					end
+					if break_outer then
+						break
 					end
 				end
 

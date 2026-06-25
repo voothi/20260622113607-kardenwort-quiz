@@ -1627,6 +1627,22 @@ def test_sync_reverse_command(quiz_env):
     assert code == 0
     clean_out = strip_ansi(out)
     assert "unified intelligence" in clean_out
+def test_sync_reverse_command_single_key_command_mode(quiz_env):
+    """Test that the /sync command works correctly when in single-key command mode."""
+    config_path = quiz_env / "config.ini"
+    content = config_path.read_text(encoding="utf-8")
+    content += "\ncommand_mode = true\nstart_in_command_mode = true\ncommand_mode_single_key = true\n"
+    config_path.write_text(content, encoding="utf-8", newline="\n")
+
+    code, out, err = run_quiz(
+        quiz_env,
+        ["20260604184114-microsoft-just-shocked-the.en.tsv"],
+        ["/sync 20260604184114 387.841", " ", "meant", "", "/q"]
+    )
+    assert code == 0
+    clean_out = strip_ansi(out)
+    assert "unified intelligence" in clean_out
+
 
 
 def test_sync_forward_hotkey_command_mode(quiz_env):
