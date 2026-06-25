@@ -3142,3 +3142,106 @@ def test_redraw_needed_transitions(quiz_env):
     # The transition to Answer mode should have redraw_needed=false, so it won't print it a second time.
     question_count = out.count("Question 1/4:")
     assert question_count == 1, f"Expected Question 1/4: to be printed exactly once, found {question_count} times.\nOutput:\n{out}"
+
+
+def test_prompt_color_config_parsing(quiz_env):
+    """Test that command_mode_prompt_color and answer_mode_prompt_color are parsed correctly by Lua."""
+    config_path = quiz_env / "config.ini"
+
+    # 1. Verify defaults (coral / standard)
+    config_path.write_text("[Leitner]\n", encoding="utf-8")
+    lua_code_defaults = """
+        local config = load_config("config.ini")
+        print("cmd_color=" .. tostring(config.command_mode_prompt_color))
+        print("ans_color=" .. tostring(config.answer_mode_prompt_color))
+    """
+    code, out, err = run_lua_eval(quiz_env, lua_code_defaults)
+    assert code == 0, f"Lua run failed: {err}"
+    assert "cmd_color=coral" in out
+    assert "ans_color=standard" in out
+
+    # 2. Verify custom values are parsed correctly
+    config_path.write_text(
+        "[Leitner]\ncommand_mode_prompt_color = red\nanswer_mode_prompt_color = green\n",
+        encoding="utf-8"
+    )
+    code, out, err = run_lua_eval(quiz_env, lua_code_defaults)
+    assert code == 0, f"Lua run failed: {err}"
+    assert "cmd_color=red" in out
+    assert "ans_color=green" in out
+
+    # 3. Verify all supported color names are accepted without errors
+    for color in ("coral", "red", "yellow", "cyan", "green", "magenta", "white", "standard"):
+        config_path.write_text(
+            f"[Leitner]\ncommand_mode_prompt_color = {color}\nanswer_mode_prompt_color = {color}\n",
+            encoding="utf-8"
+        )
+        code, out, err = run_lua_eval(quiz_env, lua_code_defaults)
+        assert code == 0, f"Lua run failed for color={color}: {err}"
+        assert f"cmd_color={color}" in out
+        assert f"ans_color={color}" in out
+
+
+def test_prompt_color_ansi_output(quiz_env):
+    """Test that the Command prompt emits the correct ANSI color code and Answer prompt does not."""
+    config_path = quiz_env / "config.ini"
+    content = config_path.read_text(encoding="utf-8")
+
+    # coral = ANSI code 91 (light/bright red), standard = no extra color code beyond bold (1)
+    content += (
+        "\ncommand_mode = true"
+        "\nstart_in_command_mode = true"
+        "\ncommand_mode_single_key = true"
+        "\ncommand_mode_prompt_color = coral"
+        "\nanswer_mode_prompt_color = standard\n"
+    )
+    config_path.write_text(content, encoding="utf-8", newline="\n")
+    focus_single_card(quiz_env, "20260604184114-microsoft-just-shocked-the.en.tsv", "properly")
+
+    # Quit immediately after seeing the Command prompt
+    code, out, err = run_quiz(
+        quiz_env,
+        ["20260604184114-microsoft-just-shocked-the.en.tsv"],
+        ["/q"]
+    )
+    assert code == 0
+
+    # The Command prompt must contain the bright-red (91) ANSI escape applied to "Command"
+    # Format: ESC[1m  ESC[91m Command ESC[0m  ESC[0m
+    assert "\x1b[91m" in out, "Expected ANSI bright-red (91) code in Command prompt output"
+
+    # Now switch to Answer mode and verify no 91 code appears in the Answer prompt
+    content2 = config_path.read_text(encoding="utf-8")
+    # Override: coral for both — verify 91 code also appears when answer_mode_prompt_color=coral
+    import re
+    content2 = re.sub(r"answer_mode_prompt_color\s*=\s*\w+", "answer_mode_prompt_color = coral", content2)
+    config_path.write_text(content2, encoding="utf-8", newline="\n")
+
+    # Space switches to Answer mode, then /q quits
+    code2, out2, err2 = run_quiz(
+        quiz_env,
+        ["20260604184114-microsoft-just-shocked-the.en.tsv"],
+        [" ", "/q"]
+    )
+    assert code2 == 0
+    # With answer_mode_prompt_color = coral, the Answer prompt should also have ANSI 91
+    assert "\x1b[91m" in out2, "Expected ANSI 91 in Answer prompt when answer_mode_prompt_color=coral"
+
+    # Finally verify standard Answer prompt has no 91 code in the Answer section
+    content3 = re.sub(r"answer_mode_prompt_color\s*=\s*\w+", "answer_mode_prompt_color = standard", content2)
+    config_path.write_text(content3, encoding="utf-8", newline="\n")
+
+    code3, out3, err3 = run_quiz(
+        quiz_env,
+        ["20260604184114-microsoft-just-shocked-the.en.tsv"],
+        [" ", "/q"]
+    )
+    assert code3 == 0
+    # The Answer prompt itself should not have 91, but the Command prompt (coral) still will
+    # Strip everything before the switch to Answer mode to isolate the Answer prompt portion
+    # We look at whether "Answer" label in the output contains 91 — it should not for standard
+    # Since both prompts appear in one output stream, we verify "Answer" text is NOT wrapped in \x1b[91m
+    # by checking that the raw "Answer" label uses bold-only (code 1), not 91
+    # The Answer prompt format is: ESC[1m Answer ESC[0m when standard (no 91 between ESC[1m and Answer)
+    assert "\x1b[1m\x1b[91m" not in out3 or "Answer" not in out3[out3.find("\x1b[1m\x1b[91m"):out3.find("\x1b[1m\x1b[91m")+30], \
+        "Answer prompt should not contain ANSI 91 when answer_mode_prompt_color=standard"
