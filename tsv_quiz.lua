@@ -83,6 +83,14 @@ local function invert(text)
 	return c("7", text)
 end
 
+local function format_wildcard(color_fn, text, blank_inverted_colors)
+	if blank_inverted_colors then
+		return invert(color_fn(text))
+	else
+		return bold(color_fn(text))
+	end
+end
+
 local function get_helper_cmd_prefix(mode)
 	local python_bin = "python"
 	local extra_args = ""
@@ -331,6 +339,8 @@ local function load_config(filename)
 		case_sensitive_diff = true,
 		ignore_punctuation = true,
 		diff_inverted_colors = false,
+		blank_inverted_colors = false,
+		show_diff_with_battleship = true,
 		anki_grading = false,
 		repeat_counts_in_stats = false,
 		mpv_integration = false,
@@ -459,6 +469,12 @@ local function load_config(filename)
 								config.ignore_punctuation = (val == "true" or val == "1")
 							elseif key == "diff_inverted_colors" then
 								config.diff_inverted_colors = (val == "true" or val == "1")
+							elseif key == "blank_inverted_colors" then
+								config.blank_inverted_colors = (val == "true" or val == "1")
+							elseif key == "show_diff_with_battleship" then
+								config.show_diff_with_battleship = (val == "true" or val == "1")
+							elseif key == "preview_inverted_colors" then
+								-- silently ignore stale key
 							elseif key == "anki_grading" then
 								config.anki_grading = (val == "true" or val == "1")
 							elseif key == "repeat_counts_in_stats" then
@@ -1477,7 +1493,7 @@ local function mask_context(
 	ignore_punctuation,
 	source_index,
 	preview_format,
-	diff_inverted_colors
+	blank_inverted_colors
 )
 	local p1, p2 = target_word:match("^(.-)%s*%.%.%.%s*(.-)$")
 
@@ -1678,8 +1694,8 @@ local function mask_context(
 		local r1, r2
 		if is_correct ~= nil then
 			if is_correct then
-				r1 = bold(green(p1))
-				r2 = bold(green(p2))
+				r1 = format_wildcard(green, p1, blank_inverted_colors)
+				r2 = format_wildcard(green, p2, blank_inverted_colors)
 			else
 				local user_p1, user_p2 = "", ""
 				if user_input then
@@ -1698,14 +1714,14 @@ local function mask_context(
 						user_p1 = u_parts[1]
 					end
 				end
-				r1 = get_inline_colored_diff(user_p1, p1, case_sensitive_diff, ignore_punctuation, diff_inverted_colors)
-				r2 = get_inline_colored_diff(user_p2, p2, case_sensitive_diff, ignore_punctuation, diff_inverted_colors)
+				r1 = get_inline_colored_diff(user_p1, p1, case_sensitive_diff, ignore_punctuation, blank_inverted_colors)
+				r2 = get_inline_colored_diff(user_p2, p2, case_sensitive_diff, ignore_punctuation, blank_inverted_colors)
 			end
 		elseif has_hint and use_exact then
 			local hp1 = get_hint_masked_word(p1, hint_n, hint_k, hint_m)
 			local hp2 = get_hint_masked_word(p2, hint_n, hint_k, hint_m)
-			r1 = bold(yellow(hp1))
-			r2 = bold(yellow(hp2))
+			r1 = format_wildcard(yellow, hp1, blank_inverted_colors)
+			r2 = format_wildcard(yellow, hp2, blank_inverted_colors)
 		else
 			if preview_format then
 				r1 = "[[TARGET:" .. p1 .. "]]"
@@ -1713,8 +1729,8 @@ local function mask_context(
 			else
 				local mask1 = get_mask_placeholder(p1, use_exact)
 				local mask2 = get_mask_placeholder(p2, use_exact)
-				r1 = bold(yellow(mask1))
-				r2 = bold(yellow(mask2))
+				r1 = format_wildcard(yellow, mask1, blank_inverted_colors)
+				r2 = format_wildcard(yellow, mask2, blank_inverted_colors)
 			end
 		end
 
@@ -1766,8 +1782,8 @@ local function mask_context(
 					local final_r2 = r2
 					if is_correct ~= nil then
 						if is_correct then
-							final_r1 = bold(green(match.m1))
-							final_r2 = bold(green(match.m2))
+							final_r1 = format_wildcard(green, match.m1, blank_inverted_colors)
+							final_r2 = format_wildcard(green, match.m2, blank_inverted_colors)
 						else
 							final_r1 = r1
 							final_r2 = r2
@@ -1799,8 +1815,8 @@ local function mask_context(
 				local final_r2 = r2
 				if is_correct ~= nil then
 					if is_correct then
-						final_r1 = bold(green(best_match.m1))
-						final_r2 = bold(green(best_match.m2))
+						final_r1 = format_wildcard(green, best_match.m1, blank_inverted_colors)
+						final_r2 = format_wildcard(green, best_match.m2, blank_inverted_colors)
 					else
 						final_r1 = r1
 						final_r2 = r2
@@ -1839,11 +1855,11 @@ local function mask_context(
 			if preview_format then
 				table.insert(rep_parts, "[[TARGET:" .. part .. "]]")
 			elseif is_correct then
-				table.insert(rep_parts, bold(green(part)))
+				table.insert(rep_parts, format_wildcard(green, part, blank_inverted_colors))
 			elseif has_hint and use_exact then
-				table.insert(rep_parts, bold(yellow(get_hint_masked_word(part, hint_n, hint_k, hint_m))))
+				table.insert(rep_parts, format_wildcard(yellow, get_hint_masked_word(part, hint_n, hint_k, hint_m), blank_inverted_colors))
 			else
-				table.insert(rep_parts, bold(yellow(get_mask_placeholder(part, use_exact))))
+				table.insert(rep_parts, format_wildcard(yellow, get_mask_placeholder(part, use_exact), blank_inverted_colors))
 			end
 		end
 		local replacement = table.concat(rep_parts, " ")
@@ -1879,11 +1895,11 @@ local function mask_context(
 						end
 						local m_rep_parts = {}
 						for _, part in ipairs(m_parts) do
-							table.insert(m_rep_parts, bold(green(part)))
+							table.insert(m_rep_parts, format_wildcard(green, part, blank_inverted_colors))
 						end
 						rep = table.concat(m_rep_parts, " ")
 					else
-						rep = get_inline_colored_diff(user_input or "", match.m, case_sensitive_diff, ignore_punctuation, diff_inverted_colors)
+						rep = get_inline_colored_diff(user_input or "", match.m, case_sensitive_diff, ignore_punctuation, blank_inverted_colors)
 					end
 				else
 					rep = replacement
@@ -1959,15 +1975,15 @@ local function mask_context(
 				rep = "[[TARGET:" .. match.m .. "]]"
 			elseif is_correct ~= nil then
 				if is_correct then
-					rep = bold(green(match.m))
+					rep = format_wildcard(green, match.m, blank_inverted_colors)
 				else
-					rep = get_inline_colored_diff(user_input or "", match.m, case_sensitive_diff, ignore_punctuation, diff_inverted_colors)
+					rep = get_inline_colored_diff(user_input or "", match.m, case_sensitive_diff, ignore_punctuation, blank_inverted_colors)
 				end
 			else
 				if has_hint and use_exact then
-					rep = bold(yellow(get_hint_masked_word(match.m, hint_n, hint_k, hint_m)))
+					rep = format_wildcard(yellow, get_hint_masked_word(match.m, hint_n, hint_k, hint_m), blank_inverted_colors)
 				else
-					rep = bold(yellow(get_mask_placeholder(match.m, use_exact)))
+					rep = format_wildcard(yellow, get_mask_placeholder(match.m, use_exact), blank_inverted_colors)
 				end
 			end
 			fallback_context = fallback_context:sub(1, match.start_pos - 1) .. rep .. fallback_context:sub(match.end_pos)
@@ -2207,7 +2223,7 @@ local function run_quiz(study_queue, config)
 				config.ignore_punctuation,
 				entry.source_index,
 				false,
-				config.diff_inverted_colors
+				config.blank_inverted_colors
 			)
 
 			if config.single_card_mode then
@@ -2344,7 +2360,7 @@ local function run_quiz(study_queue, config)
 						config.ignore_punctuation,
 						entry.source_index,
 						true, -- preview_format
-						config.diff_inverted_colors
+						config.blank_inverted_colors
 					)
 					local payload = {
 						header = get_card_header(config, question_num, total, entry),
@@ -2355,7 +2371,8 @@ local function run_quiz(study_queue, config)
 						battleship_feedback = config.battleship_feedback,
 						case_sensitive_diff = config.case_sensitive_diff,
 						ignore_punctuation = config.ignore_punctuation,
-						diff_inverted_colors = config.diff_inverted_colors
+						diff_inverted_colors = config.diff_inverted_colors,
+						blank_inverted_colors = config.blank_inverted_colors
 					}
 					preview_data = to_hex(json_encode(payload))
 				end
@@ -2597,20 +2614,27 @@ local function run_quiz(study_queue, config)
 					config.ignore_punctuation,
 					entry.source_index,
 					false,
-					config.diff_inverted_colors
+					config.blank_inverted_colors
 				)
 				print(wrap_text(revealed_context))
 
-				print()
-				local u_line, t_line = get_two_line_diff(
-					trimmed_input,
-					target_word,
-					config.case_sensitive_diff,
-					config.ignore_punctuation,
-					config.diff_inverted_colors
-				)
-				print_framed_diff(u_line, t_line)
-				print()
+				local show_diff = true
+				if config.battleship_feedback and not config.show_diff_with_battleship then
+					show_diff = false
+				end
+
+				if show_diff then
+					print()
+					local u_line, t_line = get_two_line_diff(
+						trimmed_input,
+						target_word,
+						config.case_sensitive_diff,
+						config.ignore_punctuation,
+						config.diff_inverted_colors
+					)
+					print_framed_diff(u_line, t_line)
+					print()
+				end
 
 				if entry.is_repeat and not config.repeat_counts_in_stats then
 					print(dim("This was a practice repeat (progress & score unaffected)."))
@@ -3269,6 +3293,7 @@ local function run_lua_eval()
 		_G.load_config = load_config
 		_G.mask_context = mask_context
 		_G.get_inline_colored_diff = get_inline_colored_diff
+		_G.get_two_line_diff = get_two_line_diff
 		_G.bold = bold
 		_G.green = green
 		_G.red = red

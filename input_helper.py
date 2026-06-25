@@ -591,24 +591,32 @@ def get_inline_colored_diff(user_str, original_target, case_sensitive, ignore_pu
                 res.append(c(RED_CODE, ch))
     return "".join(res)
 
-def get_preview_replacement(u_part, target, use_exact, battleship, case_sensitive, ignore_punctuation, diff_inverted_colors):
+def format_wildcard(text, blank_inverted_colors, color_code=None):
+    if color_code:
+        if blank_inverted_colors:
+            return f"\033[7m\033[{color_code}m{text}\033[0m"
+        else:
+            return f"\033[1m\033[{color_code}m{text}\033[0m"
+    else:
+        if blank_inverted_colors:
+            return f"\033[7m{text}\033[0m"
+        else:
+            return f"\033[1m{text}\033[0m"
+
+def get_preview_replacement(u_part, target, use_exact, battleship, case_sensitive, ignore_punctuation, blank_inverted_colors=None, diff_inverted_colors=None):
+    if blank_inverted_colors is None:
+        blank_inverted_colors = diff_inverted_colors if diff_inverted_colors is not None else False
     target_len = len(target)
     p_len = len(u_part)
     
-    def bold(text):
-        return f"\033[1m{text}\033[0m"
-        
-    def bold_yellow(text):
-        return f"\033[1m\033[33m{text}\033[0m"
-        
     if use_exact:
         if p_len < target_len:
             if battleship:
                 target_prefix = target[:p_len]
-                colored = get_inline_colored_diff(u_part, target_prefix, case_sensitive, ignore_punctuation, diff_inverted_colors)
-                return colored + bold_yellow("_" * (target_len - p_len))
+                colored = get_inline_colored_diff(u_part, target_prefix, case_sensitive, ignore_punctuation, blank_inverted_colors)
+                return colored + format_wildcard("_" * (target_len - p_len), blank_inverted_colors, "33")
             else:
-                return bold(u_part + "_" * (target_len - p_len))
+                return format_wildcard(u_part + "_" * (target_len - p_len), blank_inverted_colors)
         elif p_len > target_len:
             fitted_plain = target
             if target_len <= 1:
@@ -617,26 +625,28 @@ def get_preview_replacement(u_part, target, use_exact, battleship, case_sensitiv
                 fitted_plain = target[:target_len - 1] + "…"
                 
             if battleship:
-                return get_inline_colored_diff(fitted_plain, target, case_sensitive, ignore_punctuation, diff_inverted_colors)
+                return get_inline_colored_diff(fitted_plain, target, case_sensitive, ignore_punctuation, blank_inverted_colors)
             else:
-                return bold(fitted_plain)
+                return format_wildcard(fitted_plain, blank_inverted_colors)
         else:
             if battleship:
-                return get_inline_colored_diff(u_part, target, case_sensitive, ignore_punctuation, diff_inverted_colors)
+                return get_inline_colored_diff(u_part, target, case_sensitive, ignore_punctuation, blank_inverted_colors)
             else:
-                return bold(u_part)
+                return format_wildcard(u_part, blank_inverted_colors)
     else:
         if battleship:
             if p_len < target_len:
                 target_prefix = target[:p_len]
-                colored = get_inline_colored_diff(u_part, target_prefix, case_sensitive, ignore_punctuation, diff_inverted_colors)
+                colored = get_inline_colored_diff(u_part, target_prefix, case_sensitive, ignore_punctuation, blank_inverted_colors)
                 return colored
             else:
-                return get_inline_colored_diff(u_part, target, case_sensitive, ignore_punctuation, diff_inverted_colors)
+                return get_inline_colored_diff(u_part, target, case_sensitive, ignore_punctuation, blank_inverted_colors)
         else:
-            return bold(u_part)
+            return format_wildcard(u_part, blank_inverted_colors)
 
-def render_preview_template(template, typed_text, use_exact, battleship, case_sensitive, ignore_punctuation, diff_inverted_colors):
+def render_preview_template(template, typed_text, use_exact, battleship, case_sensitive, ignore_punctuation, blank_inverted_colors=None, diff_inverted_colors=None):
+    if blank_inverted_colors is None:
+        blank_inverted_colors = diff_inverted_colors if diff_inverted_colors is not None else False
     placeholders = re.findall(r'\[\[TARGET:(.*?)\]\]', template)
     if not placeholders:
         return template
@@ -646,7 +656,7 @@ def render_preview_template(template, typed_text, use_exact, battleship, case_se
     rendered = template
     for idx, target in enumerate(placeholders):
         u_part = u_parts[idx] if idx < len(u_parts) else ""
-        replacement = get_preview_replacement(u_part, target, use_exact, battleship, case_sensitive, ignore_punctuation, diff_inverted_colors)
+        replacement = get_preview_replacement(u_part, target, use_exact, battleship, case_sensitive, ignore_punctuation, blank_inverted_colors)
         rendered = rendered.replace(f"[[TARGET:{target}]]", replacement, 1)
         
     return rendered
@@ -672,6 +682,7 @@ def read_line(enable_arrows=False, initial_text="", save_esc=False, swap_arrows=
     case_sensitive = True
     ignore_punctuation = True
     diff_inverted_colors = False
+    blank_inverted_colors = False
     
     if preview_data:
         header_text = preview_data.get("header")
@@ -683,6 +694,7 @@ def read_line(enable_arrows=False, initial_text="", save_esc=False, swap_arrows=
         case_sensitive = bool(preview_data.get("case_sensitive_diff"))
         ignore_punctuation = bool(preview_data.get("ignore_punctuation"))
         diff_inverted_colors = bool(preview_data.get("diff_inverted_colors"))
+        blank_inverted_colors = bool(preview_data.get("blank_inverted_colors"))
 
     def draw():
         nonlocal drawn_cursor_pos, drawn_len
@@ -692,7 +704,7 @@ def read_line(enable_arrows=False, initial_text="", save_esc=False, swap_arrows=
         if preview_data and template:
             live_context = render_preview_template(
                 template, typed, use_exact, battleship,
-                case_sensitive, ignore_punctuation, diff_inverted_colors
+                case_sensitive, ignore_punctuation, blank_inverted_colors
             )
             con.write("\033[2J\033[H")
             con.write(header_text)

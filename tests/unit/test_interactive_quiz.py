@@ -2569,3 +2569,147 @@ def test_lua_inline_colored_diff(quiz_env):
     code, out, err = run_lua_eval(quiz_env, lua_code_inverted)
     assert code == 0, f"Lua run failed: {err}"
     assert "\033[7m\033[32ma\033[0m" in out
+
+
+def test_config_blank_and_diff_toggles(quiz_env):
+    """4.1 & 4.5 Test that blank_inverted_colors, show_diff_with_battleship and stale key are parsed correctly."""
+    config_path = quiz_env / "config.ini"
+    
+    # 1. Default check
+    config_path.write_text("[Leitner]\n", encoding="utf-8")
+    lua_code = """
+        local config = load_config("config.ini")
+        print("blank=" .. tostring(config.blank_inverted_colors))
+        print("show_diff=" .. tostring(config.show_diff_with_battleship))
+    """
+    code, out, err = run_lua_eval(quiz_env, lua_code)
+    assert code == 0, f"Lua run failed: {err}"
+    assert "blank=false" in out
+    assert "show_diff=true" in out
+
+    # 2. Explicit values & stale key check
+    config_path.write_text("[Leitner]\nblank_inverted_colors = true\nshow_diff_with_battleship = false\npreview_inverted_colors = true\n", encoding="utf-8")
+    code, out, err = run_lua_eval(quiz_env, lua_code)
+    assert code == 0, f"Lua run failed: {err}"
+    assert "blank=true" in out
+    assert "show_diff=false" in out
+
+
+def test_independent_blank_and_diff_inversion(quiz_env):
+    """4.2 Test that wildcard model and diff display model invert independently."""
+    # Case: blank_inverted_colors=true, diff_inverted_colors=false
+    lua_code = """
+        local revealed = mask_context(
+            "Ich gehe heute Hause.",
+            "Hause",
+            false, false, 0, 0, 0,
+            false, "Hax", true, true, nil, false,
+            true -- blank_inverted_colors
+        )
+        print("REVEALED:" .. revealed)
+        
+        local u_line, t_line = get_two_line_diff(
+            "Hax", "Hause", true, true,
+            false -- diff_inverted_colors
+        )
+        print("DIFF_U:" .. u_line)
+    """
+    code, out, err = run_lua_eval(quiz_env, lua_code)
+    assert code == 0, f"Lua run failed: {err}"
+    assert "\033[7m\033[32mH\033[0m" in out or "\033[7m\033[31mH\033[0m" in out
+    assert "\033[32mH\033[0m" in out
+
+
+def test_python_preview_blank_inversion():
+    """Test Python-side preview blank inversion independence."""
+    import input_helper
+    # If blank_inverted_colors=True, replacement is inverted
+    res_inv = input_helper.get_preview_replacement(
+        u_part="Ha",
+        target="Hause",
+        use_exact=True,
+        battleship=True,
+        case_sensitive=True,
+        ignore_punctuation=True,
+        blank_inverted_colors=True
+    )
+    assert "\033[7m\033[32mH\033[0m" in res_inv
+
+    # If blank_inverted_colors=False, replacement is bold
+    res_bold = input_helper.get_preview_replacement(
+        u_part="Ha",
+        target="Hause",
+        use_exact=True,
+        battleship=True,
+        case_sensitive=True,
+        ignore_punctuation=True,
+        blank_inverted_colors=False
+    )
+    assert "\033[32m\033[1mH\033[0m" in res_bold
+
+
+def test_lua_python_blank_coloring_parity(quiz_env):
+    """4.3 Test Lua/Python parity for blank coloring under matching blank_inverted_colors values."""
+    import input_helper
+    # Python side
+    py_res = input_helper.get_preview_replacement("Ha", "Hause", True, True, True, True, True)
+    
+    # Lua side
+    lua_code = """
+        local template = mask_context(
+            "Ich gehe heute nach Hause.",
+            "Hause",
+            true, false, 0, 0, 0,
+            nil, nil, true, true, nil,
+            true, -- preview_format
+            true -- blank_inverted_colors
+        )
+        print("LUA:" .. template)
+    """
+    code, out, err = run_lua_eval(quiz_env, lua_code)
+    assert code == 0, f"Lua run failed: {err}"
+    
+    rendered = input_helper.render_preview_template(
+        "Ich gehe heute nach [[TARGET:Hause]].",
+        "Ha", True, True, True, True, True
+    )
+    assert f"nach {py_res}." in rendered
+
+
+def test_show_diff_with_battleship_gating(quiz_env):
+    """4.4 Test show_diff_with_battleship toggle behavior under different battleship_feedback and show_diff_with_battleship values."""
+    config_path = quiz_env / "config.ini"
+    
+    # Setup card
+    focus_single_card(quiz_env, "20260303214721-text1.de.tsv", "Abend vorbei. Wir schlagen")
+    
+    # Scenario A: battleship_feedback = true, show_diff_with_battleship = false -> Diff should be absent
+    focus_single_card(quiz_env, "20260303214721-text1.de.tsv", "Abend vorbei. Wir schlagen")
+    config_path.write_text("[Leitner]\nbattleship_feedback = true\nshow_diff_with_battleship = false\n", encoding="utf-8")
+    code, out, err = run_quiz(quiz_env, ["20260303214721-text1.de.tsv"], ["Abend vorbei.", "/q"])
+    assert code == 0, f"Quiz run failed: {err}"
+    clean_out = strip_ansi(out)
+    assert "User:" not in clean_out
+    assert "Target:" not in clean_out
+    assert "Diff" not in clean_out
+
+    # Scenario B: battleship_feedback = true, show_diff_with_battleship = true -> Diff should be present
+    focus_single_card(quiz_env, "20260303214721-text1.de.tsv", "Abend vorbei. Wir schlagen")
+    config_path.write_text("[Leitner]\nbattleship_feedback = true\nshow_diff_with_battleship = true\n", encoding="utf-8")
+    code, out, err = run_quiz(quiz_env, ["20260303214721-text1.de.tsv"], ["Abend vorbei.", "/q"])
+    assert code == 0, f"Quiz run failed: {err}"
+    clean_out = strip_ansi(out)
+    assert "User:" in clean_out
+    assert "Target:" in clean_out
+    assert "Diff" in clean_out
+
+    # Scenario C: battleship_feedback = false, show_diff_with_battleship = false -> Diff should still be present because battleship is false
+    focus_single_card(quiz_env, "20260303214721-text1.de.tsv", "Abend vorbei. Wir schlagen")
+    config_path.write_text("[Leitner]\nbattleship_feedback = false\nshow_diff_with_battleship = false\n", encoding="utf-8")
+    code, out, err = run_quiz(quiz_env, ["20260303214721-text1.de.tsv"], ["Abend vorbei.", "/q"])
+    assert code == 0, f"Quiz run failed: {err}"
+    clean_out = strip_ansi(out)
+    assert "User:" in clean_out
+    assert "Target:" in clean_out
+    assert "Diff" in clean_out
+
