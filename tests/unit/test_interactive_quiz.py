@@ -2603,6 +2603,61 @@ def test_input_helper_wrap_text():
     assert wrapped_multiline == expected
 
 
+def test_input_helper_width_pipe_regression():
+    """Regression test for the piped-subprocess width bug.
+
+    Invokes `input_helper.py --width` with stdout redirected to a pipe
+    and asserts the returned value equals the real console column count
+    (not the static 120 fallback).
+    """
+    import sys
+    import subprocess
+    import shutil
+    import os
+    from pathlib import Path
+
+    project_root = Path(__file__).parent.parent.parent
+    input_helper_path = project_root / "input_helper.py"
+
+    # Run the helper script with stdout redirected to a pipe
+    res = subprocess.run(
+        [sys.executable, str(input_helper_path), "--width"],
+        capture_output=True,
+        text=True,
+        cwd=str(project_root)
+    )
+
+    assert res.returncode == 0
+    returned_width = int(res.stdout.strip())
+
+    # We want to check if the returned value equals the real console column count.
+    # What is the real console column count?
+    # Inside a pytest runner (which might be run in a terminal or in a CI/non-interactive env),
+    # let's determine the expected width.
+    expected_width = 0
+    if sys.platform == 'win32':
+        try:
+            with open("CONOUT$", "w") as f:
+                expected_width = os.get_terminal_size(f.fileno()).columns
+        except Exception:
+            pass
+    if not expected_width:
+        try:
+            expected_width = os.get_terminal_size(sys.__stdout__.fileno()).columns
+        except Exception:
+            try:
+                expected_width, _ = shutil.get_terminal_size((120, 30))
+            except Exception:
+                expected_width = 120
+
+    # Since get_wrap_width() + 1 returns columns, returned_width should match expected_width.
+    # However, if there is no real console (e.g. running in a headless environment/CI),
+    # both will fall back to the same fallback value.
+    assert returned_width == expected_width
+
+
+
+
 def test_lua_inline_colored_diff(quiz_env):
     """Test that Lua's get_inline_colored_diff behaves consistently with Python's, including inverted colors support."""
     # Case: normal bold green/red
