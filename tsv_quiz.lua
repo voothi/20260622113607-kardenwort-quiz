@@ -1684,8 +1684,13 @@ local function mask_context(
 		local r1, r2
 		if is_correct ~= nil then
 			if is_correct then
-				r1 = bold(green(p1))
-				r2 = bold(green(p2))
+				if diff_inverted_colors then
+					r1 = invert(green(p1))
+					r2 = invert(green(p2))
+				else
+					r1 = bold(green(p1))
+					r2 = bold(green(p2))
+				end
 			else
 				local user_p1, user_p2 = "", ""
 				if user_input then
@@ -1772,8 +1777,13 @@ local function mask_context(
 					local final_r2 = r2
 					if is_correct ~= nil then
 						if is_correct then
-							final_r1 = bold(green(match.m1))
-							final_r2 = bold(green(match.m2))
+							if diff_inverted_colors then
+								final_r1 = invert(green(match.m1))
+								final_r2 = invert(green(match.m2))
+							else
+								final_r1 = bold(green(match.m1))
+								final_r2 = bold(green(match.m2))
+							end
 						else
 							final_r1 = r1
 							final_r2 = r2
@@ -1805,8 +1815,13 @@ local function mask_context(
 				local final_r2 = r2
 				if is_correct ~= nil then
 					if is_correct then
-						final_r1 = bold(green(best_match.m1))
-						final_r2 = bold(green(best_match.m2))
+						if diff_inverted_colors then
+							final_r1 = invert(green(best_match.m1))
+							final_r2 = invert(green(best_match.m2))
+						else
+							final_r1 = bold(green(best_match.m1))
+							final_r2 = bold(green(best_match.m2))
+						end
 					else
 						final_r1 = r1
 						final_r2 = r2
@@ -1845,7 +1860,11 @@ local function mask_context(
 			if preview_format then
 				table.insert(rep_parts, "[[TARGET:" .. part .. "]]")
 			elseif is_correct then
-				table.insert(rep_parts, bold(green(part)))
+				if diff_inverted_colors then
+					table.insert(rep_parts, invert(green(part)))
+				else
+					table.insert(rep_parts, bold(green(part)))
+				end
 			elseif has_hint and use_exact then
 				table.insert(rep_parts, bold(yellow(get_hint_masked_word(part, hint_n, hint_k, hint_m))))
 			else
@@ -1885,7 +1904,11 @@ local function mask_context(
 						end
 						local m_rep_parts = {}
 						for _, part in ipairs(m_parts) do
-							table.insert(m_rep_parts, bold(green(part)))
+							if diff_inverted_colors then
+								table.insert(m_rep_parts, invert(green(part)))
+							else
+								table.insert(m_rep_parts, bold(green(part)))
+							end
 						end
 						rep = table.concat(m_rep_parts, " ")
 					else
