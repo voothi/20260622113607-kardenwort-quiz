@@ -2029,7 +2029,9 @@ local function read_line_with_esc(config, initial_text, save_esc, use_arrows)
 end
 
 -- 3. Run the interactive CLI quiz
--- Helper to create a repeat entry copy
+-- Helper to create a repeat entry copy.
+-- NOTE: fields like raw_columns and raw_rows are intentionally shared by reference with the original card
+-- to support in-memory progress synchronization (spaced repetition boxes/due dates) back to the master list.
 local function make_repeat_entry(target_card, target_idx, study_queue)
 	local repeat_entry = {}
 	for k, v in pairs(target_card) do
@@ -2041,14 +2043,17 @@ local function make_repeat_entry(target_card, target_idx, study_queue)
 
 	if target_card.is_repeat then
 		repeat_entry.original_question_num = target_card.original_question_num
-	else
+	elseif study_queue then
 		local count = 0
 		for idx = 1, target_idx do
-			if not study_queue[idx].is_repeat then
+			local card = study_queue[idx]
+			if card and not card.is_repeat then
 				count = count + 1
 			end
 		end
 		repeat_entry.original_question_num = count
+	else
+		repeat_entry.original_question_num = 1
 	end
 	return repeat_entry
 end
@@ -2065,6 +2070,10 @@ local function run_quiz(study_queue, config)
 
 	for i, entry in ipairs(study_queue) do
 		console_width = get_console_width()
+		if entry.original_card then
+			entry.box = entry.original_card.box
+			entry.due = entry.original_card.due
+		end
 		if not entry.is_repeat or config.repeat_counts_in_stats then
 			question_num = question_num + 1
 		end
@@ -2082,6 +2091,7 @@ local function run_quiz(study_queue, config)
 			for k, v in pairs(entry) do
 				deferred_entry[k] = v
 			end
+			deferred_entry.original_card = entry.original_card or entry
 			table.insert(study_queue, deferred_entry)
 			-- We no longer decrement question_num here so that it visibly advances
 			-- even when skipping, up to a maximum of 'total'.

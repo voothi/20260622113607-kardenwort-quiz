@@ -2365,5 +2365,7 @@ def test_sync_command_stats_and_header_repeat_true(quiz_env):
     )
     assert code == 0
     clean_out = strip_ansi(out)
-    # The total should increment, so it is "You scored 2 out of 2" (first card + synced card)
     assert "You scored 2 out of 2" in clean_out
+    entry = read_tsv_entry(tsv_file, "properly")
+    assert entry is not None
+    assert entry["LeitnerBox"] == "3"
