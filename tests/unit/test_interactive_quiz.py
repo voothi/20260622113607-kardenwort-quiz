@@ -1369,6 +1369,31 @@ def test_command_mode_single_key(quiz_env):
     assert "Diff" in clean_out
 
 
+def test_command_mode_single_key_repeat_error(quiz_env):
+    """Test that repeat error on first card in single-key command mode prints a newline before the error."""
+    config_path = quiz_env / "config.ini"
+    content = config_path.read_text(encoding="utf-8")
+    content += "\ncommand_mode = true\nstart_in_command_mode = true\ncommand_mode_single_key = true\nsingle_card_mode = true\n"
+    config_path.write_text(content, encoding="utf-8", newline="\n")
+
+    focus_single_card(quiz_env, "20260604184114-microsoft-just-shocked-the.en.tsv", "properly")
+
+    # Start in Command mode.
+    # 1. Send "a" (repeat previous card).
+    #    Since there is no previous card, it prints the error and prompts "Press 'Enter' or 'Space' to retry..."
+    # 2. Send " " (Space) to retry.
+    # 3. Send "/q" to quit.
+    code, out, err = run_quiz(
+        quiz_env,
+        ["20260604184114-microsoft-just-shocked-the.en.tsv"],
+        ["a", " ", "/q"]
+    )
+    assert code == 0
+    clean_out = strip_ansi(out)
+    # The warning should be printed on a new line after the Command prompt.
+    assert "Command (press '?' for help)... \nThere is no previous card to repeat." in clean_out
+
+
 def test_arrow_hints_config_parameters(quiz_env):
     """Test that arrow hints configurations are successfully parsed and quiz runs with them."""
     config_path = quiz_env / "config.ini"

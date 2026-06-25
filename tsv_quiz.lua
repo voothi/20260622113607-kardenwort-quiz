@@ -2580,6 +2580,9 @@ local function run_quiz(study_queue, config, start_sync_zid, start_sync_time)
 
 							break
 						else
+							if config.command_mode_single_key then
+								print()
+							end
 							print(bold(red("There is no previous card to repeat.")))
 							if config.single_card_mode then
 								press_any_key("Press 'Enter' or 'Space' to retry... ", { "\r", "\n", " " })
@@ -2595,6 +2598,9 @@ local function run_quiz(study_queue, config, start_sync_zid, start_sync_time)
 						sync_forward_to_mpv(entry, config)
 					elseif lower_cmd:match("^sync%s+") or lower_cmd == "sync" then
 						if not config.mpv_integration then
+							if config.command_mode_single_key then
+								print()
+							end
 							print(bold(red("MPV Integration is disabled in config.ini.")))
 						else
 							local zid, timestamp_str = cmd_body:match("^sync%s+(%d+)%s+([%d%.]+)")
@@ -2627,11 +2633,17 @@ local function run_quiz(study_queue, config, start_sync_zid, start_sync_time)
 									defer_current_card()
 									break
 								else
+									if config.command_mode_single_key then
+										print()
+									end
 									print(bold(red("Could not find matching card for ZID: ")) .. zid)
 								end
 							end
 						end
 					else
+						if config.command_mode_single_key then
+							print()
+						end
 						print(bold(red("Unknown command: ")) .. trimmed_input .. ". Type '/?' for help.\n")
 						if config.single_card_mode then
 							press_any_key("Press 'Enter' or 'Space' to retry... ", { "\r", "\n", " " })
