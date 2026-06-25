@@ -2139,7 +2139,7 @@ local function run_quiz(study_queue, config)
 				)
 			end
 			print(wrap_text(masked_context))
-			if current_hint then
+			if current_hint and not config.exact_length_mask then
 				print(current_hint)
 			end
 			local user_input = ""
