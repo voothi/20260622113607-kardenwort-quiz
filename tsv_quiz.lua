@@ -328,6 +328,7 @@ local function load_config(filename)
 		exact_length_mask = false,
 		typing_preview = false,
 		battleship_feedback = false,
+		show_diff_with_battleship = true,
 		case_sensitive_diff = true,
 		ignore_punctuation = true,
 		diff_inverted_colors = false,
@@ -454,6 +455,8 @@ local function load_config(filename)
 								config.typing_preview = (val == "true" or val == "1")
 							elseif key == "battleship_feedback" then
 								config.battleship_feedback = (val == "true" or val == "1")
+							elseif key == "show_diff_with_battleship" then
+								config.show_diff_with_battleship = (val == "true" or val == "1")
 							elseif key == "case_sensitive_diff" then
 								config.case_sensitive_diff = (val == "true" or val == "1")
 							elseif key == "ignore_punctuation" then
@@ -2586,6 +2589,12 @@ local function run_quiz(study_queue, config)
 					end
 				end
 
+				local is_battleship_active = config.typing_preview and config.single_card_mode and config.battleship_feedback
+				local revealed_is_correct = is_correct
+				if is_battleship_active and not config.show_diff_with_battleship then
+					revealed_is_correct = true
+				end
+
 				local revealed_context = mask_context(
 					entry.context,
 					target_word,
@@ -2594,7 +2603,7 @@ local function run_quiz(study_queue, config)
 					0,
 					0,
 					0,
-					is_correct,
+					revealed_is_correct,
 					trimmed_input,
 					config.case_sensitive_diff,
 					config.ignore_punctuation,
@@ -2604,15 +2613,17 @@ local function run_quiz(study_queue, config)
 				)
 				print(wrap_text(revealed_context))
 
-				print()
-				local u_line, t_line = get_two_line_diff(
-					trimmed_input,
-					target_word,
-					config.case_sensitive_diff,
-					config.ignore_punctuation,
-					config.diff_inverted_colors
-				)
-				print_framed_diff(u_line, t_line)
+				if not (is_battleship_active and not config.show_diff_with_battleship) then
+					print()
+					local u_line, t_line = get_two_line_diff(
+						trimmed_input,
+						target_word,
+						config.case_sensitive_diff,
+						config.ignore_punctuation,
+						config.diff_inverted_colors
+					)
+					print_framed_diff(u_line, t_line)
+				end
 				print()
 
 				if entry.is_repeat and not config.repeat_counts_in_stats then

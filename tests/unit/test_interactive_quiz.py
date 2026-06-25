@@ -2572,3 +2572,56 @@ def test_lua_inline_colored_diff(quiz_env):
     code, out, err = run_lua_eval(quiz_env, lua_code_inverted)
     assert code == 0, f"Lua run failed: {err}"
     assert "\033[7m\033[32ma\033[0m" in out
+
+
+def test_config_show_diff_with_battleship(quiz_env):
+    """Test that show_diff_with_battleship config option is parsed correctly and defaults to true."""
+    config_path = quiz_env / "config.ini"
+    
+    # 1. Test defaults
+    config_path.write_text("[Leitner]\n", encoding="utf-8")
+    lua_code = """
+        local config = load_config("config.ini")
+        print("show_diff_with_battleship=" .. tostring(config.show_diff_with_battleship))
+    """
+    code, out, err = run_lua_eval(quiz_env, lua_code)
+    assert code == 0, f"Lua run failed: {err}"
+    assert "show_diff_with_battleship=true" in out
+
+    # 2. Test explicit false values
+    config_path.write_text("[Leitner]\nshow_diff_with_battleship = false\n", encoding="utf-8")
+    code, out, err = run_lua_eval(quiz_env, lua_code)
+    assert code == 0, f"Lua run failed: {err}"
+    assert "show_diff_with_battleship=false" in out
+
+
+def test_suppress_diff_with_battleship(quiz_env):
+    """Test that when show_diff_with_battleship = false and battleship feedback is active:
+    1. The back-side sentence displays the target word in bold green (instead of a diff representation).
+    2. The two-line character diff is completely suppressed/hidden.
+    """
+    focus_single_card(quiz_env, "20260604184114-microsoft-just-shocked-the.en.tsv", "properly")
+    
+    # Configure: typing_preview=true, single_card_mode=true, battleship_feedback=true, show_diff_with_battleship=false
+    config_path = quiz_env / "config.ini"
+    config_path.write_text(
+        "[Leitner]\n"
+        "typing_preview = true\n"
+        "single_card_mode = true\n"
+        "battleship_feedback = true\n"
+        "show_diff_with_battleship = false\n",
+        encoding="utf-8"
+    )
+    
+    # Submit an incorrect answer: "properle" instead of "properly"
+    code, out, err = run_quiz(quiz_env, ["20260604184114-microsoft-just-shocked-the.en.tsv"], ["properle", "/q"])
+    
+    assert code == 0
+    
+    # 1. The output should NOT contain the two-line diff frame/content of properle vs properly.
+    clean_out = strip_ansi(out)
+    assert "properle" not in clean_out
+    
+    # 2. The back-side sentence displays the target word with the green color.
+    assert "\x1b[1m\x1b[32mproperly\x1b[0m" in out
+
