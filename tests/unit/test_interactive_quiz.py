@@ -2713,3 +2713,84 @@ def test_show_diff_with_battleship_gating(quiz_env):
     assert "Target:" in clean_out
     assert "Diff" in clean_out
 
+
+def test_blank_color_customization(quiz_env):
+    """5.5 Test that blank_color is parsed correctly and behaves as expected in Lua and Python."""
+    config_path = quiz_env / "config.ini"
+
+    # 1. Default config check (blank_color should default to "yellow")
+    config_path.write_text("[Leitner]\n", encoding="utf-8")
+    lua_code_default = """
+        local config = load_config("config.ini")
+        print("blank_color=" .. tostring(config.blank_color))
+    """
+    code, out, err = run_lua_eval(quiz_env, lua_code_default)
+    assert code == 0, f"Lua run failed: {err}"
+    assert "blank_color=yellow" in out
+
+    # 2. Custom config check (blank_color = standard)
+    config_path.write_text("[Leitner]\nblank_color = standard\n", encoding="utf-8")
+    code, out, err = run_lua_eval(quiz_env, lua_code_default)
+    assert code == 0, f"Lua run failed: {err}"
+    assert "blank_color=standard" in out
+
+    # 3. Test Lua mask_context formatting with blank_color = "standard" (should not have color code 33/yellow)
+    lua_code_standard = """
+        local template = mask_context(
+            "Ich gehe heute nach Hause.",
+            "Hause",
+            false, false, 0, 0, 0,
+            nil, nil, true, true, nil,
+            true, -- preview_format
+            false, -- blank_inverted_colors
+            "standard"
+        )
+        print("LUA_STANDARD:" .. template)
+    """
+    code, out, err = run_lua_eval(quiz_env, lua_code_standard)
+    assert code == 0, f"Lua run failed: {err}"
+    # Standard format: bold text only, no color (normally bold has \033[1m ... \033[0m)
+    assert "\033[33m" not in out
+    assert "\033[1m" in out
+
+    # 4. Test Python format_wildcard / get_preview_replacement with blank_color = "standard"
+    import input_helper
+    res_std = input_helper.get_preview_replacement(
+        u_part="Ha",
+        target="Hause",
+        use_exact=True,
+        battleship=True,
+        case_sensitive=True,
+        ignore_punctuation=True,
+        blank_inverted_colors=False,
+        blank_color="standard"
+    )
+    # If blank_color="standard", the wildcard fill ("_") should not contain yellow color code "33".
+    assert "\033[33m" not in res_std
+    assert "\033[1m" in res_std
+
+    # 5. Parity check with blank_color = "standard"
+    py_res = input_helper.get_preview_replacement("Ha", "Hause", True, True, True, True, True, blank_color="standard")
+    # Lua side
+    lua_code_parity = """
+        local template = mask_context(
+            "Ich gehe heute nach Hause.",
+            "Hause",
+            true, false, 0, 0, 0,
+            nil, nil, true, true, nil,
+            true, -- preview_format
+            true, -- blank_inverted_colors
+            "standard"
+        )
+        print("LUA:" .. template)
+    """
+    code, out, err = run_lua_eval(quiz_env, lua_code_parity)
+    assert code == 0, f"Lua run failed: {err}"
+    
+    rendered = input_helper.render_preview_template(
+        "Ich gehe heute nach [[TARGET:Hause]].",
+        "Ha", True, True, True, True, True, blank_color="standard"
+    )
+    assert f"nach {py_res}." in rendered
+
+

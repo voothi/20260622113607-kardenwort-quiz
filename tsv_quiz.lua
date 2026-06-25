@@ -83,7 +83,10 @@ local function invert(text)
 	return c("7", text)
 end
 
-local function format_wildcard(color_fn, text, blank_inverted_colors)
+local function format_wildcard(color_fn, text, blank_inverted_colors, blank_color)
+	if blank_color == "standard" then
+		color_fn = function(t) return t end
+	end
 	if blank_inverted_colors then
 		return invert(color_fn(text))
 	else
@@ -340,6 +343,7 @@ local function load_config(filename)
 		ignore_punctuation = true,
 		diff_inverted_colors = false,
 		blank_inverted_colors = false,
+		blank_color = "yellow",
 		show_diff_with_battleship = true,
 		anki_grading = false,
 		repeat_counts_in_stats = false,
@@ -471,6 +475,8 @@ local function load_config(filename)
 								config.diff_inverted_colors = (val == "true" or val == "1")
 							elseif key == "blank_inverted_colors" then
 								config.blank_inverted_colors = (val == "true" or val == "1")
+							elseif key == "blank_color" then
+								config.blank_color = val:lower()
 							elseif key == "show_diff_with_battleship" then
 								config.show_diff_with_battleship = (val == "true" or val == "1")
 							elseif key == "preview_inverted_colors" then
@@ -1493,9 +1499,15 @@ local function mask_context(
 	ignore_punctuation,
 	source_index,
 	preview_format,
-	blank_inverted_colors
+	blank_inverted_colors,
+	blank_color
 )
 	local p1, p2 = target_word:match("^(.-)%s*%.%.%.%s*(.-)$")
+
+	local original_format_wildcard = format_wildcard
+	local function format_wildcard(color_fn, text, blank_inverted_colors_param)
+		return original_format_wildcard(color_fn, text, blank_inverted_colors_param, blank_color)
+	end
 
 	local function escape_pattern(text)
 		return text:gsub("([^%w])", "%%%1")
@@ -2223,7 +2235,8 @@ local function run_quiz(study_queue, config)
 				config.ignore_punctuation,
 				entry.source_index,
 				false,
-				config.blank_inverted_colors
+				config.blank_inverted_colors,
+				config.blank_color
 			)
 
 			if config.single_card_mode then
@@ -2360,7 +2373,8 @@ local function run_quiz(study_queue, config)
 						config.ignore_punctuation,
 						entry.source_index,
 						true, -- preview_format
-						config.blank_inverted_colors
+						config.blank_inverted_colors,
+						config.blank_color
 					)
 					local payload = {
 						header = get_card_header(config, question_num, total, entry),
@@ -2372,7 +2386,8 @@ local function run_quiz(study_queue, config)
 						case_sensitive_diff = config.case_sensitive_diff,
 						ignore_punctuation = config.ignore_punctuation,
 						diff_inverted_colors = config.diff_inverted_colors,
-						blank_inverted_colors = config.blank_inverted_colors
+						blank_inverted_colors = config.blank_inverted_colors,
+						blank_color = config.blank_color
 					}
 					preview_data = to_hex(json_encode(payload))
 				end
@@ -2614,7 +2629,8 @@ local function run_quiz(study_queue, config)
 					config.ignore_punctuation,
 					entry.source_index,
 					false,
-					config.blank_inverted_colors
+					config.blank_inverted_colors,
+					config.blank_color
 				)
 				print(wrap_text(revealed_context))
 
