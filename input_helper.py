@@ -704,10 +704,11 @@ def read_line(enable_arrows=False, initial_text="", save_esc=False, swap_arrows=
         nonlocal drawn_cursor_pos, drawn_len
         
         typed = "".join(chars)
+        preview_typed = "" if typed.startswith("/") else typed
         
         if preview_data and template:
             live_context = render_preview_template(
-                template, typed, use_exact, battleship,
+                template, preview_typed, use_exact, battleship,
                 case_sensitive, ignore_punctuation, blank_inverted_colors,
                 blank_color=blank_color
             )

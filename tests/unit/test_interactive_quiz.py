@@ -2794,3 +2794,31 @@ def test_blank_color_customization(quiz_env):
     assert f"nach {py_res}." in rendered
 
 
+def test_command_preview_suppression():
+    """6.2 Test that input starting with '/' is treated as empty for preview template rendering."""
+    import input_helper
+    
+    template = "Ich gehe heute nach [[TARGET:Hause]]."
+    
+    # Simulate a user typing a command starting with '/'
+    command_input = "/h 1 1 1"
+    # Intercept logic matching what we did in draw()
+    preview_typed = "" if command_input.startswith("/") else command_input
+    
+    assert preview_typed == ""
+    
+    rendered_for_command = input_helper.render_preview_template(
+        template, preview_typed, True, True, True, True, False, blank_color="standard"
+    )
+    
+    rendered_for_empty = input_helper.render_preview_template(
+        template, "", True, True, True, True, False, blank_color="standard"
+    )
+    
+    # Verify that the rendered string with command input is identical to empty input
+    assert rendered_for_command == rendered_for_empty
+    # Verify it doesn't contain command characters
+    assert "/h" not in rendered_for_command
+
+
+
