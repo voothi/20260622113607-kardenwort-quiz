@@ -2365,7 +2365,10 @@ def test_sync_command_stats_and_header_repeat_true(quiz_env):
     )
     assert code == 0
     clean_out = strip_ansi(out)
+    # The total should increment, so it is "You scored 2 out of 2" (first card + synced card)
     assert "You scored 2 out of 2" in clean_out
+    # Verify that the card's Leitner Box in-memory progress was successfully promoted and synced
     entry = read_tsv_entry(tsv_file, "properly")
     assert entry is not None
+    # Synced card was graded correct (1 -> 2), then deferred card was graded correct (2 -> 3)
     assert entry["LeitnerBox"] == "3"
