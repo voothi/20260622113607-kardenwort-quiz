@@ -425,6 +425,14 @@ def get_key_event():
         if record.EventType == 0x0001:  # KEY_EVENT
             if record.KeyEvent.bKeyDown:
                 return record.KeyEvent
+        elif record.EventType == 0x0004:  # WINDOW_BUFFER_SIZE_EVENT
+            mock_key = KEY_EVENT_RECORD()
+            mock_key.bKeyDown = True
+            mock_key.wVirtualKeyCode = 0xFE  # Special custom VK for resize
+            mock_key.wVirtualScanCode = 0
+            mock_key.UnicodeChar = '\x00'
+            mock_key.dwControlKeyState = 0
+            return mock_key
 
 def read_key(enable_arrows=False, swap_arrows=False):
     """Read a single key, print it, exit."""
@@ -441,6 +449,9 @@ def read_key(enable_arrows=False, swap_arrows=False):
                     print(f"/{msg}", end="")
             except Exception:
                 pass
+            return
+        elif e.wVirtualKeyCode == 0xFE:  # Special custom VK for resize
+            print("/resize", end="")
             return
         # Return if it's a character or significant key
         if e.UnicodeChar != '\x00':
@@ -892,6 +903,10 @@ def read_line(enable_arrows=False, initial_text="", save_esc=False, swap_arrows=
         is_shift = bool(ctrl & SHIFT_PRESSED)
         is_ctrl = bool(ctrl & (LEFT_CTRL_PRESSED | RIGHT_CTRL_PRESSED))
         
+        if vk == 0xFE:  # Special custom VK for resize
+            draw()
+            continue
+
         if vk == 0xFF:
             try:
                 msg = sync_event_queue.get_nowait()

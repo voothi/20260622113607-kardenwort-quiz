@@ -300,7 +300,9 @@ local function press_any_key(prompt, allowed_keys, use_arrows)
 		end
 
 		if key:sub(1, 1) == "/" then
-			print()
+			if key ~= "/resize" then
+				print()
+			end
 			return key
 		end
 
@@ -312,7 +314,9 @@ local function press_any_key(prompt, allowed_keys, use_arrows)
 		local lkey = key:lower()
 		for _, v in ipairs(allowed_keys) do
 			if key == v or lkey == v then
-				print()
+				if key ~= "\x1b" and key ~= "\27" then
+					print()
+				end
 				return key
 			end
 		end
@@ -2217,6 +2221,7 @@ local function run_quiz(study_queue, config)
 		local is_command_mode = config.start_in_command_mode and config.command_mode
 		local saved_input = ""
 		local saved_command_input = ""
+		local redraw_needed = true
 
 		local function defer_current_card()
 			local deferred_entry = {}
@@ -2249,34 +2254,39 @@ local function run_quiz(study_queue, config)
 				config.blank_color
 			)
 
-			if config.single_card_mode then
-				clear_screen()
-			end
+			local cur_redraw = redraw_needed
+			redraw_needed = true
 
-			print_header(config)
-
-			local basename = entry.filename:match("([^/\\]+)$") or entry.filename
-			if entry.is_repeat and not config.repeat_counts_in_stats then
-				local header_prefix
-				if entry.original_question_num then
-					header_prefix = string.format("Practice Repeat %d/%d:", entry.original_question_num, total)
-				else
-					header_prefix = "Practice Repeat (Sync):"
+			if cur_redraw then
+				if config.single_card_mode then
+					clear_screen()
 				end
-				print(bold(cyan(header_prefix)) .. dim(string.format(" [File: %s | Box %d]", basename, entry.box)))
-			else
-				local cycle = math.ceil(question_num / total)
-				local disp_num = ((question_num - 1) % total) + 1
-				local cycle_str = cycle > 1 and string.format(" (Cycle %d)", cycle) or ""
-				local repeat_str = entry.is_repeat and " (Repeat)" or ""
-				print(
-					bold(cyan(string.format("Question %d/%d%s%s:", disp_num, total, cycle_str, repeat_str)))
-						.. dim(string.format(" [File: %s | Box %d]", basename, entry.box))
-				)
-			end
-			print(wrap_text(masked_context))
-			if current_hint and not config.exact_length_mask then
-				print(current_hint)
+
+				print_header(config)
+
+				local basename = entry.filename:match("([^/\\]+)$") or entry.filename
+				if entry.is_repeat and not config.repeat_counts_in_stats then
+					local header_prefix
+					if entry.original_question_num then
+						header_prefix = string.format("Practice Repeat %d/%d:", entry.original_question_num, total)
+					else
+						header_prefix = "Practice Repeat (Sync):"
+					end
+					print(bold(cyan(header_prefix)) .. dim(string.format(" [File: %s | Box %d]", basename, entry.box)))
+				else
+					local cycle = math.ceil(question_num / total)
+					local disp_num = ((question_num - 1) % total) + 1
+					local cycle_str = cycle > 1 and string.format(" (Cycle %d)", cycle) or ""
+					local repeat_str = entry.is_repeat and " (Repeat)" or ""
+					print(
+						bold(cyan(string.format("Question %d/%d%s%s:", disp_num, total, cycle_str, repeat_str)))
+							.. dim(string.format(" [File: %s | Box %d]", basename, entry.box))
+					)
+				end
+				print(wrap_text(masked_context))
+				if current_hint and not config.exact_length_mask then
+					print(current_hint)
+				end
 			end
 			local user_input = ""
 			local trimmed_input = ""
@@ -2297,10 +2307,16 @@ local function run_quiz(study_queue, config)
 					elseif lkey == "\r" or lkey == "\n" or lkey == " " then
 						switch_mode = true
 						is_command_mode = false
+						if config.single_card_mode and config.typing_preview then
+							redraw_needed = false
+						end
 					elseif lkey == "\x1b" then
 						if config.command_mode_esc_toggles then
 							is_command_mode = false
 							switch_mode = true
+							if config.single_card_mode and config.typing_preview then
+								redraw_needed = false
+							end
 						else
 							trimmed_input = "/d"
 						end
@@ -2401,8 +2417,10 @@ local function run_quiz(study_queue, config)
 					}
 					preview_data = to_hex(json_encode(payload))
 				end
-				if not preview_data or package.config:sub(1, 1) ~= "\\" or config.single_card_mode then
-					io.write(bold("Answer ") .. dim("(type '/?' for help): "))
+				if cur_redraw then
+					if not preview_data or package.config:sub(1, 1) ~= "\\" or config.single_card_mode then
+						io.write(bold("Answer ") .. dim("(type '/?' for help): "))
+					end
 				end
 				user_input = read_line_with_esc(config, saved_input, config.command_mode_save_input, config.answer_mode_arrow_hints, preview_data)
 				if not user_input then
@@ -2444,6 +2462,8 @@ local function run_quiz(study_queue, config)
 					if config.single_card_mode then
 						press_any_key("Press 'Enter' or 'Space' to return to quiz... ", { "\r", "\n", " " })
 					end
+				elseif lower_cmd == "resize" then
+					-- Do nothing, just loop again to redraw with updated console width
 				else
 					local function generate_hint_string(target, n, k, m)
 						local len = utf8_len(target)
