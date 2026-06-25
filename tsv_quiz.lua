@@ -2401,7 +2401,7 @@ local function run_quiz(study_queue, config)
 					}
 					preview_data = to_hex(json_encode(payload))
 				end
-				if not preview_data or package.config:sub(1, 1) ~= "\\" then
+				if not preview_data or package.config:sub(1, 1) ~= "\\" or config.single_card_mode then
 					io.write(bold("Answer ") .. dim("(type '/?' for help): "))
 				end
 				user_input = read_line_with_esc(config, saved_input, config.command_mode_save_input, config.answer_mode_arrow_hints, preview_data)
