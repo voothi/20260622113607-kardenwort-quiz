@@ -2240,12 +2240,12 @@ def test_in_memory_progress_syncing(quiz_env):
     tsv_file.write_text("\n".join(new_lines) + "\n", encoding="utf-8", newline="\n")
 
     # Sequence of answers:
-    # 1. Front Card 1: "properly" (promoted 1 -> 2)
-    # 2. Front Card 2: "/a" (repeats Card 1, R1. R1 starts at 2)
-    # 3. Front R1: "properly" (promoted 2 -> 3, syncs to Card 1 in memory)
-    # 4. Front Card 2: "/a" (repeats Card 1, R2. R2 starts at 3 in memory!)
-    # 5. Front R2: "properly" (promoted 3 -> 4, syncs to Card 1 in memory)
-    # 6. Front Card 2: "/q" (quit)
+    # 1. Front Card 1 ("properly"): answer "properly" (promoted 1 -> 2)
+    # 2. Front Card 2 ("meant"): "/a" (repeats previous card Card 1, spawning R1. R1 starts at 2)
+    # 3. Front R1 ("properly"): answer "properly" (promoted 2 -> 3, syncs back to Card 1 in memory)
+    # 4. Front Card 2 ("meant"): "/a" (repeats previous card R1, spawning R2. R2 starts at 3 in memory!)
+    # 5. Front R2 ("properly"): answer "properly" (promoted 3 -> 4, syncs back to Card 1 in memory)
+    # 6. Front Card 2 ("meant"): "/q" (quit)
     code, out, err = run_quiz(
         quiz_env,
         ["20260604184114-microsoft-just-shocked-the.en.tsv"],

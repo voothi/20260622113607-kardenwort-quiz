@@ -1980,8 +1980,10 @@ local function update_and_save_progress(entry, is_correct, config)
 		entry.original_card.box = new_box
 		entry.original_card.due = new_due
 		if entry.original_card.raw_columns then
-			entry.original_card.raw_columns[entry.box_idx] = tostring(new_box)
-			entry.original_card.raw_columns[entry.due_idx] = tostring(new_due)
+			local orig_box_idx = entry.original_card.box_idx or entry.box_idx
+			local orig_due_idx = entry.original_card.due_idx or entry.due_idx
+			entry.original_card.raw_columns[orig_box_idx] = tostring(new_box)
+			entry.original_card.raw_columns[orig_due_idx] = tostring(new_due)
 		end
 	end
 
