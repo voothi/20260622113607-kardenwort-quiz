@@ -94,8 +94,14 @@ def focus_single_card(quiz_env, tsv_name, target_word):
     tsv_path.write_text("\n".join(new_lines) + "\n", encoding="utf-8", newline="\n")
 
 def run_quiz(env_dir, args, inputs, env=None):
+    import os
     cmd = ["lua", "tsv_quiz.lua"] + args
     
+    # Ensure COLUMNS is set in the environment so console wrapping is consistent
+    actual_env = os.environ.copy() if env is None else env.copy()
+    if "COLUMNS" not in actual_env:
+        actual_env["COLUMNS"] = "120"
+        
     # Run the process
     process = subprocess.Popen(
         cmd,
@@ -105,7 +111,7 @@ def run_quiz(env_dir, args, inputs, env=None):
         stderr=subprocess.PIPE,
         text=True,
         encoding="utf-8",
-        env=env
+        env=actual_env
     )
     
     # Provide inputs and get output

@@ -586,12 +586,19 @@ def wrap_text(text, max_width):
 
 def get_wrap_width():
     columns = 0
-    if sys.platform == 'win32':
+    env_cols = os.environ.get("COLUMNS")
+    if env_cols:
         try:
-            with open("CONOUT$", "w") as f:
-                columns = os.get_terminal_size(f.fileno()).columns
-        except Exception:
+            columns = int(env_cols)
+        except ValueError:
             pass
+    if not columns:
+        if sys.platform == 'win32':
+            try:
+                with open("CONOUT$", "w") as f:
+                    columns = os.get_terminal_size(f.fileno()).columns
+            except Exception:
+                pass
     if not columns:
         try:
             columns = os.get_terminal_size(sys.__stdout__.fileno()).columns
