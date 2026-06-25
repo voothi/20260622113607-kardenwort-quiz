@@ -2349,7 +2349,9 @@ local function run_quiz(study_queue, config)
 					end
 				else
 					local save_command = config.command_mode_save_command
-					io.write(bold("Command ") .. dim("(type '?' for help): "))
+					if cur_redraw then
+						io.write(bold("Command ") .. dim("(type '?' for help): "))
+					end
 					user_input = read_line_with_esc(config, saved_command_input, save_command, config.command_mode_arrow_hints)
 					if not user_input then
 						print(magenta("\nExiting quiz early."))
@@ -2370,10 +2372,16 @@ local function run_quiz(study_queue, config)
 					if trimmed_input == "" then
 						is_command_mode = false
 						switch_mode = true
+						if config.single_card_mode and config.typing_preview then
+							redraw_needed = false
+						end
 					elseif trimmed_input == "/d" then
 						if config.command_mode_esc_toggles then
 							is_command_mode = false
 							switch_mode = true
+							if config.single_card_mode and config.typing_preview then
+								redraw_needed = false
+							end
 						elseif esc_triggered then
 							-- esc_toggles=false: Esc in Command mode skips the card (same as /d).
 							-- Fall through so /d is dispatched by the command handler below.

@@ -3071,3 +3071,25 @@ def test_blank_color_gray(quiz_env):
 
 
 
+
+def test_redraw_needed_transitions(quiz_env):
+    """Test that switching from Command to Answer mode in single_card_mode + typing_preview does not double-draw."""
+    config_path = quiz_env / "config.ini"
+    content = config_path.read_text(encoding="utf-8")
+    content += "\n"
+    content += "single_card_mode = true\n"
+    content += "typing_preview = true\n"
+    content += "command_mode = true\n"
+    content += "start_in_command_mode = true\n"
+    content += "command_mode_esc_toggles = true\n"
+    config_path.write_text(content, encoding="utf-8", newline="\n")
+
+
+    
+    code, out, err = run_quiz(quiz_env, ["20260604184114-microsoft-just-shocked-the.en.tsv"], ["/d", "/q"])
+    assert code == 0
+    
+    # In single_card_mode, we should see 'Question' printed exactly once (for the initial Command mode draw).
+    # The transition to Answer mode should have redraw_needed=false, so it won't print it a second time.
+    question_count = out.count("Question 1/4:")
+    assert question_count == 1, f"Expected Question 1/4: to be printed exactly once, found {question_count} times.\nOutput:\n{out}"
