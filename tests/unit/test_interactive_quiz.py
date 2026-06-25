@@ -2551,6 +2551,58 @@ def test_input_helper_preview_helpers():
     assert "\033[1m\033[33m___\033[0m" in rendered
 
 
+def test_input_helper_wrap_text():
+    """Test the Python-side wrap_text implementation and its helpers."""
+    import sys
+    from pathlib import Path
+    project_root = str(Path(__file__).parent.parent.parent)
+    if project_root not in sys.path:
+        sys.path.insert(0, project_root)
+    import input_helper
+
+    # 1. Test strip_ansi
+    assert input_helper.strip_ansi("\033[32mhello\033[0m") == "hello"
+    assert input_helper.strip_ansi("plain text") == "plain text"
+
+    # 2. Test tokenize_ansi_utf8
+    tokens = input_helper.tokenize_ansi_utf8("\033[32mhi\033[0m")
+    assert len(tokens) == 4
+    assert tokens[0] == {"type": "ansi", "val": "\033[32m"}
+    assert tokens[1] == {"type": "char", "val": "h"}
+    assert tokens[2] == {"type": "char", "val": "i"}
+    assert tokens[3] == {"type": "ansi", "val": "\033[0m"}
+
+    # 3. Test split_word_by_width
+    # Word 'abcdef' with max_width 3 -> ['abc', 'def']
+    parts = input_helper.split_word_by_width("abcdef", 3)
+    assert parts == ["abc", "def"]
+
+    # Colored word '\033[32mabcdef' with active styling re-opening
+    parts_colored = input_helper.split_word_by_width("\033[32mabcdef", 3)
+    assert parts_colored == ["\033[32mabc\033[0m", "\033[32mdef"]
+
+    # 4. Test wrap_text behavior
+    # - a long line wraps at word boundaries with no mid-word split
+    wrapped = input_helper.wrap_text("hello world this is a test", 12)
+    assert wrapped == "hello world\nthis is a\ntest"
+
+    # - a single word longer than the width is hard-split exactly at the width
+    #   and ANSI styling is re-opened on continuation lines
+    wrapped_long = input_helper.wrap_text("\033[32mabcdefgh", 3)
+    assert wrapped_long == "\033[32mabc\033[0m\n\033[32mdef\033[0m\n\033[32mgh"
+
+    # - ANSI escape sequences do not change the wrap column (compare to the plain-text equivalent)
+    text_plain = "hello world and everyone"
+    text_ansi = "hello \033[32mworld\033[0m and \033[31meveryone\033[0m"
+    assert input_helper.strip_ansi(input_helper.wrap_text(text_ansi, 12)) == input_helper.wrap_text(text_plain, 12)
+
+    # - a multi-line input is wrapped per existing line with no extra trailing blank line
+    text_multiline = "first line is very long\nsecond short\nthird also very long here"
+    wrapped_multiline = input_helper.wrap_text(text_multiline, 12)
+    expected = "first line\nis very long\nsecond short\nthird also\nvery long\nhere"
+    assert wrapped_multiline == expected
+
+
 def test_lua_inline_colored_diff(quiz_env):
     """Test that Lua's get_inline_colored_diff behaves consistently with Python's, including inverted colors support."""
     # Case: normal bold green/red

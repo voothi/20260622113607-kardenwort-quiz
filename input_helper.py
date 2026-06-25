@@ -473,6 +473,101 @@ def get_word_boundary(chars, pos, direction):
             p += 1
     return p
 
+def strip_ansi(str_val):
+    return re.sub(r'\x1b\[\d+;?\d*;?\d*m', '', str_val)
+
+def tokenize_ansi_utf8(str_val):
+    tokens = []
+    i = 0
+    length = len(str_val)
+    ansi_pattern = re.compile(r'\x1b\[[\d;]*m')
+    while i < length:
+        m = ansi_pattern.match(str_val, i)
+        if m:
+            val = m.group(0)
+            tokens.append({"type": "ansi", "val": val})
+            i += len(val)
+        else:
+            tokens.append({"type": "char", "val": str_val[i]})
+            i += 1
+    return tokens
+
+def split_word_by_width(word, max_width):
+    tokens = tokenize_ansi_utf8(word)
+    parts = []
+    current_part = []
+    current_visible_len = 0
+    active_ansi = []
+    
+    for tok in tokens:
+        if tok["type"] == "ansi":
+            current_part.append(tok["val"])
+            if tok["val"] == "\x1b[0m":
+                active_ansi = []
+            else:
+                active_ansi.append(tok["val"])
+        else:
+            if current_visible_len >= max_width:
+                if len(active_ansi) > 0:
+                    current_part.append("\x1b[0m")
+                parts.append("".join(current_part))
+                current_part = []
+                current_visible_len = 0
+                for ansi_val in active_ansi:
+                    current_part.append(ansi_val)
+            current_part.append(tok["val"])
+            current_visible_len += 1
+            
+    if len(current_part) > 0:
+        parts.append("".join(current_part))
+    return parts
+
+def wrap_text(text, max_width):
+    lines = []
+    raw_lines = (text + "\n").split("\n")[:-1]
+    
+    for line in raw_lines:
+        if line == "":
+            lines.append("")
+        else:
+            current_line = ""
+            current_len = 0
+            for word, space in re.findall(r'(\S*)(\s*)', line):
+                if word != "" or space != "":
+                    word_len = len(strip_ansi(word))
+                    space_len = len(strip_ansi(space))
+                    
+                    if word_len > max_width:
+                        if current_len > 0:
+                            lines.append(current_line.rstrip())
+                            current_line = ""
+                            current_len = 0
+                        word_parts = split_word_by_width(word, max_width)
+                        for idx in range(len(word_parts) - 1):
+                            lines.append(word_parts[idx])
+                        last_part = word_parts[-1]
+                        current_line = last_part + space
+                        current_len = len(strip_ansi(last_part)) + space_len
+                    else:
+                        if current_len > 0 and current_len + word_len > max_width:
+                            lines.append(current_line.rstrip())
+                            current_line = word + space
+                            current_len = word_len + space_len
+                        else:
+                            current_line = current_line + word + space
+                            current_len = current_len + word_len + space_len
+            if current_line != "":
+                lines.append(current_line.rstrip())
+                
+    if len(lines) > 0 and lines[-1] == "":
+        lines.pop()
+        
+    return "\n".join(lines)
+
+def get_wrap_width():
+    columns, _ = shutil.get_terminal_size((120, 30))
+    return columns - 1
+
 def is_punctuation_or_space(c):
     if c.isspace():
         return True
@@ -718,7 +813,7 @@ def read_line(enable_arrows=False, initial_text="", save_esc=False, swap_arrows=
             )
             con.write("\033[2J\033[H")
             con.write(header_text)
-            con.write(live_context + "\n")
+            con.write(wrap_text(live_context, get_wrap_width()) + "\n")
             if hint_text:
                 con.write(hint_text + "\n")
             con.write(prompt_text)
