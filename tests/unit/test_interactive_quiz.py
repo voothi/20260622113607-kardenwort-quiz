@@ -2548,3 +2548,24 @@ def test_input_helper_preview_helpers():
     assert "Ich gehe nach " in rendered
     assert " morgen." in rendered
     assert "\033[1m\033[33m___\033[0m" in rendered
+
+
+def test_lua_inline_colored_diff(quiz_env):
+    """Test that Lua's get_inline_colored_diff behaves consistently with Python's, including inverted colors support."""
+    # Case: normal bold green/red
+    lua_code_bold = """
+        local diff = get_inline_colored_diff("abc", "abc", true, true, false)
+        print("BOLD:" .. diff)
+    """
+    code, out, err = run_lua_eval(quiz_env, lua_code_bold)
+    assert code == 0, f"Lua run failed: {err}"
+    assert "\033[1m\033[32ma\033[0m" in out
+
+    # Case: inverted green/red
+    lua_code_inverted = """
+        local diff = get_inline_colored_diff("abc", "abc", true, true, true)
+        print("INVERTED:" .. diff)
+    """
+    code, out, err = run_lua_eval(quiz_env, lua_code_inverted)
+    assert code == 0, f"Lua run failed: {err}"
+    assert "\033[7m\033[32ma\033[0m" in out

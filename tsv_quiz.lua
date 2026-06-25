@@ -1361,7 +1361,7 @@ local function get_two_line_diff(user_str, target_str, case_sensitive, ignore_pu
 	return table.concat(user_parts, ""), table.concat(target_parts, "")
 end
 
-local function get_inline_colored_diff(user_str, original_target, case_sensitive, ignore_punctuation)
+local function get_inline_colored_diff(user_str, original_target, case_sensitive, ignore_punctuation, inverted_colors)
 	local function to_chars(str)
 		local ok, chars = pcall(function()
 			local c = {}
@@ -1434,19 +1434,27 @@ local function get_inline_colored_diff(user_str, original_target, case_sensitive
 		end
 	end
 
+	local function format_char(color_fn, ch)
+		if inverted_colors then
+			return invert(color_fn(ch))
+		else
+			return bold(color_fn(ch))
+		end
+	end
+
 	local res = {}
 	local tag_idx = 1
 	local orig_chars = to_chars(original_target)
 	for _, ch in ipairs(orig_chars) do
 		if ch:match("[%p%s]") then
-			table.insert(res, bold(green(ch)))
+			table.insert(res, format_char(green, ch))
 		else
 			local tag = tags[tag_idx] or "missing"
 			tag_idx = tag_idx + 1
 			if tag == "match" then
-				table.insert(res, bold(green(ch)))
+				table.insert(res, format_char(green, ch))
 			else
-				table.insert(res, bold(red(ch)))
+				table.insert(res, format_char(red, ch))
 			end
 		end
 	end
@@ -1468,7 +1476,8 @@ local function mask_context(
 	case_sensitive_diff,
 	ignore_punctuation,
 	source_index,
-	preview_format
+	preview_format,
+	diff_inverted_colors
 )
 	local p1, p2 = target_word:match("^(.-)%s*%.%.%.%s*(.-)$")
 
@@ -1689,8 +1698,8 @@ local function mask_context(
 						user_p1 = u_parts[1]
 					end
 				end
-				r1 = get_inline_colored_diff(user_p1, p1, case_sensitive_diff, ignore_punctuation)
-				r2 = get_inline_colored_diff(user_p2, p2, case_sensitive_diff, ignore_punctuation)
+				r1 = get_inline_colored_diff(user_p1, p1, case_sensitive_diff, ignore_punctuation, diff_inverted_colors)
+				r2 = get_inline_colored_diff(user_p2, p2, case_sensitive_diff, ignore_punctuation, diff_inverted_colors)
 			end
 		elseif has_hint and use_exact then
 			local hp1 = get_hint_masked_word(p1, hint_n, hint_k, hint_m)
@@ -1874,7 +1883,7 @@ local function mask_context(
 						end
 						rep = table.concat(m_rep_parts, " ")
 					else
-						rep = get_inline_colored_diff(user_input or "", match.m, case_sensitive_diff, ignore_punctuation)
+						rep = get_inline_colored_diff(user_input or "", match.m, case_sensitive_diff, ignore_punctuation, diff_inverted_colors)
 					end
 				else
 					rep = replacement
@@ -1952,7 +1961,7 @@ local function mask_context(
 				if is_correct then
 					rep = bold(green(match.m))
 				else
-					rep = get_inline_colored_diff(user_input or "", match.m, case_sensitive_diff, ignore_punctuation)
+					rep = get_inline_colored_diff(user_input or "", match.m, case_sensitive_diff, ignore_punctuation, diff_inverted_colors)
 				end
 			else
 				if has_hint and use_exact then
@@ -2027,7 +2036,7 @@ local function json_encode(tbl)
 		elseif type(v) == "number" then
 			val_str = tostring(v)
 		else
-			local escaped = tostring(v):gsub("\\", "\\\\"):gsub('"', '\\"'):gsub("\n", "\\n"):gsub("\r", "\\r")
+			local escaped = tostring(v):gsub("\\", "\\\\"):gsub('"', '\\"'):gsub("\n", "\\n"):gsub("\r", "\\r"):gsub("\t", "\\t"):gsub("\x1b", "\\u001b")
 			val_str = '"' .. escaped .. '"'
 		end
 		table.insert(parts, key_str .. ":" .. val_str)
@@ -2196,7 +2205,9 @@ local function run_quiz(study_queue, config)
 				nil,
 				config.case_sensitive_diff,
 				config.ignore_punctuation,
-				entry.source_index
+				entry.source_index,
+				false,
+				config.diff_inverted_colors
 			)
 
 			if config.single_card_mode then
@@ -2332,7 +2343,8 @@ local function run_quiz(study_queue, config)
 						config.case_sensitive_diff,
 						config.ignore_punctuation,
 						entry.source_index,
-						true -- preview_format
+						true, -- preview_format
+						config.diff_inverted_colors
 					)
 					local payload = {
 						header = get_card_header(config, question_num, total, entry),
@@ -2583,7 +2595,9 @@ local function run_quiz(study_queue, config)
 					trimmed_input,
 					config.case_sensitive_diff,
 					config.ignore_punctuation,
-					entry.source_index
+					entry.source_index,
+					false,
+					config.diff_inverted_colors
 				)
 				print(wrap_text(revealed_context))
 
