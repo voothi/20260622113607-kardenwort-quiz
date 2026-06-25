@@ -3250,7 +3250,8 @@ local function main()
 end
 
 local function run_lua_eval()
-	if os.getenv("TEST_LUA_EVAL") then
+	local eval_code = os.getenv("TEST_LUA_EVAL")
+	if eval_code then
 		_G.load_config = load_config
 		_G.mask_context = mask_context
 		_G.get_inline_colored_diff = get_inline_colored_diff
@@ -3260,7 +3261,7 @@ local function run_lua_eval()
 		_G.yellow = yellow
 		_G.c = c
 		_G.invert = invert
-		local chunk, err = load(os.getenv("TEST_LUA_EVAL"))
+		local chunk, err = load(eval_code)
 		if chunk then
 			local ok_eval, eval_err = pcall(chunk)
 			if not ok_eval then
