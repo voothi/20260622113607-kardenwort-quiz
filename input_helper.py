@@ -456,8 +456,13 @@ def read_key(enable_arrows=False, swap_arrows=False):
                 print(hint_cmd, end="")
                 return
         elif e.wVirtualKeyCode in (0x1B, 0x0D, 0x08): # Esc, Enter, Backspace
-            return # Actually just return nothing for these in press_any_key, or handle appropriately?
-            # Wait, press_any_key uses read_key which originally returned single char.
+            if e.wVirtualKeyCode == 0x1B:
+                print("\x1b", end="")
+            elif e.wVirtualKeyCode == 0x0D:
+                print("\r", end="")
+            elif e.wVirtualKeyCode == 0x08:
+                print("\b", end="")
+            return
 
 def get_word_boundary(chars, pos, direction):
     p = pos

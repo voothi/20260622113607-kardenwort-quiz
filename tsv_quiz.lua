@@ -296,7 +296,6 @@ local function press_any_key(prompt, allowed_keys, use_arrows)
 
 		-- Pytest sends empty string when no tty
 		if key == "" then
-			print()
 			return key
 		end
 
