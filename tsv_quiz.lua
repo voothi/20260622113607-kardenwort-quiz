@@ -2565,7 +2565,7 @@ local function run_quiz(study_queue, config, start_sync_zid, start_sync_time)
 						config.blank_color
 					)
 					local hint_masks = {}
-					if has_hint then
+					if has_hint and config.hint_flash_duration ~= 0 then
 						for part in target_word:gmatch("[^%s]+") do
 							table.insert(hint_masks, get_hint_masked_word(part, hint_n, hint_k, hint_m))
 						end

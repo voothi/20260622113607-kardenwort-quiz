@@ -1608,7 +1608,7 @@ def test_repeat_counts_in_stats_default_false(quiz_env):
 
 
 def test_repeat_counts_in_stats_enabled(quiz_env):
-    """Test that with repeat_counts_in_stats=true, repeat cards ARE counted in score and progress."""
+    """Test that with repeat_counts_in_stats=true, progress is saved but score and total are not incremented."""
     config_path = quiz_env / "config.ini"
     content = config_path.read_text(encoding="utf-8")
     content += "\nsingle_card_mode = true\nrepeat_counts_in_stats = true\n"
@@ -1634,7 +1634,7 @@ def test_repeat_counts_in_stats_enabled(quiz_env):
 
 
 def test_repeat_counts_in_stats_enabled_incorrect(quiz_env):
-    """Test that with repeat_counts_in_stats=true, an incorrect repeat answer lowers the score denominator correctly."""
+    """Test that with repeat_counts_in_stats=true, an incorrect repeat answer progress is saved but score denominator is not affected."""
     config_path = quiz_env / "config.ini"
     content = config_path.read_text(encoding="utf-8")
     content += "\nsingle_card_mode = true\nrepeat_counts_in_stats = true\n"
@@ -1656,7 +1656,7 @@ def test_repeat_counts_in_stats_enabled_incorrect(quiz_env):
 
 
 def test_repeat_counts_in_stats_anki_grading(quiz_env):
-    """Test that with repeat_counts_in_stats=true and anki_grading=true, pressing 's' saves progress for repeats."""
+    """Test that with repeat_counts_in_stats=true and anki_grading=true, pressing 's' saves Leitner progress for repeats but does not increment score/total."""
     config_path = quiz_env / "config.ini"
     content = config_path.read_text(encoding="utf-8")
     content += "\nanki_grading = true\nsingle_card_mode = true\nrepeat_counts_in_stats = true\n"
@@ -3378,4 +3378,65 @@ def test_mask_context_separable_preview_hint(quiz_env):
     code, out, err = run_lua_eval(quiz_env, lua_code)
     assert code == 0, f"Lua run failed: {err}"
     assert "SEPARABLE_HINT:Ich [[TARGET:fange]] morgen [[TARGET:an]]." in out
+
+
+def test_hint_flash_duration_zero(quiz_env):
+    """Test that hint_flash_duration=0 prevents hints from appearing in the blank."""
+    config_path = quiz_env / "config.ini"
+    content = config_path.read_text(encoding="utf-8")
+    content += "\nhint_flash_duration = 0\nexact_length_mask = true\ntyping_preview = true\nsingle_card_mode = true\n"
+    config_path.write_text(content, encoding="utf-8", newline="\n")
+
+    focus_single_card(quiz_env, "20260604184114-microsoft-just-shocked-the.en.tsv", "properly")
+
+    code, out, err = run_quiz(
+        quiz_env,
+        ["20260604184114-microsoft-just-shocked-the.en.tsv"],
+        ["/h", "/q"]
+    )
+    assert code == 0
+    clean_out = strip_ansi(out)
+    assert "________" in clean_out
+    assert "p_______" not in clean_out
+
+
+def test_hints_in_blank_non_exact_length(quiz_env):
+    """Test that hints are not shown in blank when exact_length_mask is false, even with duration=-1."""
+    config_path = quiz_env / "config.ini"
+    content = config_path.read_text(encoding="utf-8")
+    content += "\nexact_length_mask = false\nhint_flash_duration = -1\ntyping_preview = true\nsingle_card_mode = true\n"
+    config_path.write_text(content, encoding="utf-8", newline="\n")
+
+    focus_single_card(quiz_env, "20260604184114-microsoft-just-shocked-the.en.tsv", "properly")
+
+    code, out, err = run_quiz(
+        quiz_env,
+        ["20260604184114-microsoft-just-shocked-the.en.tsv"],
+        ["/h", "/q"]
+    )
+    assert code == 0
+    clean_out = strip_ansi(out)
+    assert "___" in clean_out
+    assert "p___" not in clean_out
+
+
+def test_hint_flash_with_show_hint_false(quiz_env):
+    """Test that flash blank display works independently of show_hint=false."""
+    config_path = quiz_env / "config.ini"
+    content = config_path.read_text(encoding="utf-8")
+    content += "\nhint_flash_duration = 0.1\nshow_hint = false\nexact_length_mask = true\ntyping_preview = true\nsingle_card_mode = true\n"
+    config_path.write_text(content, encoding="utf-8", newline="\n")
+
+    focus_single_card(quiz_env, "20260604184114-microsoft-just-shocked-the.en.tsv", "properly")
+
+    code, out, err = run_quiz(
+        quiz_env,
+        ["20260604184114-microsoft-just-shocked-the.en.tsv"],
+        ["/h", "/q"]
+    )
+    assert code == 0
+    clean_out = strip_ansi(out)
+    assert "💡 Hint:" not in clean_out
+    assert "p_______" in clean_out
+    assert "________" in clean_out
 
