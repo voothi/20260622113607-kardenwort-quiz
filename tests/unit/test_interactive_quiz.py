@@ -387,6 +387,37 @@ def test_show_hint_config_false(quiz_env):
     assert code == 0
     assert "💡 Hint:" not in out
 
+
+def test_hint_flash_duration_permanent(quiz_env):
+    """Test that setting hint_flash_duration = -1 causes hints to remain permanent in the blank."""
+    config_path = quiz_env / "config.ini"
+    content = config_path.read_text(encoding="utf-8")
+    content += "\nhint_flash_duration = -1\nexact_length_mask = true\n"
+    config_path.write_text(content, encoding="utf-8", newline="\n")
+
+    focus_single_card(quiz_env, "20260604184114-microsoft-just-shocked-the.en.tsv", "properly")
+    code, out, err = run_quiz(quiz_env, ["20260604184114-microsoft-just-shocked-the.en.tsv"], ["/h", "/q"])
+    
+    assert code == 0
+    clean_out = strip_ansi(out)
+    assert "p_______" in clean_out
+
+
+def test_hint_flash_duration_temporary(quiz_env):
+    """Test that setting hint_flash_duration = 0.5 causes hints to disappear after the duration."""
+    config_path = quiz_env / "config.ini"
+    content = config_path.read_text(encoding="utf-8")
+    content += "\nhint_flash_duration = 0.5\nexact_length_mask = true\n"
+    config_path.write_text(content, encoding="utf-8", newline="\n")
+
+    focus_single_card(quiz_env, "20260604184114-microsoft-just-shocked-the.en.tsv", "properly")
+    code, out, err = run_quiz(quiz_env, ["20260604184114-microsoft-just-shocked-the.en.tsv"], ["/h", "/q"])
+    
+    assert code == 0
+    clean_out = strip_ansi(out)
+    assert "p_______" in clean_out
+    assert "________" in clean_out
+
 def test_single_card_mode(quiz_env):
     """Test flashcard mode toggling."""
     config_path = quiz_env / "config.ini"

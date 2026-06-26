@@ -744,25 +744,29 @@ def format_wildcard(text, blank_inverted_colors, color_code=None, blank_color=No
         else:
             return f"\033[1m{text}\033[0m"
 
-def get_preview_replacement(u_part, target, use_exact, battleship, case_sensitive, ignore_punctuation, blank_inverted_colors=None, diff_inverted_colors=None, blank_color=None):
+def get_preview_replacement(u_part, target, use_exact, battleship, case_sensitive, ignore_punctuation, blank_inverted_colors=None, diff_inverted_colors=None, blank_color=None, hint_mask=None):
     if blank_inverted_colors is None:
         blank_inverted_colors = diff_inverted_colors if diff_inverted_colors is not None else False
     target_len = len(target)
     p_len = len(u_part)
     
     if p_len == 0:
-        placeholder = "_" * target_len if use_exact else "___"
+        if hint_mask:
+            placeholder = hint_mask
+        else:
+            placeholder = "_" * target_len if use_exact else "___"
         return format_wildcard(placeholder, blank_inverted_colors, "33", blank_color)
         
     if use_exact:
         if p_len < target_len:
+            remaining = hint_mask[p_len:] if hint_mask else "_" * (target_len - p_len)
             if battleship:
                 target_prefix = target[:p_len]
                 colored = get_inline_colored_diff(u_part, target_prefix, case_sensitive, ignore_punctuation, blank_inverted_colors)
-                return colored + format_wildcard("_" * (target_len - p_len), blank_inverted_colors, "33", blank_color)
+                return colored + format_wildcard(remaining, blank_inverted_colors, "33", blank_color)
             else:
                 typed_colored = format_wildcard(u_part, blank_inverted_colors, None, blank_color)
-                return typed_colored + format_wildcard("_" * (target_len - p_len), blank_inverted_colors, "33", blank_color)
+                return typed_colored + format_wildcard(remaining, blank_inverted_colors, "33", blank_color)
         elif p_len > target_len:
             fitted_plain = target
             if target_len <= 1:
@@ -786,7 +790,7 @@ def get_preview_replacement(u_part, target, use_exact, battleship, case_sensitiv
         else:
             return format_wildcard(u_part, blank_inverted_colors, None, blank_color)
 
-def render_preview_template(template, typed_text, use_exact, battleship, case_sensitive, ignore_punctuation, blank_inverted_colors=None, diff_inverted_colors=None, blank_color=None):
+def render_preview_template(template, typed_text, use_exact, battleship, case_sensitive, ignore_punctuation, blank_inverted_colors=None, diff_inverted_colors=None, blank_color=None, hint_masks=None):
     if blank_inverted_colors is None:
         blank_inverted_colors = diff_inverted_colors if diff_inverted_colors is not None else False
     placeholders = re.findall(r'\[\[TARGET:(.*?)\]\]', template)
@@ -798,7 +802,8 @@ def render_preview_template(template, typed_text, use_exact, battleship, case_se
     rendered = template
     for idx, target in enumerate(placeholders):
         u_part = u_parts[idx] if idx < len(u_parts) else ""
-        replacement = get_preview_replacement(u_part, target, use_exact, battleship, case_sensitive, ignore_punctuation, blank_inverted_colors, None, blank_color)
+        hint_mask = hint_masks[idx] if (hint_masks and idx < len(hint_masks)) else None
+        replacement = get_preview_replacement(u_part, target, use_exact, battleship, case_sensitive, ignore_punctuation, blank_inverted_colors, None, blank_color, hint_mask)
         rendered = rendered.replace(f"[[TARGET:{target}]]", replacement, 1)
         
     return rendered
@@ -826,6 +831,7 @@ def read_line(enable_arrows=False, initial_text="", save_esc=False, swap_arrows=
     diff_inverted_colors = False
     blank_inverted_colors = False
     blank_color = None
+    hint_masks = None
     
     if preview_data:
         header_text = preview_data.get("header")
@@ -839,6 +845,7 @@ def read_line(enable_arrows=False, initial_text="", save_esc=False, swap_arrows=
         diff_inverted_colors = bool(preview_data.get("diff_inverted_colors"))
         blank_inverted_colors = bool(preview_data.get("blank_inverted_colors"))
         blank_color = preview_data.get("blank_color")
+        hint_masks = preview_data.get("hint_masks")
 
     def draw():
         nonlocal drawn_cursor_pos, drawn_len
@@ -850,7 +857,7 @@ def read_line(enable_arrows=False, initial_text="", save_esc=False, swap_arrows=
             live_context = render_preview_template(
                 template, preview_typed, use_exact, battleship,
                 case_sensitive, ignore_punctuation, blank_inverted_colors,
-                blank_color=blank_color
+                blank_color=blank_color, hint_masks=hint_masks
             )
             con.write("\033[2J\033[H")
             con.write(header_text)

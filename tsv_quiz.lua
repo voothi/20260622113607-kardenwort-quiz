@@ -368,6 +368,7 @@ local function load_config(filename)
 		answer_mode_arrow_hints = nil,
 		exact_length_mask = false,
 		show_hint = true,
+		hint_flash_duration = -1,
 		typing_preview = false,
 		battleship_feedback = false,
 		case_sensitive_diff = true,
@@ -498,6 +499,8 @@ local function load_config(filename)
 								config.exact_length_mask = (val == "true" or val == "1")
 							elseif key == "show_hint" or key == "show_hints" then
 								config.show_hint = (val == "true" or val == "1")
+							elseif key == "hint_flash_duration" then
+								config.hint_flash_duration = tonumber(val) or config.hint_flash_duration
 							elseif key == "typing_preview" then
 								config.typing_preview = (val == "true" or val == "1")
 							elseif key == "battleship_feedback" then
@@ -2285,6 +2288,7 @@ local function run_quiz(study_queue, config, start_sync_zid, start_sync_time)
 		local saved_input = ""
 		local saved_command_input = ""
 		local redraw_needed = true
+		local skip_input_read = false
 
 		local function defer_current_card()
 			local deferred_entry = {}
@@ -2295,6 +2299,63 @@ local function run_quiz(study_queue, config, start_sync_zid, start_sync_time)
 			table.insert(study_queue, deferred_entry)
 			-- We no longer decrement question_num here so that it visibly advances
 			-- even when skipping, up to a maximum of 'total'.
+		end
+
+		local function flash_hint_if_needed()
+			if has_hint and config.hint_flash_duration and config.hint_flash_duration > 0 then
+				local flash_context = mask_context(
+					entry.context,
+					target_word,
+					config.exact_length_mask,
+					has_hint,
+					hint_n,
+					hint_k,
+					hint_m,
+					nil,
+					nil,
+					config.case_sensitive_diff,
+					config.ignore_punctuation,
+					entry.source_index,
+					false,
+					config.blank_inverted_colors,
+					config.blank_color
+				)
+				
+				if config.single_card_mode then
+					clear_screen()
+				end
+				print_header(config)
+				
+				local basename = entry.filename:match("([^/\\]+)$") or entry.filename
+				if entry.is_repeat and not config.repeat_counts_in_stats then
+					local header_prefix = entry.original_question_num and string.format("Practice Repeat %d/%d:", entry.original_question_num, total) or "Practice Repeat (Sync):"
+					print(bold(cyan(header_prefix)) .. dim(string.format(" [File: %s | Box %d]", basename, entry.box)))
+				else
+					local cycle = math.ceil(question_num / total)
+					local disp_num = ((question_num - 1) % total) + 1
+					local cycle_str = cycle > 1 and string.format(" (Cycle %d)", cycle) or ""
+					local repeat_str = entry.is_repeat and " (Repeat)" or ""
+					print(bold(cyan(string.format("Question %d/%d%s%s:", disp_num, total, cycle_str, repeat_str))) .. dim(string.format(" [File: %s | Box %d]", basename, entry.box)))
+				end
+				
+				print(wrap_text(flash_context))
+				if current_hint and not config.exact_length_mask and config.show_hint then
+					print(current_hint)
+				end
+				
+				io.flush()
+				local sleep_cmd = string.format('%s -c "import time; time.sleep(%f)"', config.python_cmd, config.hint_flash_duration)
+				os.execute(sleep_cmd)
+				
+				-- Clear hint
+				has_hint = false
+				hint_n = 0
+				hint_k = 0
+				hint_m = 0
+				current_hint = nil
+				
+				redraw_needed = true
+			end
 		end
 
 		while true do
@@ -2467,10 +2528,10 @@ local function run_quiz(study_queue, config, start_sync_zid, start_sync_time)
 						entry.context,
 						target_word,
 						config.exact_length_mask,
-						false,
-						0,
-						0,
-						0,
+						has_hint,
+						hint_n,
+						hint_k,
+						hint_m,
 						nil,
 						nil,
 						config.case_sensitive_diff,
@@ -2480,10 +2541,17 @@ local function run_quiz(study_queue, config, start_sync_zid, start_sync_time)
 						config.blank_inverted_colors,
 						config.blank_color
 					)
+					local hint_masks = {}
+					if has_hint then
+						for part in target_word:gmatch("[^%s]+") do
+							table.insert(hint_masks, get_hint_masked_word(part, hint_n, hint_k, hint_m))
+						end
+					end
 					local payload = {
 						header = get_card_header(config, question_num, total, entry),
 						template = preview_template,
 						hint = (config.show_hint and current_hint) or "",
+						hint_masks = hint_masks,
 						prompt = (function() local _f = get_prompt_color_fn(config.answer_mode_prompt_color); return bold(_f and _f("Answer") or "Answer") .. dim(" (type '/?' for help): ") end)(),
 						exact_length_mask = config.exact_length_mask,
 						battleship_feedback = config.battleship_feedback,
@@ -2569,14 +2637,17 @@ local function run_quiz(study_queue, config, start_sync_zid, start_sync_time)
 						hint_n = hint_n + 1
 						current_hint = generate_hint_string(target_word, hint_n, hint_k, hint_m)
 						has_hint = true
+						flash_hint_if_needed()
 					elseif lower_cmd == "hint_right" then
 						hint_m = hint_m + 1
 						current_hint = generate_hint_string(target_word, hint_n, hint_k, hint_m)
 						has_hint = true
+						flash_hint_if_needed()
 					elseif lower_cmd == "hint_down" then
 						hint_k = hint_k + 1
 						current_hint = generate_hint_string(target_word, hint_n, hint_k, hint_m)
 						has_hint = true
+						flash_hint_if_needed()
 					elseif lower_cmd == "hint_up" then
 						hint_n = 0
 						hint_k = 0
@@ -2605,6 +2676,7 @@ local function run_quiz(study_queue, config, start_sync_zid, start_sync_time)
 						current_hint = generate_hint_string(target_word, hint_n, hint_k, hint_m)
 						has_hint = true
 						print("\n")
+						flash_hint_if_needed()
 					elseif lower_cmd == "a" then
 						local target_idx = entry.is_repeat and ((entry.repeat_target_idx or i) - 1) or (i - 1)
 						if target_idx >= 1 then
