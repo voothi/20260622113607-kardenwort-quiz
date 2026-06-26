@@ -2205,7 +2205,7 @@ local function read_line_with_esc(config, initial_text, save_esc, use_arrows, pr
 			local res = f:read("*a")
 			f:close()
 			if res ~= "NOT_TTY" then
-				if res:sub(1, 1) ~= "\27" then
+				if res:sub(1, 1) ~= "\27" and not config.single_card_mode then
 					print() -- move to next line after input
 				end
 				return res -- return even if empty (empty Enter = empty answer)
@@ -2698,7 +2698,9 @@ local function run_quiz(study_queue, config, start_sync_zid, start_sync_time)
 						hint_m = m
 						current_hint = generate_hint_string(target_word, hint_n, hint_k, hint_m)
 						has_hint = true
-						print("\n")
+						if not config.single_card_mode then
+							print("\n")
+						end
 						flash_hint_if_needed()
 					elseif lower_cmd == "a" then
 						local target_idx = entry.is_repeat and ((entry.repeat_target_idx or i) - 1) or (i - 1)
