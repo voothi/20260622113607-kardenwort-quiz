@@ -367,6 +367,7 @@ local function load_config(filename)
 		command_mode_arrow_hints = nil,
 		answer_mode_arrow_hints = nil,
 		exact_length_mask = false,
+		show_hint = true,
 		typing_preview = false,
 		battleship_feedback = false,
 		case_sensitive_diff = true,
@@ -495,6 +496,8 @@ local function load_config(filename)
 								end
 							elseif key == "exact_length_mask" then
 								config.exact_length_mask = (val == "true" or val == "1")
+							elseif key == "show_hint" or key == "show_hints" then
+								config.show_hint = (val == "true" or val == "1")
 							elseif key == "typing_preview" then
 								config.typing_preview = (val == "true" or val == "1")
 							elseif key == "battleship_feedback" then
@@ -2344,7 +2347,7 @@ local function run_quiz(study_queue, config, start_sync_zid, start_sync_time)
 					)
 				end
 				print(wrap_text(masked_context))
-				if current_hint and not config.exact_length_mask then
+				if current_hint and not config.exact_length_mask and config.show_hint then
 					print(current_hint)
 				end
 			end
@@ -2475,7 +2478,7 @@ local function run_quiz(study_queue, config, start_sync_zid, start_sync_time)
 					local payload = {
 						header = get_card_header(config, question_num, total, entry),
 						template = preview_template,
-						hint = current_hint or "",
+						hint = (config.show_hint and current_hint) or "",
 						prompt = (function() local _f = get_prompt_color_fn(config.answer_mode_prompt_color); return bold(_f and _f("Answer") or "Answer") .. dim(" (type '/?' for help): ") end)(),
 						exact_length_mask = config.exact_length_mask,
 						battleship_feedback = config.battleship_feedback,

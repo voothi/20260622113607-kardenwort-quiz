@@ -96,6 +96,12 @@ answer_mode_arrow_hints = true
 # - false: Display a fixed three-underscore mask "___" (default).
 exact_length_mask = true
 
+# Show the hint message (💡 Hint: ...) when hints are generated (true/false)
+# - true: Display the hint message (default).
+# - false: Do not display the hint message.
+show_hint = true
+
+
 # Show your typed text inside the blank as you type (true/false)
 # - true: While typing in the answer prompt, the current text is rendered into the blank of the context sentence in real time.
 # - false: The blank shows the placeholder until you submit (default).

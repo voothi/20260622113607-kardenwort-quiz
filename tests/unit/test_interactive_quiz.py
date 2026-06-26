@@ -373,6 +373,20 @@ def test_hints_display(quiz_env):
     assert "💡 Hint:" in out
     assert "(length: 8)" in out
 
+
+def test_show_hint_config_false(quiz_env):
+    """Test that setting show_hint = false disables the hint display."""
+    config_path = quiz_env / "config.ini"
+    content = config_path.read_text(encoding="utf-8")
+    content += "\nshow_hint = false\n"
+    config_path.write_text(content, encoding="utf-8", newline="\n")
+
+    focus_single_card(quiz_env, "20260604184114-microsoft-just-shocked-the.en.tsv", "properly")
+    code, out, err = run_quiz(quiz_env, ["20260604184114-microsoft-just-shocked-the.en.tsv"], ["/h", "/q"])
+    
+    assert code == 0
+    assert "💡 Hint:" not in out
+
 def test_single_card_mode(quiz_env):
     """Test flashcard mode toggling."""
     config_path = quiz_env / "config.ini"
