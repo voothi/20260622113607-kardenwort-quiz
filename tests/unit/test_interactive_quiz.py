@@ -1303,6 +1303,47 @@ def test_command_mode_esc_skip_no_toggle(quiz_env):
     assert "Skipping card..." in clean_out
 
 
+def test_explicit_d_skips_in_command_and_answer_modes(quiz_env):
+    """Test that explicitly typing /d in Answer mode or d/ /d in Command mode skips the card rather than toggling."""
+    # 1. Answer Mode:
+    config_path = quiz_env / "config.ini"
+    content = config_path.read_text(encoding="utf-8")
+    content += "\ncommand_mode = true\nsingle_card_mode = false\n"
+    config_path.write_text(content, encoding="utf-8", newline="\n")
+
+    focus_single_card(quiz_env, "20260604184114-microsoft-just-shocked-the.en.tsv", "properly")
+    focus_single_card(quiz_env, "20260303214721-text1.de.tsv", "Absätze")
+
+    # In Answer mode, type "/d" to skip "properly". Then quit.
+    code, out, err = run_quiz(
+        quiz_env,
+        ["20260604184114-microsoft-just-shocked-the.en.tsv", "20260303214721-text1.de.tsv"],
+        ["/d", "/q"]
+    )
+    assert code == 0
+    clean_out = strip_ansi(out)
+    assert "Skipping card..." in clean_out
+
+    # 2. Command Mode:
+    config_path = quiz_env / "config.ini"
+    content = config_path.read_text(encoding="utf-8")
+    content += "\ncommand_mode = true\nstart_in_command_mode = true\ncommand_mode_single_key = false\ncommand_mode_esc_toggles = true\n"
+    config_path.write_text(content, encoding="utf-8", newline="\n")
+
+    focus_single_card(quiz_env, "20260604184114-microsoft-just-shocked-the.en.tsv", "properly")
+    focus_single_card(quiz_env, "20260303214721-text1.de.tsv", "Absätze")
+
+    # In Command mode (with esc_toggles=true), type "d" and Enter to skip "properly". Then quit.
+    code, out, err = run_quiz(
+        quiz_env,
+        ["20260604184114-microsoft-just-shocked-the.en.tsv", "20260303214721-text1.de.tsv"],
+        ["d", "/q"]
+    )
+    assert code == 0
+    clean_out = strip_ansi(out)
+    assert "Skipping card..." in clean_out
+
+
 def test_command_mode_esc_save_no_toggle_skips(quiz_env):
     """Test that Esc in Command mode skips the card even when save_command=true and esc_toggles=false.
 

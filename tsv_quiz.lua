@@ -2422,10 +2422,15 @@ local function run_quiz(study_queue, config, start_sync_zid, start_sync_time)
 					end
 					
 					local esc_triggered = false
-					if save_command and user_input:sub(1, 1) == "\x1b" then
-						saved_command_input = user_input:sub(2)
-						user_input = "/d"
+					if user_input:sub(1, 1) == "\27" or user_input:sub(1, 1) == "\x1b" then
 						esc_triggered = true
+						if save_command then
+							saved_command_input = user_input:sub(2)
+							user_input = "/d"
+						else
+							saved_command_input = ""
+							user_input = user_input:sub(2)
+						end
 					else
 						saved_command_input = ""
 					end
@@ -2438,14 +2443,14 @@ local function run_quiz(study_queue, config, start_sync_zid, start_sync_time)
 						if config.single_card_mode and config.typing_preview then
 							redraw_needed = false
 						end
-					elseif trimmed_input == "/d" then
+					elseif trimmed_input == "/d" and esc_triggered then
 						if config.command_mode_esc_toggles then
 							is_command_mode = false
 							switch_mode = true
 							if config.single_card_mode and config.typing_preview then
 								redraw_needed = false
 							end
-						elseif esc_triggered then
+						else
 							-- esc_toggles=false: Esc in Command mode skips the card (same as /d).
 							-- Fall through so /d is dispatched by the command handler below.
 						end
@@ -2502,7 +2507,9 @@ local function run_quiz(study_queue, config, start_sync_zid, start_sync_time)
 					return
 				end
 
+				local esc_pressed = false
 				if user_input:sub(1, 1) == "\27" or user_input:sub(1, 1) == "\x1b" then
+					esc_pressed = true
 					if config.command_mode_save_input then
 						saved_input = user_input:sub(2)
 						user_input = "/d"
@@ -2516,7 +2523,7 @@ local function run_quiz(study_queue, config, start_sync_zid, start_sync_time)
 
 				trimmed_input = user_input:gsub("^%s+", ""):gsub("%s+$", "")
 				
-				if config.command_mode and trimmed_input == "/d" then
+				if config.command_mode and esc_pressed and trimmed_input == "/d" then
 					is_command_mode = true
 					switch_mode = true
 				end
