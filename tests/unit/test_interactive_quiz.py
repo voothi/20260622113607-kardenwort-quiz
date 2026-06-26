@@ -1629,8 +1629,8 @@ def test_repeat_counts_in_stats_enabled(quiz_env):
     assert "(Repeat):" in clean_out
     # The "progress & score unaffected" message should NOT appear
     assert "progress & score unaffected" not in clean_out
-    # Final score should be 2 out of 2 (repeat counted)
-    assert "You scored 2 out of 2" in clean_out
+    # Final score should be 1 out of 1 (repeat not counted in stats total/score)
+    assert "You scored 1 out of 1" in clean_out
 
 
 def test_repeat_counts_in_stats_enabled_incorrect(quiz_env):
@@ -1651,8 +1651,8 @@ def test_repeat_counts_in_stats_enabled_incorrect(quiz_env):
     assert code == 0
     clean_out = strip_ansi(out)
 
-    # First answer correct (1 point), repeat answer wrong (0 points) = 1 out of 2
-    assert "You scored 1 out of 2" in clean_out
+    # First answer correct (1 point), repeat answer wrong (ignored for stats) = 1 out of 1
+    assert "You scored 1 out of 1" in clean_out
 
 
 def test_repeat_counts_in_stats_anki_grading(quiz_env):
@@ -1677,8 +1677,8 @@ def test_repeat_counts_in_stats_anki_grading(quiz_env):
     assert "(Repeat):" in clean_out
     # The "progress & score unaffected" message should NOT appear
     assert "progress & score unaffected" not in clean_out
-    # Final score: 2 out of 2
-    assert "You scored 2 out of 2" in clean_out
+    # Final score: 1 out of 1
+    assert "You scored 1 out of 1" in clean_out
 
 
 def test_repeat_counts_in_stats_anki_grading_default_false(quiz_env):
@@ -2520,8 +2520,8 @@ def test_sync_command_stats_and_header_repeat_true(quiz_env):
     )
     assert code == 0
     clean_out = strip_ansi(out)
-    # The total should increment, so it is "You scored 2 out of 2" (first card + synced card)
-    assert "You scored 2 out of 2" in clean_out
+    # The total should not increment, so it is "You scored 1 out of 1" (first card / sync iteration not changing physical total)
+    assert "You scored 1 out of 1" in clean_out
     # Verify that the card's Leitner Box in-memory progress was successfully promoted and synced
     entry = read_tsv_entry(tsv_file, "properly")
     assert entry is not None

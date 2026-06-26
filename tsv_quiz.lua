@@ -2299,7 +2299,7 @@ local function run_quiz(study_queue, config, start_sync_zid, start_sync_time)
 			entry.box = entry.original_card.box
 			entry.due = entry.original_card.due
 		end
-		if not entry.is_repeat or config.repeat_counts_in_stats then
+		if not entry.is_repeat then
 			question_num = question_num + 1
 		end
 		local target_word = entry.word
@@ -2708,11 +2708,10 @@ local function run_quiz(study_queue, config, start_sync_zid, start_sync_time)
 							local repeat_entry = make_repeat_entry(study_queue[target_idx], target_idx, study_queue)
 
 							table.insert(study_queue, i + 1, repeat_entry)
-							if config.repeat_counts_in_stats then total = total + 1 end
 							-- Re-insert current card so we can return to it after the repeat
 							table.insert(study_queue, i + 2, entry)
 
-							if not entry.is_repeat or config.repeat_counts_in_stats then
+							if not entry.is_repeat then
 								question_num = question_num - 1
 							end
 
@@ -2767,7 +2766,6 @@ local function run_quiz(study_queue, config, start_sync_zid, start_sync_time)
 									sync_entry.is_repeat = true
 									sync_entry.original_card = best_entry
 									table.insert(study_queue, i + 1, sync_entry)
-									if config.repeat_counts_in_stats then total = total + 1 end
 									defer_current_card()
 									break
 								else
@@ -2804,10 +2802,12 @@ local function run_quiz(study_queue, config, start_sync_zid, start_sync_time)
 				local save_ok, save_err = true, nil
 
 				if not config.anki_grading then
-					if not entry.is_repeat or config.repeat_counts_in_stats then
+					if not entry.is_repeat then
 						if is_correct then
 							score = score + 1
 						end
+					end
+					if not entry.is_repeat or config.repeat_counts_in_stats then
 						save_ok, save_err = update_and_save_progress(entry, is_correct, config)
 					end
 				end
@@ -2933,7 +2933,6 @@ local function run_quiz(study_queue, config, start_sync_zid, start_sync_time)
 												sync_entry.is_repeat = true
 												sync_entry.original_card = best_entry
 												table.insert(study_queue, i + 1, sync_entry)
-												if config.repeat_counts_in_stats then total = total + 1 end
 												defer_current_card()
 												break_outer = true
 												break
@@ -2976,7 +2975,6 @@ local function run_quiz(study_queue, config, start_sync_zid, start_sync_time)
 								if target_idx >= 1 then
 									local repeat_entry = make_repeat_entry(study_queue[target_idx], target_idx, study_queue)
 									table.insert(study_queue, i + 1, repeat_entry)
-									if config.repeat_counts_in_stats then total = total + 1 end
 									break
 								else
 									io.write("\27[1F\27[J")
@@ -2986,7 +2984,6 @@ local function run_quiz(study_queue, config, start_sync_zid, start_sync_time)
 								local target_idx = entry.repeat_target_idx or i
 								local repeat_entry = make_repeat_entry(entry, target_idx, study_queue)
 								table.insert(study_queue, i + 1, repeat_entry)
-								if config.repeat_counts_in_stats then total = total + 1 end
 								break
 							elseif lkey == "d" or lkey == "\x1b" then
 								break
@@ -3051,7 +3048,6 @@ local function run_quiz(study_queue, config, start_sync_zid, start_sync_time)
 											sync_entry.is_repeat = true
 											sync_entry.original_card = best_entry
 											table.insert(study_queue, i + 1, sync_entry)
-											if config.repeat_counts_in_stats then total = total + 1 end
 											defer_current_card()
 											break_outer = true
 											break
@@ -3104,7 +3100,6 @@ local function run_quiz(study_queue, config, start_sync_zid, start_sync_time)
 							if target_idx >= 1 then
 								local repeat_entry = make_repeat_entry(study_queue[target_idx], target_idx, study_queue)
 								table.insert(study_queue, i + 1, repeat_entry)
-								if config.repeat_counts_in_stats then total = total + 1 end
 								break
 							else
 								print(bold(red("\nThere is no previous card to repeat.")))
@@ -3114,10 +3109,12 @@ local function run_quiz(study_queue, config, start_sync_zid, start_sync_time)
 							end
 						elseif lkey == "s" then
 							local graded_correct = is_correct
-							if not entry.is_repeat or config.repeat_counts_in_stats then
+							if not entry.is_repeat then
 								if graded_correct then
 									score = score + 1
 								end
+							end
+							if not entry.is_repeat or config.repeat_counts_in_stats then
 								save_ok, save_err = update_and_save_progress(entry, graded_correct, config)
 								if not save_ok then
 									print(bold(red("Warning: ")) .. "Failed to save progress: " .. tostring(save_err))
@@ -3127,7 +3124,6 @@ local function run_quiz(study_queue, config, start_sync_zid, start_sync_time)
 							local target_idx = entry.repeat_target_idx or i
 							local repeat_entry = make_repeat_entry(entry, target_idx, study_queue)
 							table.insert(study_queue, i + 1, repeat_entry)
-							if config.repeat_counts_in_stats then total = total + 1 end
 							break
 						elseif lkey == "d" or lkey == "\x1b" then
 							defer_current_card()
@@ -3142,10 +3138,12 @@ local function run_quiz(study_queue, config, start_sync_zid, start_sync_time)
 								graded_correct = is_correct
 							end
 
-							if not entry.is_repeat or config.repeat_counts_in_stats then
+							if not entry.is_repeat then
 								if graded_correct then
 									score = score + 1
 								end
+							end
+							if not entry.is_repeat or config.repeat_counts_in_stats then
 								save_ok, save_err = update_and_save_progress(entry, graded_correct, config)
 								if not save_ok then
 									print(bold(red("Warning: ")) .. "Failed to save progress: " .. tostring(save_err))
