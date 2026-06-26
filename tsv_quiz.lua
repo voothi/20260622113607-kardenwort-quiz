@@ -1775,21 +1775,19 @@ local function mask_context(
 				r1 = get_inline_colored_diff(user_p1, p1, case_sensitive_diff, ignore_punctuation, blank_inverted_colors)
 				r2 = get_inline_colored_diff(user_p2, p2, case_sensitive_diff, ignore_punctuation, blank_inverted_colors)
 			end
+		elseif preview_format then
+			r1 = "[[TARGET:" .. p1 .. "]]"
+			r2 = "[[TARGET:" .. p2 .. "]]"
 		elseif has_hint and use_exact then
 			local hp1 = get_hint_masked_word(p1, hint_n, hint_k, hint_m)
 			local hp2 = get_hint_masked_word(p2, hint_n, hint_k, hint_m)
 			r1 = format_wildcard(yellow, hp1, blank_inverted_colors)
 			r2 = format_wildcard(yellow, hp2, blank_inverted_colors)
 		else
-			if preview_format then
-				r1 = "[[TARGET:" .. p1 .. "]]"
-				r2 = "[[TARGET:" .. p2 .. "]]"
-			else
-				local mask1 = get_mask_placeholder(p1, use_exact)
-				local mask2 = get_mask_placeholder(p2, use_exact)
-				r1 = format_wildcard(yellow, mask1, blank_inverted_colors)
-				r2 = format_wildcard(yellow, mask2, blank_inverted_colors)
-			end
+			local mask1 = get_mask_placeholder(p1, use_exact)
+			local mask2 = get_mask_placeholder(p2, use_exact)
+			r1 = format_wildcard(yellow, mask1, blank_inverted_colors)
+			r2 = format_wildcard(yellow, mask2, blank_inverted_colors)
 		end
 
 		local function try_replace(p1_case, p2_case)
@@ -2100,22 +2098,47 @@ local function to_hex(str)
 	end))
 end
 
-local function json_encode(tbl)
-	local parts = {}
-	for k, v in pairs(tbl) do
-		local key_str = '"' .. k .. '"'
-		local val_str
-		if type(v) == "boolean" then
-			val_str = v and "true" or "false"
-		elseif type(v) == "number" then
-			val_str = tostring(v)
-		else
-			local escaped = tostring(v):gsub("\\", "\\\\"):gsub('"', '\\"'):gsub("\n", "\\n"):gsub("\r", "\\r"):gsub("\t", "\\t"):gsub("\x1b", "\\u001b")
-			val_str = '"' .. escaped .. '"'
+local function json_encode(val)
+	if type(val) == "boolean" then
+		return val and "true" or "false"
+	elseif type(val) == "number" then
+		return tostring(val)
+	elseif type(val) == "string" then
+		local escaped = val:gsub("\\", "\\\\"):gsub('"', '\\"'):gsub("\n", "\\n"):gsub("\r", "\\r"):gsub("\t", "\\t"):gsub("\x1b", "\\u001b")
+		return '"' .. escaped .. '"'
+	elseif type(val) == "table" then
+		local is_array = true
+		local count = 0
+		local max_key = 0
+		for k, _ in pairs(val) do
+			if type(k) ~= "number" or k < 1 or math.floor(k) ~= k then
+				is_array = false
+				break
+			end
+			if k > max_key then max_key = k end
+			count = count + 1
 		end
-		table.insert(parts, key_str .. ":" .. val_str)
+		if is_array and max_key ~= count then
+			is_array = false
+		end
+		if is_array then
+			local parts = {}
+			for i = 1, count do
+				table.insert(parts, json_encode(val[i]))
+			end
+			return "[" .. table.concat(parts, ",") .. "]"
+		else
+			local parts = {}
+			for k, v in pairs(val) do
+				local key_str = tostring(k)
+				local escaped_key = key_str:gsub("\\", "\\\\"):gsub('"', '\\"')
+				table.insert(parts, '"' .. escaped_key .. '":' .. json_encode(v))
+			end
+			return "{" .. table.concat(parts, ",") .. "}"
+		end
+	else
+		return "null"
 	end
-	return "{" .. table.concat(parts, ",") .. "}"
 end
 
 local function get_card_header(config, question_num, total, entry)
@@ -3523,6 +3546,7 @@ local function run_lua_eval()
 		_G.mask_context = mask_context
 		_G.get_inline_colored_diff = get_inline_colored_diff
 		_G.get_two_line_diff = get_two_line_diff
+		_G.json_encode = json_encode
 		_G.bold = bold
 		_G.green = green
 		_G.red = red

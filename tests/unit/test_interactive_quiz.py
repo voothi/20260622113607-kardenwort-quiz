@@ -3337,3 +3337,45 @@ def test_prompt_color_ansi_output(quiz_env):
     # The Answer prompt format is: ESC[1m Answer ESC[0m when standard (no 91 between ESC[1m and Answer)
     assert "\x1b[1m\x1b[91m" not in out3 or "Answer" not in out3[out3.find("\x1b[1m\x1b[91m"):out3.find("\x1b[1m\x1b[91m")+30], \
         "Answer prompt should not contain ANSI 91 when answer_mode_prompt_color=standard"
+
+
+def test_json_encode_nested(quiz_env):
+    """Test that json_encode correctly handles nested arrays and objects recursively."""
+    lua_code = """
+        local t = {
+            hint_masks = {"p_______", "____"},
+            exact_length_mask = true,
+            val = 42
+        }
+        print("JSON:" .. json_encode(t))
+    """
+    code, out, err = run_lua_eval(quiz_env, lua_code)
+    assert code == 0, f"Lua run failed: {err}"
+    assert 'JSON:{' in out
+    assert '"hint_masks":["p_______","____"]' in out
+    assert '"exact_length_mask":true' in out
+    assert '"val":42' in out
+
+
+def test_mask_context_separable_preview_hint(quiz_env):
+    """Test that mask_context preserves [[TARGET:...]] placeholders in preview format when has_hint=true."""
+    lua_code = """
+        local template = mask_context(
+            "Ich fange morgen an.", -- context
+            "fange ... an", -- target_word
+            true, -- use_exact
+            true, -- has_hint
+            1, 0, 0, -- hint params n, k, m
+            nil, -- is_correct
+            nil, -- user_input
+            true, -- case_sensitive_diff
+            true, -- ignore_punctuation
+            nil, -- source_index
+            true -- preview_format
+        )
+        print("SEPARABLE_HINT:" .. template)
+    """
+    code, out, err = run_lua_eval(quiz_env, lua_code)
+    assert code == 0, f"Lua run failed: {err}"
+    assert "SEPARABLE_HINT:Ich [[TARGET:fange]] morgen [[TARGET:an]]." in out
+
