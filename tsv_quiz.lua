@@ -2813,73 +2813,77 @@ local function run_quiz(study_queue, config, start_sync_zid, start_sync_time)
 				end
 
 				-- BACK SIDE (Result presentation)
-				if config.single_card_mode then
-					clear_screen()
-					print_header(config)
-					local basename = entry.filename:match("([^/\\]+)$") or entry.filename
-					if entry.is_repeat and not config.repeat_counts_in_stats then
-						local header_prefix
-						if entry.original_question_num then
-							header_prefix = string.format("Practice Repeat %d/%d:", entry.original_question_num, total)
+				local function draw_back_side()
+					if config.single_card_mode then
+						clear_screen()
+						print_header(config)
+						local basename = entry.filename:match("([^/\\]+)$") or entry.filename
+						if entry.is_repeat and not config.repeat_counts_in_stats then
+							local header_prefix
+							if entry.original_question_num then
+								header_prefix = string.format("Practice Repeat %d/%d:", entry.original_question_num, total)
+							else
+								header_prefix = "Practice Repeat (Sync):"
+							end
+							print(
+								bold(cyan(header_prefix))
+									.. dim(string.format(" [File: %s | Box %d]", basename, entry.box))
+							)
 						else
-							header_prefix = "Practice Repeat (Sync):"
+							local cycle = math.ceil(question_num / total)
+							local disp_num = ((question_num - 1) % total) + 1
+							local cycle_str = cycle > 1 and string.format(" (Cycle %d)", cycle) or ""
+							local repeat_str = entry.is_repeat and " (Repeat)" or ""
+							print(
+								bold(cyan(string.format("Question %d/%d%s%s:", disp_num, total, cycle_str, repeat_str)))
+									.. dim(string.format(" [File: %s | Box %d]", basename, entry.box))
+							)
 						end
-						print(
-							bold(cyan(header_prefix))
-								.. dim(string.format(" [File: %s | Box %d]", basename, entry.box))
+					end
+
+					local revealed_context = mask_context(
+						entry.context,
+						target_word,
+						config.exact_length_mask,
+						false,
+						0,
+						0,
+						0,
+						is_correct,
+						trimmed_input,
+						config.case_sensitive_diff,
+						config.ignore_punctuation,
+						entry.source_index,
+						false,
+						config.blank_inverted_colors,
+						config.blank_color
+					)
+					print(wrap_text(revealed_context))
+
+					local show_diff = true
+					if config.battleship_feedback and not config.show_diff_with_battleship then
+						show_diff = false
+					end
+
+					if show_diff then
+						print()
+						local u_line, t_line = get_two_line_diff(
+							trimmed_input,
+							target_word,
+							config.case_sensitive_diff,
+							config.ignore_punctuation,
+							config.diff_inverted_colors
 						)
-					else
-						local cycle = math.ceil(question_num / total)
-						local disp_num = ((question_num - 1) % total) + 1
-						local cycle_str = cycle > 1 and string.format(" (Cycle %d)", cycle) or ""
-						local repeat_str = entry.is_repeat and " (Repeat)" or ""
-						print(
-							bold(cyan(string.format("Question %d/%d%s%s:", disp_num, total, cycle_str, repeat_str)))
-								.. dim(string.format(" [File: %s | Box %d]", basename, entry.box))
-						)
+						print_framed_diff(u_line, t_line)
+						print()
+					end
+
+					if entry.is_repeat and not config.repeat_counts_in_stats then
+						print(dim("This was a practice repeat (progress & score unaffected)."))
 					end
 				end
 
-				local revealed_context = mask_context(
-					entry.context,
-					target_word,
-					config.exact_length_mask,
-					false,
-					0,
-					0,
-					0,
-					is_correct,
-					trimmed_input,
-					config.case_sensitive_diff,
-					config.ignore_punctuation,
-					entry.source_index,
-					false,
-					config.blank_inverted_colors,
-					config.blank_color
-				)
-				print(wrap_text(revealed_context))
-
-				local show_diff = true
-				if config.battleship_feedback and not config.show_diff_with_battleship then
-					show_diff = false
-				end
-
-				if show_diff then
-					print()
-					local u_line, t_line = get_two_line_diff(
-						trimmed_input,
-						target_word,
-						config.case_sensitive_diff,
-						config.ignore_punctuation,
-						config.diff_inverted_colors
-					)
-					print_framed_diff(u_line, t_line)
-					print()
-				end
-
-				if entry.is_repeat and not config.repeat_counts_in_stats then
-					print(dim("This was a practice repeat (progress & score unaffected)."))
-				end
+				draw_back_side()
 
 				if not config.anki_grading then
 					if not save_ok then
@@ -2961,6 +2965,9 @@ local function run_quiz(study_queue, config, start_sync_zid, start_sync_time)
 								print()
 							elseif lkey == "y" then
 								sync_forward_to_mpv(entry, config)
+								if config.single_card_mode then
+									draw_back_side()
+								end
 							elseif lkey == "q" then
 								print(magenta("\nExiting quiz early."))
 								return
@@ -3086,6 +3093,9 @@ local function run_quiz(study_queue, config, start_sync_zid, start_sync_time)
 							print()
 						elseif lkey == "y" then
 							sync_forward_to_mpv(entry, config)
+							if config.single_card_mode then
+								draw_back_side()
+							end
 						elseif lkey == "q" then
 							print(magenta("\nExiting quiz early."))
 							return
