@@ -965,53 +965,58 @@ local function load_tsv(filename, config)
 	end
 
 	-- Second pass to populate multiple context lines based on context_lines config
-	local max_context = config.context_lines or 0
-	for i, entry in ipairs(vocabulary) do
+	local max_context = tonumber(config.context_lines) or 0
+	
+	-- Build a lookup table from source_index to context string to make lookups fast
+	local context_by_index = {}
+	for _, entry in ipairs(vocabulary) do
+		local idx = tonumber(entry.source_index)
+		if idx and not context_by_index[idx] then
+			context_by_index[idx] = entry.context
+		end
+	end
+
+	for _, entry in ipairs(vocabulary) do
 		local left_list = {}
 		local right_list = {}
+		local idx_curr = tonumber(entry.source_index)
 		
 		-- 1. Gather left context
-		for d = 1, max_context do
-			local prev_entry = vocabulary[i - d]
-			local consecutive = false
-			if prev_entry then
-				local idx_curr = tonumber(entry.source_index)
-				local idx_prev = tonumber(prev_entry.source_index)
-				if idx_curr and idx_prev and idx_prev == idx_curr - d then
-					consecutive = true
+		if idx_curr then
+			for d = 1, max_context do
+				local target_idx = idx_curr - d
+				local target_context = context_by_index[target_idx]
+				
+				if target_context then
+					table.insert(left_list, 1, target_context)
+				else
+					if d == 1 and entry.context_left then
+						table.insert(left_list, 1, entry.context_left)
+					end
+					break
 				end
 			end
-			
-			if consecutive then
-				table.insert(left_list, 1, prev_entry.context)
-			else
-				if d == 1 and entry.context_left then
-					table.insert(left_list, 1, entry.context_left)
-				end
-				break
-			end
+		elseif entry.context_left and max_context >= 1 then
+			table.insert(left_list, entry.context_left)
 		end
 		
 		-- 2. Gather right context
-		for d = 1, max_context do
-			local next_entry = vocabulary[i + d]
-			local consecutive = false
-			if next_entry then
-				local idx_curr = tonumber(entry.source_index)
-				local idx_next = tonumber(next_entry.source_index)
-				if idx_curr and idx_next and idx_next == idx_curr + d then
-					consecutive = true
+		if idx_curr then
+			for d = 1, max_context do
+				local target_idx = idx_curr + d
+				local target_context = context_by_index[target_idx]
+				
+				if target_context then
+					table.insert(right_list, target_context)
+				else
+					if d == 1 and entry.context_right then
+						table.insert(right_list, entry.context_right)
+					end
+					break
 				end
 			end
-			
-			if consecutive then
-				table.insert(right_list, next_entry.context)
-			else
-				if d == 1 and entry.context_right then
-					table.insert(right_list, entry.context_right)
-				end
-				break
-			end
+		elseif entry.context_right and max_context >= 1 then
+			table.insert(right_list, entry.context_right)
 		end
 		
 		entry.context_left_list = left_list
