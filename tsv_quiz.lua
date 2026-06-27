@@ -63,10 +63,16 @@ local function bold(text)
 	return c("1", text)
 end
 local function dim(text)
+	return c("90", text)
+end
+local function faint(text)
+	return c("2", text)
+end
+local function header_dim(text)
 	local code = (g_config and g_config.header_dim_color) or "90"
 	return c(code, text)
 end
-local function faint(text)
+local function context_dim(text)
 	local code = (g_config and g_config.context_dim_color) or "2"
 	return c(code, text)
 end
@@ -1147,11 +1153,11 @@ local function print_header(config)
 	print(bold(cyan("Kardenwort TSV Quiz")))
 	print(bold(cyan("-------------------")))
 	if config.exact_length_mask then
-		print(dim("Fill in the blanks based on the context sentence."))
+		print(header_dim("Fill in the blanks based on the context sentence."))
 	else
-		print(dim("Fill in the blank '") .. yellow("___") .. dim("' based on the context sentence."))
+		print(header_dim("Fill in the blank '") .. yellow("___") .. header_dim("' based on the context sentence."))
 	end
-	print(dim("Type '/q' or '/exit' to quit.\n"))
+	print(header_dim("Type '/q' or '/exit' to quit.\n"))
 end
 
 -- Generate placeholder for a given word/phrase based on configuration
@@ -2350,11 +2356,11 @@ local function get_card_header(config, question_num, total, entry)
 	table.insert(lines, bold(cyan("Kardenwort TSV Quiz")))
 	table.insert(lines, bold(cyan("-------------------")))
 	if config.exact_length_mask then
-		table.insert(lines, dim("Fill in the blanks based on the context sentence."))
+		table.insert(lines, header_dim("Fill in the blanks based on the context sentence."))
 	else
-		table.insert(lines, dim("Fill in the blank '") .. yellow("___") .. dim("' based on the context sentence."))
+		table.insert(lines, header_dim("Fill in the blank '") .. yellow("___") .. header_dim("' based on the context sentence."))
 	end
-	table.insert(lines, dim("Type '/q' or '/exit' to quit.\n"))
+	table.insert(lines, header_dim("Type '/q' or '/exit' to quit.\n"))
 
 	local basename = entry.filename:match("([^/\\]+)$") or entry.filename
 	if entry.is_repeat and not config.repeat_counts_in_stats then
@@ -2364,7 +2370,7 @@ local function get_card_header(config, question_num, total, entry)
 		else
 			header_prefix = "Practice Repeat (Sync):"
 		end
-		table.insert(lines, bold(cyan(header_prefix)) .. dim(string.format(" [File: %s | Box %d]", basename, entry.box)))
+		table.insert(lines, bold(cyan(header_prefix)) .. header_dim(string.format(" [File: %s | Box %d]", basename, entry.box)))
 	else
 		local cycle = math.ceil(question_num / total)
 		local disp_num = ((question_num - 1) % total) + 1
@@ -2373,7 +2379,7 @@ local function get_card_header(config, question_num, total, entry)
 		table.insert(
 			lines,
 			bold(cyan(string.format("Question %d/%d%s%s:", disp_num, total, cycle_str, repeat_str)))
-				.. dim(string.format(" [File: %s | Box %d]", basename, entry.box))
+				.. header_dim(string.format(" [File: %s | Box %d]", basename, entry.box))
 		)
 	end
 	return table.concat(lines, "\n") .. "\n"
@@ -2556,24 +2562,24 @@ local function run_quiz(study_queue, config, start_sync_zid, start_sync_timestam
 				local basename = entry.filename:match("([^/\\]+)$") or entry.filename
 				if entry.is_repeat and not config.repeat_counts_in_stats then
 					local header_prefix = entry.original_question_num and string.format("Practice Repeat %d/%d:", entry.original_question_num, total) or "Practice Repeat (Sync):"
-					print(bold(cyan(header_prefix)) .. dim(string.format(" [File: %s | Box %d]", basename, entry.box)))
+					print(bold(cyan(header_prefix)) .. header_dim(string.format(" [File: %s | Box %d]", basename, entry.box)))
 				else
 					local cycle = math.ceil(question_num / total)
 					local disp_num = ((question_num - 1) % total) + 1
 					local cycle_str = cycle > 1 and string.format(" (Cycle %d)", cycle) or ""
 					local repeat_str = entry.is_repeat and " (Repeat)" or ""
-					print(bold(cyan(string.format("Question %d/%d%s%s:", disp_num, total, cycle_str, repeat_str))) .. dim(string.format(" [File: %s | Box %d]", basename, entry.box)))
+					print(bold(cyan(string.format("Question %d/%d%s%s:", disp_num, total, cycle_str, repeat_str))) .. header_dim(string.format(" [File: %s | Box %d]", basename, entry.box)))
 				end
 				
 				if config.context_lines and config.context_lines > 0 and entry.context_left_list then
 					for _, line in ipairs(entry.context_left_list) do
-						print(faint(wrap_text(line)))
+						print(context_dim(wrap_text(line)))
 					end
 				end
 				print(wrap_text(flash_context))
 				if config.context_lines and config.context_lines > 0 and entry.context_right_list then
 					for _, line in ipairs(entry.context_right_list) do
-						print(faint(wrap_text(line)))
+						print(context_dim(wrap_text(line)))
 					end
 				end
 				if current_hint and not config.exact_length_mask and config.show_hint then
@@ -2633,7 +2639,7 @@ local function run_quiz(study_queue, config, start_sync_zid, start_sync_timestam
 					else
 						header_prefix = "Practice Repeat (Sync):"
 					end
-					print(bold(cyan(header_prefix)) .. dim(string.format(" [File: %s | Box %d]", basename, entry.box)))
+					print(bold(cyan(header_prefix)) .. header_dim(string.format(" [File: %s | Box %d]", basename, entry.box)))
 				else
 					local cycle = math.ceil(question_num / total)
 					local disp_num = ((question_num - 1) % total) + 1
@@ -2641,18 +2647,18 @@ local function run_quiz(study_queue, config, start_sync_zid, start_sync_timestam
 					local repeat_str = entry.is_repeat and " (Repeat)" or ""
 					print(
 						bold(cyan(string.format("Question %d/%d%s%s:", disp_num, total, cycle_str, repeat_str)))
-							.. dim(string.format(" [File: %s | Box %d]", basename, entry.box))
+							.. header_dim(string.format(" [File: %s | Box %d]", basename, entry.box))
 					)
 				end
 				if config.context_lines and config.context_lines > 0 and entry.context_left_list then
 					for _, line in ipairs(entry.context_left_list) do
-						print(faint(wrap_text(line)))
+						print(context_dim(wrap_text(line)))
 					end
 				end
 				print(wrap_text(masked_context))
 				if config.context_lines and config.context_lines > 0 and entry.context_right_list then
 					for _, line in ipairs(entry.context_right_list) do
-						print(faint(wrap_text(line)))
+						print(context_dim(wrap_text(line)))
 					end
 				end
 				if current_hint and not config.exact_length_mask and config.show_hint then
@@ -3070,7 +3076,7 @@ local function run_quiz(study_queue, config, start_sync_zid, start_sync_timestam
 							end
 							print(
 								bold(cyan(header_prefix))
-									.. dim(string.format(" [File: %s | Box %d]", basename, entry.box))
+									.. header_dim(string.format(" [File: %s | Box %d]", basename, entry.box))
 							)
 						else
 							local cycle = math.ceil(question_num / total)
@@ -3079,7 +3085,7 @@ local function run_quiz(study_queue, config, start_sync_zid, start_sync_timestam
 							local repeat_str = entry.is_repeat and " (Repeat)" or ""
 							print(
 								bold(cyan(string.format("Question %d/%d%s%s:", disp_num, total, cycle_str, repeat_str)))
-									.. dim(string.format(" [File: %s | Box %d]", basename, entry.box))
+									.. header_dim(string.format(" [File: %s | Box %d]", basename, entry.box))
 							)
 						end
 					end
@@ -3103,13 +3109,13 @@ local function run_quiz(study_queue, config, start_sync_zid, start_sync_timestam
 					)
 					if config.context_lines and config.context_lines > 0 and entry.context_left_list then
 						for _, line in ipairs(entry.context_left_list) do
-							print(faint(wrap_text(line)))
+							print(context_dim(wrap_text(line)))
 						end
 					end
 					print(wrap_text(revealed_context))
 					if config.context_lines and config.context_lines > 0 and entry.context_right_list then
 						for _, line in ipairs(entry.context_right_list) do
-							print(faint(wrap_text(line)))
+							print(context_dim(wrap_text(line)))
 						end
 					end
 
@@ -3814,6 +3820,8 @@ local function run_lua_eval()
 		_G.bold = bold
 		_G.dim = dim
 		_G.faint = faint
+		_G.header_dim = header_dim
+		_G.context_dim = context_dim
 		_G.green = green
 		_G.red = red
 		_G.yellow = yellow
