@@ -78,6 +78,12 @@ if sys.platform == 'win32':
     kernel32.WaitForSingleObject.argtypes = [wintypes.HANDLE, wintypes.DWORD]
     kernel32.WaitForSingleObject.restype = wintypes.DWORD
 
+    kernel32.PeekConsoleInputW.argtypes = [wintypes.HANDLE, ctypes.c_void_p, wintypes.DWORD, ctypes.POINTER(wintypes.DWORD)]
+    kernel32.PeekConsoleInputW.restype = wintypes.BOOL
+
+    kernel32.GetNumberOfConsoleInputEvents.argtypes = [wintypes.HANDLE, ctypes.POINTER(wintypes.DWORD)]
+    kernel32.GetNumberOfConsoleInputEvents.restype = wintypes.BOOL
+
 INVALID_HANDLE = ctypes.c_void_p(-1).value  # 0xFFFFFFFF on 32-bit, 0xFFFFFFFFFFFFFFFF on 64-bit
 
 def _is_invalid_handle(h):
@@ -840,6 +846,24 @@ def check_auto_submit(typed_text, placeholders, mode, case_sensitive, ignore_pun
                 return False
     return True
 
+def is_new_keypress_available():
+    num_events = wintypes.DWORD(0)
+    if not kernel32.GetNumberOfConsoleInputEvents(hIn, ctypes.byref(num_events)):
+        return False
+    if num_events.value == 0:
+        return False
+    records = (INPUT_RECORD * num_events.value)()
+    events_peeked = wintypes.DWORD(0)
+    if not kernel32.PeekConsoleInputW(hIn, ctypes.byref(records), num_events.value, ctypes.byref(events_peeked)):
+        return False
+    for i in range(events_peeked.value):
+        rec = records[i]
+        if rec.EventType == 0x0001:  # KEY_EVENT
+            if rec.KeyEvent.bKeyDown:
+                if rec.KeyEvent.wVirtualKeyCode != 0xFF:
+                    return True
+    return False
+
 def read_line(enable_arrows=False, initial_text="", save_esc=False, swap_arrows=False, preview_data=None):
     if not sys.stdin.isatty():
         print("NOT_TTY", end="")
@@ -1082,8 +1106,8 @@ def read_line(enable_arrows=False, initial_text="", save_esc=False, swap_arrows=
                                 start_time = time.time()
                                 while time.time() - start_time < battleship_auto_submit_delay:
                                     if sys.platform == 'win32':
-                                        res = kernel32.WaitForSingleObject(hIn, 50)
-                                        if res == 0:
+                                        time.sleep(0.02)
+                                        if is_new_keypress_available():
                                             aborted = True
                                             break
                                     else:
