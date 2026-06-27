@@ -61,7 +61,7 @@ local function bold(text)
 	return c("1", text)
 end
 local function dim(text)
-	return c("90", text)
+	return c("2", text)
 end
 local function cyan(text)
 	return c("36", text)
