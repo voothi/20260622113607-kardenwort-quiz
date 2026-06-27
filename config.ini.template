@@ -325,6 +325,7 @@ SentenceSource = source_sentence
 SentenceSourceIndex = source_index
 LeitnerBox = leitner_box
 LeitnerDue = leitner_due
+Note = timestamp
 
 [fields_mapping.sentence]
 # Mapping rules for sentence-level cards
@@ -333,4 +334,5 @@ SentenceSource = source_sentence
 SentenceSourceIndex = source_index
 LeitnerBox = leitner_box
 LeitnerDue = leitner_due
+Note = timestamp
 

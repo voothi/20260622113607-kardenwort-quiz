@@ -760,6 +760,8 @@ local function load_tsv(filename, config)
 	local due_idx = nil
 	local box_field_name = nil
 	local due_field_name = nil
+	local source_index_field_name = nil
+	local note_field_name = nil
 
 	if config then
 		for _, mapping in ipairs({ config.fields_mapping_word, config.fields_mapping_sentence }) do
@@ -769,6 +771,10 @@ local function load_tsv(filename, config)
 						box_field_name = k
 					elseif v == "leitner_due" and not due_field_name then
 						due_field_name = k
+					elseif v == "source_index" and not source_index_field_name then
+						source_index_field_name = k
+					elseif (v == "timestamp" or v == "note") and not note_field_name then
+						note_field_name = k
 					end
 				end
 			end
@@ -777,6 +783,8 @@ local function load_tsv(filename, config)
 
 	box_field_name = box_field_name or "LeitnerBox"
 	due_field_name = due_field_name or "LeitnerDue"
+	source_index_field_name = source_index_field_name or "SentenceSourceIndex"
+	note_field_name = note_field_name or "Note"
 
 	for idx, h in ipairs(headers) do
 		local clean_header = h:gsub("%s+$", ""):gsub("^%s+", "")
@@ -934,7 +942,7 @@ local function load_tsv(filename, config)
 				local box_val = tonumber(columns[box_idx]) or 1
 				local due_val = tonumber(columns[due_idx]) or 0
 
-				local source_index_idx = found_cols["SentenceSourceIndex"]
+				local source_index_idx = found_cols[source_index_field_name]
 				local source_idx_val = nil
 				if source_index_idx then
 					local raw_idx = columns[source_index_idx]
@@ -943,7 +951,7 @@ local function load_tsv(filename, config)
 					end
 				end
 
-				local note_idx = found_cols["Note"]
+				local note_idx = found_cols[note_field_name]
 				local note_val = nil
 				if note_idx then
 					local raw_note = columns[note_idx]
