@@ -389,6 +389,7 @@ local function load_config(filename)
 		case_sensitive_diff = true,
 		ignore_punctuation = true,
 		diff_inverted_colors = false,
+		compact_diff = false,
 		blank_inverted_colors = false,
 		blank_color = "yellow",
 		command_mode_prompt_color = "coral",
@@ -538,6 +539,8 @@ local function load_config(filename)
 								config.ignore_punctuation = (val == "true" or val == "1")
 							elseif key == "diff_inverted_colors" then
 								config.diff_inverted_colors = (val == "true" or val == "1")
+							elseif key == "compact_diff" then
+								config.compact_diff = (val == "true" or val == "1")
 							elseif key == "blank_inverted_colors" then
 								config.blank_inverted_colors = (val == "true" or val == "1")
 							elseif key == "blank_color" then
@@ -3125,7 +3128,9 @@ local function run_quiz(study_queue, config, start_sync_zid, start_sync_timestam
 					end
 
 					if show_diff then
-						print()
+						if not config.compact_diff then
+							print()
+						end
 						local u_line, t_line = get_two_line_diff(
 							trimmed_input,
 							target_word,
@@ -3134,7 +3139,9 @@ local function run_quiz(study_queue, config, start_sync_zid, start_sync_timestam
 							config.diff_inverted_colors
 						)
 						print_framed_diff(u_line, t_line)
-						print()
+						if not config.compact_diff then
+							print()
+						end
 					end
 
 					if entry.is_repeat and not config.repeat_counts_in_stats then
