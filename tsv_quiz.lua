@@ -57,14 +57,18 @@ local function c(code, text)
 	return string.format("\27[%sm%s\27[0m", code, text)
 end
 
+local g_config = nil
+
 local function bold(text)
 	return c("1", text)
 end
 local function dim(text)
-	return c("90", text)
+	local code = (g_config and g_config.header_dim_color) or "90"
+	return c(code, text)
 end
 local function faint(text)
-	return c("2", text)
+	local code = (g_config and g_config.context_dim_color) or "2"
+	return c(code, text)
 end
 local function cyan(text)
 	return c("36", text)
@@ -384,6 +388,8 @@ local function load_config(filename)
 		command_mode_prompt_color = "coral",
 		answer_mode_prompt_color = "standard",
 		show_diff_with_battleship = true,
+		header_dim_color = "90",
+		context_dim_color = "2",
 		context_lines = 0,
 		anki_grading = false,
 		repeat_counts_in_stats = false,
@@ -534,6 +540,10 @@ local function load_config(filename)
 								config.command_mode_prompt_color = val:lower()
 							elseif key == "answer_mode_prompt_color" then
 								config.answer_mode_prompt_color = val:lower()
+							elseif key == "header_dim_color" then
+								config.header_dim_color = val:gsub("^%s+", ""):gsub("%s+$", "")
+							elseif key == "context_dim_color" then
+								config.context_dim_color = val:gsub("^%s+", ""):gsub("%s+$", "")
 							elseif key == "show_diff_with_battleship" then
 								config.show_diff_with_battleship = (val == "true" or val == "1")
 							elseif key == "context_lines" then
@@ -585,6 +595,7 @@ local function load_config(filename)
 	while #config.fields > 0 and config.fields[#config.fields] == "" do
 		table.remove(config.fields)
 	end
+	g_config = config
 	return config
 end
 
@@ -2800,7 +2811,8 @@ local function run_quiz(study_queue, config, start_sync_zid, start_sync_time)
 						blank_color = config.blank_color,
 						context_left_list = entry.context_left_list,
 						context_right_list = entry.context_right_list,
-						context_lines = config.context_lines
+						context_lines = config.context_lines,
+						context_dim_color = config.context_dim_color
 					}
 					preview_data = to_hex(json_encode(payload))
 				end

@@ -915,6 +915,7 @@ def read_line(enable_arrows=False, initial_text="", save_esc=False, swap_arrows=
             battleship_auto_submit_delay = 0.0
         context_left_list = preview_data.get("context_left_list")
         context_right_list = preview_data.get("context_right_list")
+        context_dim_color = preview_data.get("context_dim_color", "2")
         try:
             context_lines = int(preview_data.get("context_lines", 0))
         except (ValueError, TypeError):
@@ -937,12 +938,12 @@ def read_line(enable_arrows=False, initial_text="", save_esc=False, swap_arrows=
             if context_lines > 0:
                 if context_left_list:
                     for line in context_left_list:
-                        con.write("\033[2m" + wrap_text(line, get_wrap_width()) + "\033[0m\n")
+                        con.write(f"\033[{context_dim_color}m" + wrap_text(line, get_wrap_width()) + "\033[0m\n")
             con.write(wrap_text(live_context, get_wrap_width()) + "\n")
             if context_lines > 0:
                 if context_right_list:
                     for line in context_right_list:
-                        con.write("\033[2m" + wrap_text(line, get_wrap_width()) + "\033[0m\n")
+                        con.write(f"\033[{context_dim_color}m" + wrap_text(line, get_wrap_width()) + "\033[0m\n")
             if hint_text:
                 con.write(hint_text + "\n")
             con.write(prompt_text)

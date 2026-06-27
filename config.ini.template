@@ -190,6 +190,13 @@ command_mode_prompt_color = cyan
 # - magenta: Magenta.
 answer_mode_prompt_color = cyan
 
+# VT100 code for the header/metadata dim text color (default: 90 for bright black/light gray)
+header_dim_color = 90
+
+# VT100 code for the surrounding context lines dim style/color (default: 2 for faint/dark gray)
+context_dim_color = 2
+
+
 # Separate grading from input (Anki-style manual grading) (true/false)
 # - true: Pressing Enter reveals the back side/diff, then you choose Again (1) or Good (3) to grade.
 # - false: Automatically grades based on whether the typed answer matches the target (default).
