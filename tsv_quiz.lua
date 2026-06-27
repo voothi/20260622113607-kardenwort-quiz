@@ -61,6 +61,9 @@ local function bold(text)
 	return c("1", text)
 end
 local function dim(text)
+	return c("90", text)
+end
+local function faint(text)
 	return c("2", text)
 end
 local function cyan(text)
@@ -2545,13 +2548,13 @@ local function run_quiz(study_queue, config, start_sync_zid, start_sync_time)
 				
 				if config.context_lines and config.context_lines > 0 and entry.context_left_list then
 					for _, line in ipairs(entry.context_left_list) do
-						print(dim(wrap_text(line)))
+						print(faint(wrap_text(line)))
 					end
 				end
 				print(wrap_text(flash_context))
 				if config.context_lines and config.context_lines > 0 and entry.context_right_list then
 					for _, line in ipairs(entry.context_right_list) do
-						print(dim(wrap_text(line)))
+						print(faint(wrap_text(line)))
 					end
 				end
 				if current_hint and not config.exact_length_mask and config.show_hint then
@@ -2624,13 +2627,13 @@ local function run_quiz(study_queue, config, start_sync_zid, start_sync_time)
 				end
 				if config.context_lines and config.context_lines > 0 and entry.context_left_list then
 					for _, line in ipairs(entry.context_left_list) do
-						print(dim(wrap_text(line)))
+						print(faint(wrap_text(line)))
 					end
 				end
 				print(wrap_text(masked_context))
 				if config.context_lines and config.context_lines > 0 and entry.context_right_list then
 					for _, line in ipairs(entry.context_right_list) do
-						print(dim(wrap_text(line)))
+						print(faint(wrap_text(line)))
 					end
 				end
 				if current_hint and not config.exact_length_mask and config.show_hint then
@@ -3080,13 +3083,13 @@ local function run_quiz(study_queue, config, start_sync_zid, start_sync_time)
 					)
 					if config.context_lines and config.context_lines > 0 and entry.context_left_list then
 						for _, line in ipairs(entry.context_left_list) do
-							print(dim(wrap_text(line)))
+							print(faint(wrap_text(line)))
 						end
 					end
 					print(wrap_text(revealed_context))
 					if config.context_lines and config.context_lines > 0 and entry.context_right_list then
 						for _, line in ipairs(entry.context_right_list) do
-							print(dim(wrap_text(line)))
+							print(faint(wrap_text(line)))
 						end
 					end
 
