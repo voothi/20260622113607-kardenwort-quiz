@@ -890,6 +890,9 @@ def read_line(enable_arrows=False, initial_text="", save_esc=False, swap_arrows=
     hint_masks = None
     placeholders = []
     battleship_auto_submit_delay = 0.0
+    context_left = None
+    context_right = None
+    context_lines = 0
     
     if preview_data:
         header_text = preview_data.get("header")
@@ -910,6 +913,12 @@ def read_line(enable_arrows=False, initial_text="", save_esc=False, swap_arrows=
             battleship_auto_submit_delay = float(preview_data.get("battleship_auto_submit_delay", 0.0))
         except (ValueError, TypeError):
             battleship_auto_submit_delay = 0.0
+        context_left = preview_data.get("context_left")
+        context_right = preview_data.get("context_right")
+        try:
+            context_lines = int(preview_data.get("context_lines", 0))
+        except (ValueError, TypeError):
+            context_lines = 0
 
     def draw():
         nonlocal drawn_cursor_pos, drawn_len
@@ -925,7 +934,13 @@ def read_line(enable_arrows=False, initial_text="", save_esc=False, swap_arrows=
             )
             con.write("\033[2J\033[H")
             con.write(header_text)
+            if context_lines > 0:
+                if context_left:
+                    con.write("\033[2m" + wrap_text(context_left, get_wrap_width()) + "\033[0m\n")
             con.write(wrap_text(live_context, get_wrap_width()) + "\n")
+            if context_lines > 0:
+                if context_right:
+                    con.write("\033[2m" + wrap_text(context_right, get_wrap_width()) + "\033[0m\n")
             if hint_text:
                 con.write(hint_text + "\n")
             con.write(prompt_text)

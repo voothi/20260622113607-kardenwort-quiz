@@ -3534,3 +3534,48 @@ def test_battleship_auto_submit_config_and_helpers(quiz_env):
     assert input_helper.check_auto_submit("fange a", multi_placeholders, "filled", case_sensitive=True, ignore_punctuation=True) is False
     assert input_helper.check_auto_submit("xyzabc ab", multi_placeholders, "filled", case_sensitive=True, ignore_punctuation=True) is True
 
+
+def test_context_lines(quiz_env):
+    """Test context_lines config parsing and context_left/context_right extraction."""
+    config_path = quiz_env / "config.ini"
+
+    # 1. Test default parsing
+    config_path.write_text("[Leitner]\n", encoding="utf-8")
+    lua_code = """
+        local config = load_config("config.ini")
+        print("context_lines=" .. tostring(config.context_lines))
+    """
+    code, out, err = run_lua_eval(quiz_env, lua_code)
+    assert code == 0, f"Lua run failed: {err}"
+    assert "context_lines=0" in out
+
+    # 2. Test explicit context_lines value
+    config_path.write_text("[Leitner]\ncontext_lines = 1\n", encoding="utf-8")
+    code, out, err = run_lua_eval(quiz_env, lua_code)
+    assert code == 0, f"Lua run failed: {err}"
+    assert "context_lines=1" in out
+
+    # 3. Test vocabulary loading with left/right context columns
+    tsv_path = quiz_env / "test_context.tsv"
+    tsv_path.write_text(
+        "WordSource\tSentenceSourceContextLeft\tSentenceSource\tSentenceSourceContextRight\tLeitnerBox\tLeitnerDue\n" +
+        "Jacke\tIch trage ein Hemd.\tSie zieht die Jacke aus.\tEr bringt das Buch.\t1\t0\n",
+        encoding="utf-8"
+    )
+    lua_code_vocab = """
+        local config = load_config("config.ini")
+        local vocab = load_tsv("test_context.tsv", config)
+        local entry = vocab[1]
+        print("word=" .. tostring(entry.word))
+        print("context=" .. tostring(entry.context))
+        print("left=" .. tostring(entry.context_left))
+        print("right=" .. tostring(entry.context_right))
+    """
+    code, out, err = run_lua_eval(quiz_env, lua_code_vocab)
+    assert code == 0, f"Lua run failed: {err}"
+    assert "word=Jacke" in out
+    assert "context=Sie zieht die Jacke aus." in out
+    assert "left=Ich trage ein Hemd." in out
+    assert "right=Er bringt das Buch." in out
+
+

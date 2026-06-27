@@ -381,6 +381,7 @@ local function load_config(filename)
 		command_mode_prompt_color = "coral",
 		answer_mode_prompt_color = "standard",
 		show_diff_with_battleship = true,
+		context_lines = 0,
 		anki_grading = false,
 		repeat_counts_in_stats = false,
 		mpv_integration = false,
@@ -532,6 +533,8 @@ local function load_config(filename)
 								config.answer_mode_prompt_color = val:lower()
 							elseif key == "show_diff_with_battleship" then
 								config.show_diff_with_battleship = (val == "true" or val == "1")
+							elseif key == "context_lines" then
+								config.context_lines = tonumber(val) or 0
 							elseif key == "preview_inverted_colors" then
 								-- silently ignore stale key
 							elseif key == "anki_grading" then
@@ -885,15 +888,42 @@ local function load_tsv(filename, config)
 				final_word = columns[fallback_word_idx]
 			end
 
+			local chosen_context_idx = nil
 			for _, idx in ipairs(context_sentence_indices) do
 				local val = columns[idx]
 				if val and val ~= "" then
 					final_context = val
+					chosen_context_idx = idx
 					break
 				end
 			end
 			if not final_context or final_context == "" then
 				final_context = columns[fallback_sentence_idx]
+				chosen_context_idx = fallback_sentence_idx
+			end
+
+			local context_left = nil
+			local context_right = nil
+			local chosen_header = nil
+			if chosen_context_idx then
+				for h, idx in pairs(found_cols) do
+					if idx == chosen_context_idx then
+						chosen_header = h
+						break
+					end
+				end
+			end
+			if chosen_header then
+				local left_header = chosen_header .. "ContextLeft"
+				local right_header = chosen_header .. "ContextRight"
+				local left_idx = found_cols[left_header]
+				local right_idx = found_cols[right_header]
+				if left_idx and columns[left_idx] and columns[left_idx] ~= "" then
+					context_left = columns[left_idx]
+				end
+				if right_idx and columns[right_idx] and columns[right_idx] ~= "" then
+					context_right = columns[right_idx]
+				end
 			end
 
 			if final_word and final_word ~= "" and final_context and final_context ~= "" then
@@ -922,6 +952,8 @@ local function load_tsv(filename, config)
 				table.insert(vocabulary, {
 					word = final_word,
 					context = final_context,
+					context_left = context_left,
+					context_right = context_right,
 					box = box_val,
 					due = due_val,
 					source_index = source_idx_val,
@@ -2372,7 +2404,17 @@ local function run_quiz(study_queue, config, start_sync_zid, start_sync_time)
 					print(bold(cyan(string.format("Question %d/%d%s%s:", disp_num, total, cycle_str, repeat_str))) .. dim(string.format(" [File: %s | Box %d]", basename, entry.box)))
 				end
 				
+				if config.context_lines and config.context_lines > 0 then
+					if entry.context_left then
+						print(dim(wrap_text(entry.context_left)))
+					end
+				end
 				print(wrap_text(flash_context))
+				if config.context_lines and config.context_lines > 0 then
+					if entry.context_right then
+						print(dim(wrap_text(entry.context_right)))
+					end
+				end
 				if current_hint and not config.exact_length_mask and config.show_hint then
 					print(current_hint)
 				end
@@ -2441,7 +2483,17 @@ local function run_quiz(study_queue, config, start_sync_zid, start_sync_time)
 							.. dim(string.format(" [File: %s | Box %d]", basename, entry.box))
 					)
 				end
+				if config.context_lines and config.context_lines > 0 then
+					if entry.context_left then
+						print(dim(wrap_text(entry.context_left)))
+					end
+				end
 				print(wrap_text(masked_context))
+				if config.context_lines and config.context_lines > 0 then
+					if entry.context_right then
+						print(dim(wrap_text(entry.context_right)))
+					end
+				end
 				if current_hint and not config.exact_length_mask and config.show_hint then
 					print(current_hint)
 				end
@@ -2595,7 +2647,10 @@ local function run_quiz(study_queue, config, start_sync_zid, start_sync_time)
 						ignore_punctuation = config.ignore_punctuation,
 						diff_inverted_colors = config.diff_inverted_colors,
 						blank_inverted_colors = config.blank_inverted_colors,
-						blank_color = config.blank_color
+						blank_color = config.blank_color,
+						context_left = entry.context_left,
+						context_right = entry.context_right,
+						context_lines = config.context_lines
 					}
 					preview_data = to_hex(json_encode(payload))
 				end
@@ -2871,7 +2926,17 @@ local function run_quiz(study_queue, config, start_sync_zid, start_sync_time)
 						config.blank_inverted_colors,
 						config.blank_color
 					)
+					if config.context_lines and config.context_lines > 0 then
+						if entry.context_left then
+							print(dim(wrap_text(entry.context_left)))
+						end
+					end
 					print(wrap_text(revealed_context))
+					if config.context_lines and config.context_lines > 0 then
+						if entry.context_right then
+							print(dim(wrap_text(entry.context_right)))
+						end
+					end
 
 					local show_diff = true
 					if config.battleship_feedback and not config.show_diff_with_battleship then
@@ -3566,6 +3631,7 @@ local function run_lua_eval()
 	local eval_code = os.getenv("TEST_LUA_EVAL")
 	if eval_code then
 		_G.load_config = load_config
+		_G.load_tsv = load_tsv
 		_G.mask_context = mask_context
 		_G.get_inline_colored_diff = get_inline_colored_diff
 		_G.get_two_line_diff = get_two_line_diff
