@@ -511,6 +511,8 @@ local function load_config(filename)
 								val = val:lower()
 								if val == "correct" or val == "filled" then
 									config.battleship_auto_submit = val
+								elseif val == "true" or val == "1" or val == "on" then
+									config.battleship_auto_submit = "correct"
 								else
 									config.battleship_auto_submit = "off"
 								end

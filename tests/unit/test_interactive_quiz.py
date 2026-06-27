@@ -3471,6 +3471,22 @@ def test_battleship_auto_submit_config_and_helpers(quiz_env):
     assert code == 0, f"Lua run failed: {err}"
     assert "auto_submit=off" in out
 
+    # Test config parsing for on, true, 1 aliases
+    config_path.write_text("[Leitner]\nbattleship_auto_submit = on\n", encoding="utf-8")
+    code, out, err = run_lua_eval(quiz_env, lua_code)
+    assert code == 0, f"Lua run failed: {err}"
+    assert "auto_submit=correct" in out
+
+    config_path.write_text("[Leitner]\nbattleship_auto_submit = true\n", encoding="utf-8")
+    code, out, err = run_lua_eval(quiz_env, lua_code)
+    assert code == 0, f"Lua run failed: {err}"
+    assert "auto_submit=correct" in out
+
+    config_path.write_text("[Leitner]\nbattleship_auto_submit = 1\n", encoding="utf-8")
+    code, out, err = run_lua_eval(quiz_env, lua_code)
+    assert code == 0, f"Lua run failed: {err}"
+    assert "auto_submit=correct" in out
+
     # Test config parsing for delay default
     lua_code_delay = """
         local config = load_config("config.ini")
