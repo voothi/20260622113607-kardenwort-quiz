@@ -2424,7 +2424,7 @@ local function read_line_with_esc(config, initial_text, save_esc, use_arrows, pr
 	end
 	if preview_data and preview_data ~= "" and package.config:sub(1, 1) == "\\" then
 		local _ans_color_fn = active_config and get_prompt_color_fn(active_config.answer_mode_prompt_color) or nil
-		io.write(bold(_ans_color_fn and _ans_color_fn("Answer") or "Answer") .. dim(" (type '/?' for help): "))
+		io.write(bold(_ans_color_fn and _ans_color_fn("Answer") or "Answer") .. header_dim(" (type '/?' for help): "))
 	end
 	local val = io.read()
 	if val == "" and initial_text and initial_text ~= "" then
@@ -2673,7 +2673,7 @@ local function run_quiz(study_queue, config, start_sync_zid, start_sync_timestam
 				if config.command_mode_single_key then
 					local allowed = {"a", "d", "y", "q", "?", "\r", "\n", "\x1b", "h", "/", " ", "/hint_left", "/hint_right", "/hint_up", "/hint_down"}
 					local _cmd_color_fn = get_prompt_color_fn(config.command_mode_prompt_color)
-					local key = press_any_key(bold(_cmd_color_fn and _cmd_color_fn("Command") or "Command") .. dim(" (press '?' for help)... "), allowed, config.command_mode_arrow_hints)
+					local key = press_any_key(bold(_cmd_color_fn and _cmd_color_fn("Command") or "Command") .. header_dim(" (press '?' for help)... "), allowed, config.command_mode_arrow_hints)
 					if key == "" then
 						local line = io.read()
 						key = line and line:sub(1, 1) or ""
@@ -2727,7 +2727,7 @@ local function run_quiz(study_queue, config, start_sync_zid, start_sync_timestam
 					local save_command = config.command_mode_save_command
 					if cur_redraw then
 						local _cmd_color_fn2 = get_prompt_color_fn(config.command_mode_prompt_color)
-						io.write(bold(_cmd_color_fn2 and _cmd_color_fn2("Command") or "Command") .. dim(" (type '?' for help): "))
+						io.write(bold(_cmd_color_fn2 and _cmd_color_fn2("Command") or "Command") .. header_dim(" (type '?' for help): "))
 					end
 					user_input = read_line_with_esc(config, saved_command_input, save_command, config.command_mode_arrow_hints)
 					if not user_input then
@@ -2805,7 +2805,7 @@ local function run_quiz(study_queue, config, start_sync_zid, start_sync_timestam
 						template = preview_template,
 						hint = (config.show_hint and current_hint) or "",
 						hint_masks = hint_masks,
-						prompt = (function() local _f = get_prompt_color_fn(config.answer_mode_prompt_color); return bold(_f and _f("Answer") or "Answer") .. dim(" (type '/?' for help): ") end)(),
+						prompt = (function() local _f = get_prompt_color_fn(config.answer_mode_prompt_color); return bold(_f and _f("Answer") or "Answer") .. header_dim(" (type '/?' for help): ") end)(),
 						exact_length_mask = config.exact_length_mask,
 						battleship_feedback = config.battleship_feedback,
 						battleship_auto_submit = config.battleship_auto_submit,
@@ -2825,7 +2825,7 @@ local function run_quiz(study_queue, config, start_sync_zid, start_sync_timestam
 				if cur_redraw then
 					if not preview_data or package.config:sub(1, 1) ~= "\\" or config.single_card_mode then
 						local _ans_color_fn2 = get_prompt_color_fn(config.answer_mode_prompt_color)
-						io.write(bold(_ans_color_fn2 and _ans_color_fn2("Answer") or "Answer") .. dim(" (type '/?' for help): "))
+						io.write(bold(_ans_color_fn2 and _ans_color_fn2("Answer") or "Answer") .. header_dim(" (type '/?' for help): "))
 					end
 				end
 				user_input = read_line_with_esc(config, saved_input, config.command_mode_save_input, config.answer_mode_arrow_hints, preview_data)
@@ -3153,7 +3153,7 @@ local function run_quiz(study_queue, config, start_sync_zid, start_sync_timestam
 						local break_outer = false
 						while true do
 							local key = press_any_key(
-								dim("Press 'Enter' or 'Space' to continue, type '?' for help... "),
+								header_dim("Press 'Enter' or 'Space' to continue, type '?' for help... "),
 								{ "\r", "\n", " ", "s", "a", "d", "y", "\x1b", "q", "?" }
 							)
 							if key == "" then
@@ -3258,7 +3258,7 @@ local function run_quiz(study_queue, config, start_sync_zid, start_sync_timestam
 					-- Anki manual grading mode
 					local break_outer = false
 					while true do
-						local prompt_str = bold("Grade ") .. dim("(press '?' for help, override with '1' as incorrect, '3' as correct)... ")
+						local prompt_str = bold("Grade ") .. header_dim("(press '?' for help, override with '1' as incorrect, '3' as correct)... ")
 
 						local allowed = { "\r", "\n", " ", "1", "3", "q", "?" }
 						if config.single_card_mode then
