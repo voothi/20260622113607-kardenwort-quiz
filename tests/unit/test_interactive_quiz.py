@@ -3479,7 +3479,7 @@ def test_battleship_auto_submit_config_and_helpers(quiz_env):
     config_path.write_text("[Leitner]\n", encoding="utf-8")
     code, out, err = run_lua_eval(quiz_env, lua_code_delay)
     assert code == 0, f"Lua run failed: {err}"
-    assert "auto_submit_delay=-1" in out or "auto_submit_delay=-1.0" in out
+    assert "auto_submit_delay=0" in out or "auto_submit_delay=0.0" in out
 
     # Test config parsing for delay custom float
     config_path.write_text("[Leitner]\nbattleship_auto_submit_delay = 1.5\n", encoding="utf-8")
@@ -3491,7 +3491,7 @@ def test_battleship_auto_submit_config_and_helpers(quiz_env):
     config_path.write_text("[Leitner]\nbattleship_auto_submit_delay = invalid_float\n", encoding="utf-8")
     code, out, err = run_lua_eval(quiz_env, lua_code_delay)
     assert code == 0, f"Lua run failed: {err}"
-    assert "auto_submit_delay=-1" in out or "auto_submit_delay=-1.0" in out
+    assert "auto_submit_delay=0" in out or "auto_submit_delay=0.0" in out
 
     # 3. Test python helpers
     import sys

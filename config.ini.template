@@ -125,10 +125,10 @@ battleship_feedback = true
 # Note: Requires battleship_feedback = true.
 battleship_auto_submit = off
 
-# Time (in seconds) to delay the automatic submission (float / -1.0)
-# - -1.0: Auto-submit immediately (default).
+# Time (in seconds) to delay the automatic submission (float / 0.0)
+# - 0.0: Auto-submit immediately (default).
 # - [positive number]: Wait for this many seconds after completion. Pressing any key during the delay cancels submission.
-battleship_auto_submit_delay = -1.0
+battleship_auto_submit_delay = 0.0
 
 # Toggle the post-submission framed diff when battleship_feedback is true (true/false)
 # - true: Render the post-submission framed diff display (default).

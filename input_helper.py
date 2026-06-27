@@ -865,7 +865,7 @@ def read_line(enable_arrows=False, initial_text="", save_esc=False, swap_arrows=
     blank_color = None
     hint_masks = None
     placeholders = []
-    battleship_auto_submit_delay = -1.0
+    battleship_auto_submit_delay = 0.0
     
     if preview_data:
         header_text = preview_data.get("header")
@@ -883,9 +883,9 @@ def read_line(enable_arrows=False, initial_text="", save_esc=False, swap_arrows=
         blank_color = preview_data.get("blank_color")
         hint_masks = preview_data.get("hint_masks")
         try:
-            battleship_auto_submit_delay = float(preview_data.get("battleship_auto_submit_delay", -1.0))
+            battleship_auto_submit_delay = float(preview_data.get("battleship_auto_submit_delay", 0.0))
         except (ValueError, TypeError):
-            battleship_auto_submit_delay = -1.0
+            battleship_auto_submit_delay = 0.0
 
     def draw():
         nonlocal drawn_cursor_pos, drawn_len

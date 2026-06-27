@@ -372,7 +372,7 @@ local function load_config(filename)
 		typing_preview = false,
 		battleship_feedback = false,
 		battleship_auto_submit = "off",
-		battleship_auto_submit_delay = -1.0,
+		battleship_auto_submit_delay = 0.0,
 		case_sensitive_diff = true,
 		ignore_punctuation = true,
 		diff_inverted_colors = false,
@@ -515,7 +515,7 @@ local function load_config(filename)
 									config.battleship_auto_submit = "off"
 								end
 							elseif key == "battleship_auto_submit_delay" then
-								config.battleship_auto_submit_delay = tonumber(val) or -1.0
+								config.battleship_auto_submit_delay = tonumber(val) or 0.0
 							elseif key == "case_sensitive_diff" then
 								config.case_sensitive_diff = (val == "true" or val == "1")
 							elseif key == "ignore_punctuation" then
