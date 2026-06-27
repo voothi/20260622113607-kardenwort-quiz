@@ -457,7 +457,7 @@ def read_key(enable_arrows=False, swap_arrows=False):
             try:
                 msg = sync_event_queue.get_nowait()
                 if isinstance(msg, dict):
-                    print(f"/sync {msg.get('zid', '')} {msg.get('time', '0')}", end="")
+                    print(f"/sync {msg.get('zid', '')} {msg.get('timestamp', msg.get('time', '0'))}", end="")
                 else:
                     print(f"/{msg}", end="")
             except Exception:
@@ -1011,7 +1011,7 @@ def read_line(enable_arrows=False, initial_text="", save_esc=False, swap_arrows=
             try:
                 msg = sync_event_queue.get_nowait()
                 if isinstance(msg, dict):
-                    print(f"/sync {msg.get('zid', '')} {msg.get('time', '0')}", end="")
+                    print(f"/sync {msg.get('zid', '')} {msg.get('timestamp', msg.get('time', '0'))}", end="")
                 else:
                     print(f"/{msg}", end="")
             except Exception:

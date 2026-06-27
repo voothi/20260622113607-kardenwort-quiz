@@ -2457,19 +2457,19 @@ local function make_repeat_entry(target_card, target_idx, study_queue)
 	return repeat_entry
 end
 
-local function run_quiz(study_queue, config, start_sync_zid, start_sync_time)
+local function run_quiz(study_queue, config, start_sync_zid, start_sync_timestamp)
 	if not study_queue then
 		study_queue = {}
 	end
 
-	if start_sync_zid and start_sync_time then
+	if start_sync_zid and start_sync_timestamp then
 		local best_entry = nil
 		local min_diff = math.huge
 		for _, e in ipairs(master_vocab) do
 			local e_filename = e.filename:match("([^/\\]+)$") or e.filename
 			if e_filename:find(start_sync_zid, 1, true) then
 				local e_time = tonumber(e.timestamp) or tonumber(e.source_index) or 0.0
-				local diff = math.abs(e_time - start_sync_time)
+				local diff = math.abs(e_time - start_sync_timestamp)
 				if diff < min_diff then
 					min_diff = diff
 					best_entry = e
@@ -3473,7 +3473,7 @@ print_interactive_help = function(config)
 	print("  " .. bold("/d") .. esc_skip .. "                 Skip the current card.")
 	if config and config.mpv_integration then
 		print("  " .. bold("/y") .. ", " .. bold("/sync_forward") .. "       Sync active card timestamp to MPV.")
-		print("  " .. bold("/sync <zid> <time>") .. "      Jump to the card matching ZID and closest timestamp.")
+		print("  " .. bold("/sync <zid> <timestamp>") .. "      Jump to the card matching ZID and closest timestamp.")
 	end
 	print("  " .. bold("/q") .. ", " .. bold("/quit") .. ", " .. bold("/exit") .. "        Exit the quiz.")
 	if config and config.command_mode then
@@ -3569,13 +3569,13 @@ local function main()
 	-- 1. Collect all input files and optional sync parameters
 	local input_files = {}
 	local start_sync_zid = nil
-	local start_sync_time = nil
+	local start_sync_timestamp = nil
 
 	local arg_idx = 1
 	while arg_idx <= #arg do
 		if arg[arg_idx] == "--sync" and arg_idx + 2 <= #arg then
 			start_sync_zid = arg[arg_idx + 1]
-			start_sync_time = tonumber(arg[arg_idx + 2])
+			start_sync_timestamp = tonumber(arg[arg_idx + 2])
 			arg_idx = arg_idx + 3
 		else
 			table.insert(input_files, arg[arg_idx])
@@ -3764,7 +3764,7 @@ local function main()
 	end
 
 	-- Check if we have anything to study
-	if #study_queue == 0 and not (start_sync_zid and start_sync_time) then
+	if #study_queue == 0 and not (start_sync_zid and start_sync_timestamp) then
 		print(bold(green("\nAll caught up! No reviews are currently due.")))
 		if #new_queue > 0 and limit > 0 then
 			print(
@@ -3788,7 +3788,7 @@ local function main()
 			if config.study_ahead then
 				print(bold(cyan('\nEntering "Study Ahead" mode (closest reviews first)...')))
 				study_queue = future_queue
-				run_quiz(study_queue, config, start_sync_zid, start_sync_time)
+				run_quiz(study_queue, config, start_sync_zid, start_sync_timestamp)
 			end
 		end
 	else
@@ -3798,7 +3798,7 @@ local function main()
 				bold(cyan(string.format("Queue Summary: %d due reviews, %d new cards selected.", #due_queue, #active_new)))
 			)
 		end
-		run_quiz(study_queue, config, start_sync_zid, start_sync_time)
+		run_quiz(study_queue, config, start_sync_zid, start_sync_timestamp)
 	end
 end
 

@@ -126,7 +126,7 @@ def test_help_argument(quiz_env):
     assert "lua tsv_quiz.lua [file.tsv]" in out
 
 def test_startup_sync_argument(quiz_env):
-    """Test launching the quiz with the --sync <zid> <time> arguments."""
+    """Test launching the quiz with the --sync <zid> <timestamp> arguments."""
     focus_single_card(quiz_env, "20260604184114-microsoft-just-shocked-the.en.tsv", "properly")
     code, out, err = run_quiz(quiz_env, ["20260604184114-microsoft-just-shocked-the.en.tsv", "--sync", "20260604184114", "330.9"], ["/q"])
     assert code == 0
