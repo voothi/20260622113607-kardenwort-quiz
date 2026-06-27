@@ -964,6 +964,60 @@ local function load_tsv(filename, config)
 		end
 	end
 
+	-- Second pass to populate multiple context lines based on context_lines config
+	local max_context = config.context_lines or 0
+	for i, entry in ipairs(vocabulary) do
+		local left_list = {}
+		local right_list = {}
+		
+		-- 1. Gather left context
+		for d = 1, max_context do
+			local prev_entry = vocabulary[i - d]
+			local consecutive = false
+			if prev_entry then
+				local idx_curr = tonumber(entry.source_index)
+				local idx_prev = tonumber(prev_entry.source_index)
+				if idx_curr and idx_prev and idx_prev == idx_curr - d then
+					consecutive = true
+				end
+			end
+			
+			if consecutive then
+				table.insert(left_list, 1, prev_entry.context)
+			else
+				if d == 1 and entry.context_left then
+					table.insert(left_list, 1, entry.context_left)
+				end
+				break
+			end
+		end
+		
+		-- 2. Gather right context
+		for d = 1, max_context do
+			local next_entry = vocabulary[i + d]
+			local consecutive = false
+			if next_entry then
+				local idx_curr = tonumber(entry.source_index)
+				local idx_next = tonumber(next_entry.source_index)
+				if idx_curr and idx_next and idx_next == idx_curr + d then
+					consecutive = true
+				end
+			end
+			
+			if consecutive then
+				table.insert(right_list, next_entry.context)
+			else
+				if d == 1 and entry.context_right then
+					table.insert(right_list, entry.context_right)
+				end
+				break
+			end
+		end
+		
+		entry.context_left_list = left_list
+		entry.context_right_list = right_list
+	end
+
 	if parsed_rows == 0 then
 		return nil,
 			nil,
@@ -2404,15 +2458,15 @@ local function run_quiz(study_queue, config, start_sync_zid, start_sync_time)
 					print(bold(cyan(string.format("Question %d/%d%s%s:", disp_num, total, cycle_str, repeat_str))) .. dim(string.format(" [File: %s | Box %d]", basename, entry.box)))
 				end
 				
-				if config.context_lines and config.context_lines > 0 then
-					if entry.context_left then
-						print(dim(wrap_text(entry.context_left)))
+				if config.context_lines and config.context_lines > 0 and entry.context_left_list then
+					for _, line in ipairs(entry.context_left_list) do
+						print(dim(wrap_text(line)))
 					end
 				end
 				print(wrap_text(flash_context))
-				if config.context_lines and config.context_lines > 0 then
-					if entry.context_right then
-						print(dim(wrap_text(entry.context_right)))
+				if config.context_lines and config.context_lines > 0 and entry.context_right_list then
+					for _, line in ipairs(entry.context_right_list) do
+						print(dim(wrap_text(line)))
 					end
 				end
 				if current_hint and not config.exact_length_mask and config.show_hint then
@@ -2483,15 +2537,15 @@ local function run_quiz(study_queue, config, start_sync_zid, start_sync_time)
 							.. dim(string.format(" [File: %s | Box %d]", basename, entry.box))
 					)
 				end
-				if config.context_lines and config.context_lines > 0 then
-					if entry.context_left then
-						print(dim(wrap_text(entry.context_left)))
+				if config.context_lines and config.context_lines > 0 and entry.context_left_list then
+					for _, line in ipairs(entry.context_left_list) do
+						print(dim(wrap_text(line)))
 					end
 				end
 				print(wrap_text(masked_context))
-				if config.context_lines and config.context_lines > 0 then
-					if entry.context_right then
-						print(dim(wrap_text(entry.context_right)))
+				if config.context_lines and config.context_lines > 0 and entry.context_right_list then
+					for _, line in ipairs(entry.context_right_list) do
+						print(dim(wrap_text(line)))
 					end
 				end
 				if current_hint and not config.exact_length_mask and config.show_hint then
@@ -2648,8 +2702,8 @@ local function run_quiz(study_queue, config, start_sync_zid, start_sync_time)
 						diff_inverted_colors = config.diff_inverted_colors,
 						blank_inverted_colors = config.blank_inverted_colors,
 						blank_color = config.blank_color,
-						context_left = entry.context_left,
-						context_right = entry.context_right,
+						context_left_list = entry.context_left_list,
+						context_right_list = entry.context_right_list,
 						context_lines = config.context_lines
 					}
 					preview_data = to_hex(json_encode(payload))
@@ -2926,15 +2980,15 @@ local function run_quiz(study_queue, config, start_sync_zid, start_sync_time)
 						config.blank_inverted_colors,
 						config.blank_color
 					)
-					if config.context_lines and config.context_lines > 0 then
-						if entry.context_left then
-							print(dim(wrap_text(entry.context_left)))
+					if config.context_lines and config.context_lines > 0 and entry.context_left_list then
+						for _, line in ipairs(entry.context_left_list) do
+							print(dim(wrap_text(line)))
 						end
 					end
 					print(wrap_text(revealed_context))
-					if config.context_lines and config.context_lines > 0 then
-						if entry.context_right then
-							print(dim(wrap_text(entry.context_right)))
+					if config.context_lines and config.context_lines > 0 and entry.context_right_list then
+						for _, line in ipairs(entry.context_right_list) do
+							print(dim(wrap_text(line)))
 						end
 					end
 

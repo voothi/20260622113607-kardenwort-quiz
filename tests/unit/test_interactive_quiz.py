@@ -3555,27 +3555,37 @@ def test_context_lines(quiz_env):
     assert code == 0, f"Lua run failed: {err}"
     assert "context_lines=1" in out
 
-    # 3. Test vocabulary loading with left/right context columns
+    # 3. Test vocabulary loading with left/right context columns & lists
     tsv_path = quiz_env / "test_context.tsv"
     tsv_path.write_text(
-        "WordSource\tSentenceSourceContextLeft\tSentenceSource\tSentenceSourceContextRight\tLeitnerBox\tLeitnerDue\n" +
-        "Jacke\tIch trage ein Hemd.\tSie zieht die Jacke aus.\tEr bringt das Buch.\t1\t0\n",
+        "WordSource\tSentenceSourceContextLeft\tSentenceSource\tSentenceSourceContextRight\tSentenceSourceIndex\tLeitnerBox\tLeitnerDue\n" +
+        "Hut\t\tIch trage einen Hut.\tSie zieht die Jacke aus.\t1\t1\t0\n" +
+        "Jacke\tIch trage einen Hut.\tSie zieht die Jacke aus.\tEr bringt das Buch.\t2\t1\t0\n" +
+        "Buch\tSie zieht die Jacke aus.\tEr bringt das Buch.\tWir lesen.\t3\t1\t0\n" +
+        "Lesen\tEr bringt das Buch.\tWir lesen.\t\t4\t1\t0\n",
         encoding="utf-8"
     )
     lua_code_vocab = """
         local config = load_config("config.ini")
+        config.context_lines = 2
         local vocab = load_tsv("test_context.tsv", config)
-        local entry = vocab[1]
-        print("word=" .. tostring(entry.word))
-        print("context=" .. tostring(entry.context))
-        print("left=" .. tostring(entry.context_left))
-        print("right=" .. tostring(entry.context_right))
+        -- Test first card (Hut)
+        print("card1_left_cnt=" .. #vocab[1].context_left_list)
+        print("card1_right_cnt=" .. #vocab[1].context_right_list)
+        print("card1_right1=" .. vocab[1].context_right_list[1])
+        print("card1_right2=" .. vocab[1].context_right_list[2])
+        
+        -- Test second card (Jacke)
+        print("card2_left_cnt=" .. #vocab[2].context_left_list)
+        print("card2_left1=" .. vocab[2].context_left_list[1])
     """
     code, out, err = run_lua_eval(quiz_env, lua_code_vocab)
     assert code == 0, f"Lua run failed: {err}"
-    assert "word=Jacke" in out
-    assert "context=Sie zieht die Jacke aus." in out
-    assert "left=Ich trage ein Hemd." in out
-    assert "right=Er bringt das Buch." in out
+    assert "card1_left_cnt=0" in out
+    assert "card1_right_cnt=2" in out
+    assert "card1_right1=Sie zieht die Jacke aus." in out
+    assert "card1_right2=Er bringt das Buch." in out
+    assert "card2_left_cnt=1" in out
+    assert "card2_left1=Ich trage einen Hut." in out
 
 
