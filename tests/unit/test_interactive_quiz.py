@@ -3471,6 +3471,28 @@ def test_battleship_auto_submit_config_and_helpers(quiz_env):
     assert code == 0, f"Lua run failed: {err}"
     assert "auto_submit=off" in out
 
+    # Test config parsing for delay default
+    lua_code_delay = """
+        local config = load_config("config.ini")
+        print("auto_submit_delay=" .. tostring(config.battleship_auto_submit_delay))
+    """
+    config_path.write_text("[Leitner]\n", encoding="utf-8")
+    code, out, err = run_lua_eval(quiz_env, lua_code_delay)
+    assert code == 0, f"Lua run failed: {err}"
+    assert "auto_submit_delay=-1" in out or "auto_submit_delay=-1.0" in out
+
+    # Test config parsing for delay custom float
+    config_path.write_text("[Leitner]\nbattleship_auto_submit_delay = 1.5\n", encoding="utf-8")
+    code, out, err = run_lua_eval(quiz_env, lua_code_delay)
+    assert code == 0, f"Lua run failed: {err}"
+    assert "auto_submit_delay=1.5" in out
+
+    # Test config parsing for delay invalid fallback
+    config_path.write_text("[Leitner]\nbattleship_auto_submit_delay = invalid_float\n", encoding="utf-8")
+    code, out, err = run_lua_eval(quiz_env, lua_code_delay)
+    assert code == 0, f"Lua run failed: {err}"
+    assert "auto_submit_delay=-1" in out or "auto_submit_delay=-1.0" in out
+
     # 3. Test python helpers
     import sys
     from pathlib import Path

@@ -372,6 +372,7 @@ local function load_config(filename)
 		typing_preview = false,
 		battleship_feedback = false,
 		battleship_auto_submit = "off",
+		battleship_auto_submit_delay = -1.0,
 		case_sensitive_diff = true,
 		ignore_punctuation = true,
 		diff_inverted_colors = false,
@@ -513,6 +514,8 @@ local function load_config(filename)
 								else
 									config.battleship_auto_submit = "off"
 								end
+							elseif key == "battleship_auto_submit_delay" then
+								config.battleship_auto_submit_delay = tonumber(val) or -1.0
 							elseif key == "case_sensitive_diff" then
 								config.case_sensitive_diff = (val == "true" or val == "1")
 							elseif key == "ignore_punctuation" then
@@ -2587,6 +2590,7 @@ local function run_quiz(study_queue, config, start_sync_zid, start_sync_time)
 						exact_length_mask = config.exact_length_mask,
 						battleship_feedback = config.battleship_feedback,
 						battleship_auto_submit = config.battleship_auto_submit,
+						battleship_auto_submit_delay = config.battleship_auto_submit_delay,
 						case_sensitive_diff = config.case_sensitive_diff,
 						ignore_punctuation = config.ignore_punctuation,
 						diff_inverted_colors = config.diff_inverted_colors,

@@ -75,6 +75,9 @@ if sys.platform == 'win32':
     kernel32.ReadFile.argtypes = [wintypes.HANDLE, ctypes.c_void_p, wintypes.DWORD, ctypes.POINTER(wintypes.DWORD), ctypes.c_void_p]
     kernel32.ReadFile.restype = wintypes.BOOL
 
+    kernel32.WaitForSingleObject.argtypes = [wintypes.HANDLE, wintypes.DWORD]
+    kernel32.WaitForSingleObject.restype = wintypes.DWORD
+
 INVALID_HANDLE = ctypes.c_void_p(-1).value  # 0xFFFFFFFF on 32-bit, 0xFFFFFFFFFFFFFFFF on 64-bit
 
 def _is_invalid_handle(h):
@@ -862,6 +865,7 @@ def read_line(enable_arrows=False, initial_text="", save_esc=False, swap_arrows=
     blank_color = None
     hint_masks = None
     placeholders = []
+    battleship_auto_submit_delay = -1.0
     
     if preview_data:
         header_text = preview_data.get("header")
@@ -878,6 +882,10 @@ def read_line(enable_arrows=False, initial_text="", save_esc=False, swap_arrows=
         blank_inverted_colors = bool(preview_data.get("blank_inverted_colors"))
         blank_color = preview_data.get("blank_color")
         hint_masks = preview_data.get("hint_masks")
+        try:
+            battleship_auto_submit_delay = float(preview_data.get("battleship_auto_submit_delay", -1.0))
+        except (ValueError, TypeError):
+            battleship_auto_submit_delay = -1.0
 
     def draw():
         nonlocal drawn_cursor_pos, drawn_len
@@ -1069,8 +1077,20 @@ def read_line(enable_arrows=False, initial_text="", save_esc=False, swap_arrows=
                     if preview_data and battleship and preview_data.get("battleship_auto_submit") in ("correct", "filled"):
                         typed = "".join(chars)
                         if check_auto_submit(typed, placeholders, preview_data.get("battleship_auto_submit"), case_sensitive, ignore_punctuation):
-                            print(typed, end="")
-                            break
+                            aborted = False
+                            if battleship_auto_submit_delay > 0:
+                                start_time = time.time()
+                                while time.time() - start_time < battleship_auto_submit_delay:
+                                    if sys.platform == 'win32':
+                                        res = kernel32.WaitForSingleObject(hIn, 50)
+                                        if res == 0:
+                                            aborted = True
+                                            break
+                                    else:
+                                        time.sleep(0.05)
+                            if not aborted:
+                                print(typed, end="")
+                                break
 
     con.close()
 
