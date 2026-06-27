@@ -967,78 +967,134 @@ local function load_tsv(filename, config)
 	-- Second pass to populate multiple context lines based on context_lines config
 	local max_context = tonumber(config.context_lines) or 0
 
+	-- Build a lookup table from source_index to context string to make lookups fast
+	local context_by_index = {}
+	for _, entry in ipairs(vocabulary) do
+		local idx = tonumber(entry.source_index)
+		if idx and not context_by_index[idx] then
+			context_by_index[idx] = entry.context
+		end
+	end
+
 	for i, entry in ipairs(vocabulary) do
 		local left_list = {}
 		local right_list = {}
+		local idx_curr = tonumber(entry.source_index)
 		
 		local function split_and_take(text, take_count, from_end)
 			if not text or text == "" then return {} end
-			-- Support Anki <br> tags if kardenwort-mpv starts exporting them
 			local lines = {}
 			if text:find("<br>") then
 				for line in text:gmatch("(.-)<br>") do
 					table.insert(lines, line)
 				end
-				-- Get the last part after the last <br>
 				local last_part = text:match(".*<br>(.*)$") or text
 				if last_part and last_part ~= "" then
 					table.insert(lines, last_part)
 				end
-			else
-				table.insert(lines, text)
-			end
-			
-			local result = {}
-			if from_end then
-				local start_idx = math.max(1, #lines - take_count + 1)
-				for j = start_idx, #lines do
-					table.insert(result, lines[j])
+				
+				local result = {}
+				if from_end then
+					local start_idx = math.max(1, #lines - take_count + 1)
+					for j = start_idx, #lines do
+						table.insert(result, lines[j])
+					end
+				else
+					local end_idx = math.min(#lines, take_count)
+					for j = 1, end_idx do
+						table.insert(result, lines[j])
+					end
 				end
+				return result
 			else
-				local end_idx = math.min(#lines, take_count)
-				for j = 1, end_idx do
-					table.insert(result, lines[j])
-				end
+				-- No <br> tags found, return nil to signal we can't split it
+				return nil
 			end
-			return result
 		end
 
 		if max_context > 0 then
 			-- 1. Gather left context
-			if entry.context_left and entry.context_left ~= "" then
-				left_list = split_and_take(entry.context_left, max_context, true)
+			local split_left = split_and_take(entry.context_left, max_context, true)
+			if split_left then
+				left_list = split_left
 			else
-				-- Fallback to previous TSV entries if context_left is missing
-				local added_left = 0
-				local d = 1
-				local last_seen = entry.context
-				while added_left < max_context and i - d >= 1 do
-					local prev_entry = vocabulary[i - d]
-					if prev_entry.context ~= last_seen then
-						table.insert(left_list, 1, prev_entry.context)
-						last_seen = prev_entry.context
-						added_left = added_left + 1
+				-- Try context_by_index lookup for exact line counts
+				if idx_curr then
+					local found_all = true
+					local temp_list = {}
+					for d = 1, max_context do
+						local target_idx = idx_curr - d
+						local target_context = context_by_index[target_idx]
+						if target_context then
+							table.insert(temp_list, 1, target_context)
+						else
+							found_all = false
+							break
+						end
 					end
-					d = d + 1
+					if found_all then
+						left_list = temp_list
+					elseif entry.context_left and entry.context_left ~= "" then
+						table.insert(left_list, entry.context_left)
+					end
+				elseif entry.context_left and entry.context_left ~= "" then
+					table.insert(left_list, entry.context_left)
+				else
+					-- Chronological fallback if context_left is missing completely
+					local added_left = 0
+					local d = 1
+					local last_seen = entry.context
+					while added_left < max_context and i - d >= 1 do
+						local prev_entry = vocabulary[i - d]
+						if prev_entry.context ~= last_seen then
+							table.insert(left_list, 1, prev_entry.context)
+							last_seen = prev_entry.context
+							added_left = added_left + 1
+						end
+						d = d + 1
+					end
 				end
 			end
 
 			-- 2. Gather right context
-			if entry.context_right and entry.context_right ~= "" then
-				right_list = split_and_take(entry.context_right, max_context, false)
+			local split_right = split_and_take(entry.context_right, max_context, false)
+			if split_right then
+				right_list = split_right
 			else
-				-- Fallback to next TSV entries if context_right is missing
-				local added_right = 0
-				local d = 1
-				local last_seen = entry.context
-				while added_right < max_context and i + d <= #vocabulary do
-					local next_entry = vocabulary[i + d]
-					if next_entry.context ~= last_seen then
-						table.insert(right_list, next_entry.context)
-						last_seen = next_entry.context
-						added_right = added_right + 1
+				if idx_curr then
+					local found_all = true
+					local temp_list = {}
+					for d = 1, max_context do
+						local target_idx = idx_curr + d
+						local target_context = context_by_index[target_idx]
+						if target_context then
+							table.insert(temp_list, target_context)
+						else
+							found_all = false
+							break
+						end
 					end
-					d = d + 1
+					if found_all then
+						right_list = temp_list
+					elseif entry.context_right and entry.context_right ~= "" then
+						table.insert(right_list, entry.context_right)
+					end
+				elseif entry.context_right and entry.context_right ~= "" then
+					table.insert(right_list, entry.context_right)
+				else
+					-- Chronological fallback if context_right is missing completely
+					local added_right = 0
+					local d = 1
+					local last_seen = entry.context
+					while added_right < max_context and i + d <= #vocabulary do
+						local next_entry = vocabulary[i + d]
+						if next_entry.context ~= last_seen then
+							table.insert(right_list, next_entry.context)
+							last_seen = next_entry.context
+							added_right = added_right + 1
+						end
+						d = d + 1
+					end
 				end
 			end
 		end
