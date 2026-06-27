@@ -118,6 +118,13 @@ typing_preview = true
 # - false: The preview is shown without per-character coloring (default).
 battleship_feedback = true
 
+# Automatically submit/mark the card when correct or filled without pressing Enter (off/correct/filled)
+# - off: Do not auto-submit (default).
+# - correct: Automatically submit immediately when the typed text matches the correct target word(s).
+# - filled: Automatically submit immediately when the length of typed characters matches the target word(s), regardless of correctness.
+# Note: Requires battleship_feedback = true.
+battleship_auto_submit = off
+
 # Toggle the post-submission framed diff when battleship_feedback is true (true/false)
 # - true: Render the post-submission framed diff display (default).
 # - false: Do not render the post-submission framed diff display.

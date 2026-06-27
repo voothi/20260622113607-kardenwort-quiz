@@ -3440,3 +3440,75 @@ def test_hint_flash_with_show_hint_false(quiz_env):
     assert "p_______" in clean_out
     assert "________" in clean_out
 
+
+def test_battleship_auto_submit_config_and_helpers(quiz_env):
+    """Test configuration parsing for battleship_auto_submit and check_auto_submit helpers."""
+    config_path = quiz_env / "config.ini"
+
+    # 1. Test config parsing default
+    config_path.write_text("[Leitner]\n", encoding="utf-8")
+    lua_code = """
+        local config = load_config("config.ini")
+        print("auto_submit=" .. tostring(config.battleship_auto_submit))
+    """
+    code, out, err = run_lua_eval(quiz_env, lua_code)
+    assert code == 0, f"Lua run failed: {err}"
+    assert "auto_submit=off" in out
+
+    # 2. Test config parsing explicit values
+    config_path.write_text("[Leitner]\nbattleship_auto_submit = correct\n", encoding="utf-8")
+    code, out, err = run_lua_eval(quiz_env, lua_code)
+    assert code == 0, f"Lua run failed: {err}"
+    assert "auto_submit=correct" in out
+
+    config_path.write_text("[Leitner]\nbattleship_auto_submit = filled\n", encoding="utf-8")
+    code, out, err = run_lua_eval(quiz_env, lua_code)
+    assert code == 0, f"Lua run failed: {err}"
+    assert "auto_submit=filled" in out
+
+    config_path.write_text("[Leitner]\nbattleship_auto_submit = invalid_value\n", encoding="utf-8")
+    code, out, err = run_lua_eval(quiz_env, lua_code)
+    assert code == 0, f"Lua run failed: {err}"
+    assert "auto_submit=off" in out
+
+    # 3. Test python helpers
+    import sys
+    from pathlib import Path
+    project_root = str(Path(__file__).parent.parent.parent)
+    if project_root not in sys.path:
+        sys.path.insert(0, project_root)
+    import input_helper
+
+    # Test clean_word
+    assert input_helper.clean_word("Hello.", ignore_punctuation=True, case_sensitive=False) == "hello"
+    assert input_helper.clean_word("Hello.", ignore_punctuation=False, case_sensitive=True) == "Hello."
+    assert input_helper.clean_word("Hello.", ignore_punctuation=True, case_sensitive=True) == "Hello"
+
+    # Test check_auto_submit correct mode
+    placeholders = ["Anthropic"]
+    # Incorrect input
+    assert input_helper.check_auto_submit("Ant", placeholders, "correct", case_sensitive=True, ignore_punctuation=True) is False
+    # Correct input
+    assert input_helper.check_auto_submit("Anthropic", placeholders, "correct", case_sensitive=True, ignore_punctuation=True) is True
+    # Case insensitivity
+    assert input_helper.check_auto_submit("anthropic", placeholders, "correct", case_sensitive=False, ignore_punctuation=True) is True
+    assert input_helper.check_auto_submit("anthropic", placeholders, "correct", case_sensitive=True, ignore_punctuation=True) is False
+    # Command bypass
+    assert input_helper.check_auto_submit("/q", placeholders, "correct", case_sensitive=True, ignore_punctuation=True) is False
+
+    # Test check_auto_submit filled mode
+    # Partial filled
+    assert input_helper.check_auto_submit("An", placeholders, "filled", case_sensitive=True, ignore_punctuation=True) is False
+    # Filled exactly
+    assert input_helper.check_auto_submit("xyz", placeholders, "filled", case_sensitive=True, ignore_punctuation=True) is False
+    assert input_helper.check_auto_submit("xyzxyzxyz", placeholders, "filled", case_sensitive=True, ignore_punctuation=True) is True
+    # Overfilled
+    assert input_helper.check_auto_submit("xyzxyzxyzxyz", placeholders, "filled", case_sensitive=True, ignore_punctuation=True) is True
+
+    # Test multi-word placeholders
+    multi_placeholders = ["fange", "an"]
+    assert input_helper.check_auto_submit("fange", multi_placeholders, "correct", case_sensitive=True, ignore_punctuation=True) is False
+    assert input_helper.check_auto_submit("fange an", multi_placeholders, "correct", case_sensitive=True, ignore_punctuation=True) is True
+    assert input_helper.check_auto_submit("fange a", multi_placeholders, "filled", case_sensitive=True, ignore_punctuation=True) is False
+    assert input_helper.check_auto_submit("xyzabc ab", multi_placeholders, "filled", case_sensitive=True, ignore_punctuation=True) is True
+

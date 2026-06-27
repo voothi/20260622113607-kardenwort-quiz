@@ -371,6 +371,7 @@ local function load_config(filename)
 		hint_flash_duration = -1,
 		typing_preview = false,
 		battleship_feedback = false,
+		battleship_auto_submit = "off",
 		case_sensitive_diff = true,
 		ignore_punctuation = true,
 		diff_inverted_colors = false,
@@ -505,6 +506,13 @@ local function load_config(filename)
 								config.typing_preview = (val == "true" or val == "1")
 							elseif key == "battleship_feedback" then
 								config.battleship_feedback = (val == "true" or val == "1")
+							elseif key == "battleship_auto_submit" then
+								val = val:lower()
+								if val == "correct" or val == "filled" then
+									config.battleship_auto_submit = val
+								else
+									config.battleship_auto_submit = "off"
+								end
 							elseif key == "case_sensitive_diff" then
 								config.case_sensitive_diff = (val == "true" or val == "1")
 							elseif key == "ignore_punctuation" then
@@ -2578,6 +2586,7 @@ local function run_quiz(study_queue, config, start_sync_zid, start_sync_time)
 						prompt = (function() local _f = get_prompt_color_fn(config.answer_mode_prompt_color); return bold(_f and _f("Answer") or "Answer") .. dim(" (type '/?' for help): ") end)(),
 						exact_length_mask = config.exact_length_mask,
 						battleship_feedback = config.battleship_feedback,
+						battleship_auto_submit = config.battleship_auto_submit,
 						case_sensitive_diff = config.case_sensitive_diff,
 						ignore_punctuation = config.ignore_punctuation,
 						diff_inverted_colors = config.diff_inverted_colors,

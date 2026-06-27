@@ -808,6 +808,35 @@ def render_preview_template(template, typed_text, use_exact, battleship, case_se
         
     return rendered
 
+def clean_word(word, ignore_punctuation, case_sensitive):
+    if ignore_punctuation:
+        cleaned = "".join(ch for ch in word if not is_punctuation_or_space(ch))
+    else:
+        cleaned = "".join(ch for ch in word if not ch.isspace())
+    if not case_sensitive:
+        cleaned = cleaned.lower()
+    return cleaned
+
+def check_auto_submit(typed_text, placeholders, mode, case_sensitive, ignore_punctuation):
+    if not placeholders:
+        return False
+    if typed_text.startswith("/"):
+        return False
+    u_parts = re.findall(r'[^\s]+', typed_text)
+    if len(u_parts) < len(placeholders):
+        return False
+    for idx, target in enumerate(placeholders):
+        u_part = u_parts[idx] if idx < len(u_parts) else ""
+        clean_target = clean_word(target, ignore_punctuation, case_sensitive)
+        clean_u_part = clean_word(u_part, ignore_punctuation, case_sensitive)
+        if mode == "correct":
+            if clean_u_part != clean_target:
+                return False
+        elif mode == "filled":
+            if len(clean_u_part) < len(clean_target):
+                return False
+    return True
+
 def read_line(enable_arrows=False, initial_text="", save_esc=False, swap_arrows=False, preview_data=None):
     if not sys.stdin.isatty():
         print("NOT_TTY", end="")
@@ -832,10 +861,13 @@ def read_line(enable_arrows=False, initial_text="", save_esc=False, swap_arrows=
     blank_inverted_colors = False
     blank_color = None
     hint_masks = None
+    placeholders = []
     
     if preview_data:
         header_text = preview_data.get("header")
         template = preview_data.get("template")
+        if template:
+            placeholders = re.findall(r'\[\[TARGET:(.*?)\]\]', template)
         hint_text = preview_data.get("hint")
         prompt_text = preview_data.get("prompt")
         use_exact = bool(preview_data.get("exact_length_mask"))
@@ -1034,6 +1066,11 @@ def read_line(enable_arrows=False, initial_text="", save_esc=False, swap_arrows=
                     chars.insert(cursor_pos, char)
                     cursor_pos += 1
                     draw()
+                    if preview_data and battleship and preview_data.get("battleship_auto_submit") in ("correct", "filled"):
+                        typed = "".join(chars)
+                        if check_auto_submit(typed, placeholders, preview_data.get("battleship_auto_submit"), case_sensitive, ignore_punctuation):
+                            print(typed, end="")
+                            break
 
     con.close()
 
