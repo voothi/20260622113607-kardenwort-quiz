@@ -3812,6 +3812,8 @@ local function run_lua_eval()
 		_G.get_two_line_diff = get_two_line_diff
 		_G.json_encode = json_encode
 		_G.bold = bold
+		_G.dim = dim
+		_G.faint = faint
 		_G.green = green
 		_G.red = red
 		_G.yellow = yellow
