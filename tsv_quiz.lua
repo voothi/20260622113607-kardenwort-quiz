@@ -2998,9 +2998,10 @@ local function run_quiz(study_queue, config, start_sync_zid, start_sync_timestam
 							cur_redraw = true
 						end
 					elseif lower_cmd == "d" then
-						skip_input_read = true
-						switch_mode = true
-						-- handled in outer loop
+						if not config.single_card_mode then
+							print(bold(yellow("\nSkipping card...")))
+						end
+						defer_current_card()
 						break
 					elseif lower_cmd == "y" or lower_cmd == "sync_forward" then
 						sync_forward_to_mpv(entry, config)
