@@ -2829,7 +2829,7 @@ def test_config_blank_and_diff_toggles(quiz_env):
     lua_code = """
         local config = load_config("config.ini")
         print("blank=" .. tostring(config.blank_inverted_colors))
-        print("show_diff=" .. tostring(config.show_diff_with_battleship))
+        print("show_diff=" .. tostring(config.show_diff))
     """
     code, out, err = run_lua_eval(quiz_env, lua_code)
     assert code == 0, f"Lua run failed: {err}"
@@ -2837,7 +2837,7 @@ def test_config_blank_and_diff_toggles(quiz_env):
     assert "show_diff=true" in out
 
     # 2. Explicit values & stale key check
-    config_path.write_text("[Leitner]\nblank_inverted_colors = true\nshow_diff_with_battleship = false\npreview_inverted_colors = true\n", encoding="utf-8")
+    config_path.write_text("[Leitner]\nblank_inverted_colors = true\nshow_diff = false\npreview_inverted_colors = true\n", encoding="utf-8")
     code, out, err = run_lua_eval(quiz_env, lua_code)
     assert code == 0, f"Lua run failed: {err}"
     assert "blank=true" in out
@@ -2925,16 +2925,16 @@ def test_lua_python_blank_coloring_parity(quiz_env):
     assert f"nach {py_res}." in rendered
 
 
-def test_show_diff_with_battleship_gating(quiz_env):
-    """4.4 Test show_diff_with_battleship toggle behavior under different battleship_feedback and show_diff_with_battleship values."""
+def test_show_diff_gating(quiz_env):
+    """4.4 Test show_diff toggle behavior under different battleship_feedback and show_diff values."""
     config_path = quiz_env / "config.ini"
     
     # Setup card
     focus_single_card(quiz_env, "20260303214721-text1.de.tsv", "Abend vorbei. Wir schlagen")
     
-    # Scenario A: battleship_feedback = true, show_diff_with_battleship = false -> Diff should be absent
+    # Scenario A: battleship_feedback = true, show_diff = false -> Diff should be absent
     focus_single_card(quiz_env, "20260303214721-text1.de.tsv", "Abend vorbei. Wir schlagen")
-    config_path.write_text("[Leitner]\nbattleship_feedback = true\nshow_diff_with_battleship = false\n", encoding="utf-8")
+    config_path.write_text("[Leitner]\nbattleship_feedback = true\nshow_diff = false\n", encoding="utf-8")
     code, out, err = run_quiz(quiz_env, ["20260303214721-text1.de.tsv"], ["Abend vorbei.", "/q"])
     assert code == 0, f"Quiz run failed: {err}"
     clean_out = strip_ansi(out)
@@ -2942,9 +2942,9 @@ def test_show_diff_with_battleship_gating(quiz_env):
     assert "Target:" not in clean_out
     assert "Diff" not in clean_out
 
-    # Scenario B: battleship_feedback = true, show_diff_with_battleship = true -> Diff should be present
+    # Scenario B: battleship_feedback = true, show_diff = true -> Diff should be present
     focus_single_card(quiz_env, "20260303214721-text1.de.tsv", "Abend vorbei. Wir schlagen")
-    config_path.write_text("[Leitner]\nbattleship_feedback = true\nshow_diff_with_battleship = true\n", encoding="utf-8")
+    config_path.write_text("[Leitner]\nbattleship_feedback = true\nshow_diff = true\n", encoding="utf-8")
     code, out, err = run_quiz(quiz_env, ["20260303214721-text1.de.tsv"], ["Abend vorbei.", "/q"])
     assert code == 0, f"Quiz run failed: {err}"
     clean_out = strip_ansi(out)
@@ -2952,15 +2952,15 @@ def test_show_diff_with_battleship_gating(quiz_env):
     assert "Target:" in clean_out
     assert "Diff" in clean_out
 
-    # Scenario C: battleship_feedback = false, show_diff_with_battleship = false -> Diff should still be present because battleship is false
+    # Scenario C: battleship_feedback = false, show_diff = false -> Diff should be absent (global)
     focus_single_card(quiz_env, "20260303214721-text1.de.tsv", "Abend vorbei. Wir schlagen")
-    config_path.write_text("[Leitner]\nbattleship_feedback = false\nshow_diff_with_battleship = false\n", encoding="utf-8")
+    config_path.write_text("[Leitner]\nbattleship_feedback = false\nshow_diff = false\n", encoding="utf-8")
     code, out, err = run_quiz(quiz_env, ["20260303214721-text1.de.tsv"], ["Abend vorbei.", "/q"])
     assert code == 0, f"Quiz run failed: {err}"
     clean_out = strip_ansi(out)
-    assert "User:" in clean_out
-    assert "Target:" in clean_out
-    assert "Diff" in clean_out
+    assert "User:" not in clean_out
+    assert "Target:" not in clean_out
+    assert "Diff" not in clean_out
 
 
 def test_blank_color_customization(quiz_env):
