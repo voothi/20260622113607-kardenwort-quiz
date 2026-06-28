@@ -2505,6 +2505,7 @@ local function run_quiz(study_queue, config, start_sync_zid, start_sync_timestam
 	local score = 0
 	local total = #study_queue
 	local question_num = 0
+	local autoplay_mode = false
 
 	for i, entry in ipairs(study_queue) do
 		console_width = get_console_width()
@@ -2533,8 +2534,12 @@ local function run_quiz(study_queue, config, start_sync_zid, start_sync_timestam
 			end
 			deferred_entry.original_card = entry.original_card or entry
 			table.insert(study_queue, deferred_entry)
-			-- We no longer decrement question_num here so that it visibly advances
-			-- even when skipping, up to a maximum of 'total'.
+			
+			redraw_needed = true
+		end
+
+		if autoplay_mode and config.mpv_integration then
+			sync_forward_to_mpv(entry, config)
 		end
 
 		local function flash_hint_if_needed()
@@ -2674,7 +2679,7 @@ local function run_quiz(study_queue, config, start_sync_zid, start_sync_timestam
 
 			if config.command_mode and is_command_mode then
 				if config.command_mode_single_key then
-					local allowed = {"a", "d", "y", "q", "?", "\r", "\n", "\x1b", "h", "/", " ", "/hint_left", "/hint_right", "/hint_up", "/hint_down"}
+					local allowed = {"a", "d", "y", "Y", "q", "?", "\r", "\n", "\x1b", "h", "/", " ", "/hint_left", "/hint_right", "/hint_up", "/hint_down"}
 					local _cmd_color_fn = get_prompt_color_fn(config.command_mode_prompt_color)
 					local key = press_any_key(bold(_cmd_color_fn and _cmd_color_fn("Command") or "Command") .. header_dim(" (press '?' for help)... "), allowed, config.command_mode_arrow_hints)
 					if key == "" then
@@ -2706,7 +2711,11 @@ local function run_quiz(study_queue, config, start_sync_zid, start_sync_timestam
 					elseif lkey == "a" then
 						trimmed_input = "/a"
 					elseif lkey == "y" then
-						trimmed_input = "/y"
+						if key == "Y" then
+							trimmed_input = "/Y"
+						else
+							trimmed_input = "/y"
+						end
 					elseif lkey == "q" then
 						trimmed_input = "/q"
 					elseif lkey == "?" then
@@ -2977,11 +2986,21 @@ local function run_quiz(study_queue, config, start_sync_zid, start_sync_timestam
 						end
 
 						break
-					elseif lower_cmd == "d" then
-						if not config.single_card_mode then
-							print(bold(yellow("\nSkipping card...")))
+					elseif cmd_body == "Y" then
+						autoplay_mode = not autoplay_mode
+						print(bold(cyan("\nAutoplay mode " .. (autoplay_mode and "ON" or "OFF"))))
+						if autoplay_mode and config.mpv_integration then
+							sync_forward_to_mpv(entry, config)
 						end
-						defer_current_card()
+						if config.single_card_mode and config.typing_preview then
+							redraw_needed = false
+						else
+							cur_redraw = true
+						end
+					elseif lower_cmd == "d" then
+						skip_input_read = true
+						switch_mode = true
+						-- handled in outer loop
 						break
 					elseif lower_cmd == "y" or lower_cmd == "sync_forward" then
 						sync_forward_to_mpv(entry, config)
@@ -3225,11 +3244,20 @@ local function run_quiz(study_queue, config, start_sync_zid, start_sync_timestam
 								)
 								if config.mpv_integration then
 									print("  " .. bold("y") .. "                       Sync current card to MPV.")
+									print("  " .. bold("Y") .. "                       Toggle Autoplay mode (auto-sync on new card).")
 								end
 								print("  " .. bold("q") .. "                       Exit the quiz.")
 								print()
 							elseif lkey == "y" then
-								sync_forward_to_mpv(entry, config)
+								if key == "Y" then
+									autoplay_mode = not autoplay_mode
+									print(bold(cyan("\nAutoplay mode " .. (autoplay_mode and "ON" or "OFF"))))
+									if autoplay_mode and config.mpv_integration then
+										sync_forward_to_mpv(entry, config)
+									end
+								else
+									sync_forward_to_mpv(entry, config)
+								end
 								if config.single_card_mode then
 									draw_back_side()
 								end
@@ -3273,6 +3301,7 @@ local function run_quiz(study_queue, config, start_sync_zid, start_sync_timestam
 							table.insert(allowed, "a")
 							table.insert(allowed, "d")
 							table.insert(allowed, "y")
+							table.insert(allowed, "Y")
 							table.insert(allowed, "\x1b")
 						end
 
@@ -3349,12 +3378,21 @@ local function run_quiz(study_queue, config, start_sync_zid, start_sync_timestam
 								)
 								if config.mpv_integration then
 									print("  " .. bold("y") .. "                       Sync current card to MPV.")
+									print("  " .. bold("Y") .. "                       Toggle Autoplay mode (auto-sync on new card).")
 								end
 							end
 							print("  " .. bold("q") .. "                       Exit the quiz.")
 							print()
 						elseif lkey == "y" then
-							sync_forward_to_mpv(entry, config)
+							if key == "Y" then
+								autoplay_mode = not autoplay_mode
+								print(bold(cyan("\nAutoplay mode " .. (autoplay_mode and "ON" or "OFF"))))
+								if autoplay_mode and config.mpv_integration then
+									sync_forward_to_mpv(entry, config)
+								end
+							else
+								sync_forward_to_mpv(entry, config)
+							end
 							if config.single_card_mode then
 								draw_back_side()
 							end
@@ -3459,6 +3497,8 @@ print_help = function()
 	print("  " .. bold("/h N K M") .. "                Reveal N from the start, K from the middle, M from the end.")
 	print("  " .. bold("/a") .. "                      Repeat the previous card.")
 	print("  " .. bold("/d") .. ", " .. bold("Esc") .. "                 Skip the current card.")
+	print("  " .. bold("/y") .. "                      Sync current card to MPV.")
+	print("  " .. bold("/Y") .. "                      Toggle Autoplay mode (auto-sync on new card).")
 	print("  " .. bold("Arrows") .. "                  Dynamic visual hints (if enabled).")
 	print("  " .. bold("/q") .. ", " .. bold("/quit") .. ", " .. bold("/exit") .. "        Exit the quiz.\n")
 	print(bold("Supported TSV Format:"))
@@ -3486,6 +3526,7 @@ print_interactive_help = function(config)
 	print("  " .. bold("/d") .. esc_skip .. "                 Skip the current card.")
 	if config and config.mpv_integration then
 		print("  " .. bold("/y") .. ", " .. bold("/sync_forward") .. "       Sync active card timestamp to MPV.")
+		print("  " .. bold("/Y") .. "                       Toggle Autoplay mode (auto-sync on new card).")
 		print("  " .. bold("/sync <zid> <timestamp>") .. "      Jump to the card matching ZID and closest timestamp.")
 	end
 	print("  " .. bold("/q") .. ", " .. bold("/quit") .. ", " .. bold("/exit") .. "        Exit the quiz.")
