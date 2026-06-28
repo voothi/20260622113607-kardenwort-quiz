@@ -3289,7 +3289,7 @@ local function run_quiz(study_queue, config, start_sync_zid, start_sync_timestam
 					-- Anki manual grading mode
 					local break_outer = false
 					while true do
-						local prompt_str = bold("Grade ") .. header_dim("(press '?' for help, override with '1' as incorrect, '3' as correct)... ")
+						local prompt_str = bold(cyan("Grade ")) .. header_dim("(press '?' for help, override with '1' as incorrect, '3' as correct)... ")
 
 						local allowed = { "\r", "\n", " ", "1", "3", "q", "?" }
 						if config.single_card_mode then
