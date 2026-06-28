@@ -394,7 +394,7 @@ local function load_config(filename)
 		blank_color = "yellow",
 		command_mode_prompt_color = "coral",
 		answer_mode_prompt_color = "standard",
-		show_diff_with_battleship = true,
+		show_diff = true,
 		header_dim_color = "90",
 		context_dim_color = "2",
 		context_lines = 0,
@@ -553,8 +553,8 @@ local function load_config(filename)
 								config.header_dim_color = val:gsub("^%s+", ""):gsub("%s+$", "")
 							elseif key == "context_dim_color" then
 								config.context_dim_color = val:gsub("^%s+", ""):gsub("%s+$", "")
-							elseif key == "show_diff_with_battleship" then
-								config.show_diff_with_battleship = (val == "true" or val == "1")
+							elseif key == "show_diff" then
+								config.show_diff = (val == "true" or val == "1")
 							elseif key == "context_lines" then
 								config.context_lines = tonumber(val) or 0
 							elseif key == "preview_inverted_colors" then
@@ -3142,12 +3142,7 @@ local function run_quiz(study_queue, config, start_sync_zid, start_sync_timestam
 						end
 					end
 
-					local show_diff = true
-					if config.battleship_feedback and not config.show_diff_with_battleship then
-						show_diff = false
-					end
-
-					if show_diff then
+					if config.show_diff then
 						if not config.compact_diff then
 							print()
 						end
