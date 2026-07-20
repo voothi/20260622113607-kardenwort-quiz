@@ -10,8 +10,8 @@ import subprocess
 import sys
 import shutil
 
-SHORTCUT_DISPLAY_NAME = "Kardenwort TSV Quiz"
-LEGACY_SHORTCUT_NAMES = ("B2 Deutsch Quiz", "kardenwort tsv quiz")
+SHORTCUT_DISPLAY_NAME = "Kardenwort Start Quiz"
+LEGACY_SHORTCUT_NAMES = ("B2 Deutsch Quiz", "kardenwort tsv quiz", "Kardenwort TSV Quiz")
 SENDTO_DIRECTORY = r"%APPDATA%\Microsoft\Windows\SendTo"
 
 
